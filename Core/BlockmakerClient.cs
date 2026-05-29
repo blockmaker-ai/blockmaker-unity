@@ -40,8 +40,7 @@ namespace Blockmaker
             {
                 // Config may be assigned post-Awake by BlockmakerAuth.EnsureBlockmakerClient()
                 // via InitFromAuth(). Don't destroy — just disable until config arrives.
-                BlockmakerLog.Warning("[BlockmakerClient] No BlockmakerConfig assigned yet. " +
-                                 "If BlockmakerAuth is managing this component, config will be set via InitFromAuth().");
+                BlockmakerLog.Verbose("[BlockmakerClient] No BlockmakerConfig assigned yet — waiting for BlockmakerAuth.InitFromAuth().");
                 Instance = null;
                 enabled = false;
                 return;
