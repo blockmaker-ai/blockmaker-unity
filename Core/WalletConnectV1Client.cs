@@ -136,9 +136,9 @@ namespace Blockmaker
             _syncContext     = SynchronizationContext.Current;
             _bridgeUrl      = session.bridgeUrl;
             _chainId        = session.chainId;
-            _appName        = "Blockmaker";
-            _appDescription = "Blockmaker SDK";
-            _appUrl         = "https://blockmaker.io";
+            _appName        = Application.productName;
+            _appDescription = Application.productName;
+            _appUrl         = BlockmakerAuth.Instance?.blockmakerConfig?.dAppUrl ?? "https://example.com";
 
             _key            = HexToBytes(session.keyHex);
             _handshakeTopic = "";
