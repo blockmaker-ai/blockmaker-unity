@@ -5,19 +5,20 @@ using UnityEngine;
 namespace Blockmaker;
 
 /// <summary>
-/// Tracks the player's live NIKO token balance with optimistic updates.
+/// Tracks a player's live Algorand ASA token balance with optimistic updates.
 ///
-/// When a coin reward is sent, call AddPendingReward() to immediately bump
-/// the displayed balance. The next poll confirms the on-chain balance and
-/// clears the pending amount.
+/// Set <see cref="tokenAssetId"/> in the Inspector to your game's token.
+/// When an in-game reward is sent, call <see cref="AddPendingReward"/> to
+/// immediately bump the displayed balance. The next poll confirms the
+/// on-chain balance and clears the pending amount.
 ///
 /// Persists across scenes (DontDestroyOnLoad). Use from any UI:
-///   NikoBalanceTracker.Instance.DisplayBalance
-///   NikoBalanceTracker.OnBalanceChanged += myHandler;
+///   TokenBalanceTracker.Instance.DisplayBalance
+///   TokenBalanceTracker.OnBalanceChanged += myHandler;
 /// </summary>
-public class NikoBalanceTracker : MonoBehaviour
+public class TokenBalanceTracker : MonoBehaviour
 {
-    public static NikoBalanceTracker Instance { get; private set; }
+    public static TokenBalanceTracker Instance { get; private set; }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
@@ -28,7 +29,7 @@ public class NikoBalanceTracker : MonoBehaviour
     }
 
     [Tooltip("Algorand ASA ID of the token to track. Set this in the Inspector for your game's token.")]
-    public long tokenAssetId = 1265975021;
+    public long tokenAssetId;
 
     private const int DefaultTokenDecimals = 6;
 
@@ -47,7 +48,7 @@ public class NikoBalanceTracker : MonoBehaviour
 
     private long _confirmedBalance;
     private long _pendingRewards;
-    private int  _nikoDecimals = DefaultTokenDecimals;
+    private int  _tokenDecimals = DefaultTokenDecimals;
     private Coroutine _pollCoroutine;
     private float _lastRewardTime;
 
@@ -58,11 +59,11 @@ public class NikoBalanceTracker : MonoBehaviour
     /// <summary>Confirmed on-chain balance + optimistic pending rewards.</summary>
     public long DisplayBalance => _confirmedBalance + _pendingRewards;
 
-    /// <summary>Decimals for the NIKO token (from chain metadata).</summary>
-    public int Decimals => _nikoDecimals;
+    /// <summary>Decimals for the tracked token (from chain metadata).</summary>
+    public int Decimals => _tokenDecimals;
 
     /// <summary>Display balance formatted as a human-readable string.</summary>
-    public string FormattedBalance => FormatBalance(DisplayBalance, _nikoDecimals);
+    public string FormattedBalance => FormatBalance(DisplayBalance, _tokenDecimals);
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -98,7 +99,7 @@ public class NikoBalanceTracker : MonoBehaviour
     // ── Public API ────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Call when an instant NIKO reward has been sent. Updates the display
+    /// Call when an instant token reward has been sent. Updates the display
     /// balance immediately without waiting for the chain to confirm.
     /// </summary>
     public void AddPendingReward(long amount)
@@ -123,7 +124,7 @@ public class NikoBalanceTracker : MonoBehaviour
     {
         _confirmedBalance = 0;
         _pendingRewards   = 0;
-        _nikoDecimals     = DefaultTokenDecimals;
+        _tokenDecimals    = DefaultTokenDecimals;
         OnBalanceChanged?.Invoke(0);
 
         if (identity != null && identity.HasWallet)
@@ -173,11 +174,10 @@ public class NikoBalanceTracker : MonoBehaviour
                 if (status?.success != true) return;
                 if (BlockmakerAuth.Instance?.Address != expectedAddress) return;
 
-                var niko = status.tokenBalances?.Find(t => t.assetId == tokenAssetId);
-                long newConfirmed = niko?.amount ?? 0;
-                if (niko != null) _nikoDecimals = niko.decimals;
+                var token = status.tokenBalances?.Find(t => t.assetId == tokenAssetId);
+                long newConfirmed = token?.amount ?? 0;
+                if (token != null) _tokenDecimals = token.decimals;
 
-                // Reduce pending by however much the chain has caught up
                 if (newConfirmed > _confirmedBalance)
                 {
                     long catchUp = newConfirmed - _confirmedBalance;
@@ -186,14 +186,13 @@ public class NikoBalanceTracker : MonoBehaviour
                 else if (_pendingRewards > 0 &&
                          Time.realtimeSinceStartup - _lastRewardTime > pendingExpirySeconds)
                 {
-                    // Pending rewards haven't confirmed after expiry — assume failed
                     _pendingRewards = 0;
                 }
 
                 _confirmedBalance = newConfirmed;
                 OnBalanceChanged?.Invoke(DisplayBalance);
             },
-            err => BlockmakerLog.Warning($"[NikoBalanceTracker] Poll failed: {err}")
+            err => BlockmakerLog.Warning($"[TokenBalanceTracker] Poll failed: {err}")
         );
     }
 
