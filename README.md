@@ -89,6 +89,8 @@ All settings live on the `BlockmakerConfig` ScriptableObject:
 | `apiKey` | Server API key (sk_ prefix) — **Editor only, never shipped in builds** |
 | `walletConnectProjectId` | Free from cloud.walletconnect.com |
 | `magicPublishableKey` | Magic SDK key for email login (WebGL only) |
+| `dAppUrl` | URL shown in wallet apps during approval (defaults to serverUrl) |
+| `dAppIconUrl` | Icon shown in wallet apps (defaults to dAppUrl + /icon.png) |
 | `walletSignTimeoutSeconds` | Timeout for wallet interactions (default: 120s) |
 
 ## Logging

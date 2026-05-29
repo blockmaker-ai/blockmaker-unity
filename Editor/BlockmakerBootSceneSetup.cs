@@ -2,7 +2,9 @@
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
-using Blockmaker;
+
+namespace Blockmaker
+{
 
 /// <summary>
 /// Editor utility: Blockmaker > Setup Boot Scene
@@ -130,4 +132,6 @@ public static class BlockmakerBootSceneSetup
         EditorGUIUtility.PingObject(AssetDatabase.LoadAssetAtPath<GameObject>(path));
     }
 }
+
+} // namespace Blockmaker
 #endif
