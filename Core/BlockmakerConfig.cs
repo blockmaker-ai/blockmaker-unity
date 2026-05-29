@@ -73,12 +73,8 @@ namespace Blockmaker
             if (string.IsNullOrEmpty(walletConnectProjectId))
                 BlockmakerLog.Warning("[BlockmakerConfig] WalletConnect Project ID is empty — wallet QR connection will not work. Get a free ID at https://cloud.walletconnect.com");
 
-    #if UNITY_WEBGL
-            // Magic SDK is WebGL-only — no warning needed on other platforms
-    #else
-            if (enableMagicEmail)
-                BlockmakerLog.Warning("[BlockmakerConfig] Magic email login is enabled but only works in WebGL builds. It will be unavailable on this platform.");
-    #endif
+            // Magic SDK is WebGL-only. Email login via OTP works on all platforms.
+            // No warning needed — Magic is silently skipped on non-WebGL.
         }
     }
 }
