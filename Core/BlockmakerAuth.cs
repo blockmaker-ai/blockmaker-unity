@@ -972,7 +972,7 @@ namespace Blockmaker
             IsAuthenticating = true;
 
             var cfg = BlockmakerClient.Instance?.config;
-            if (cfg == null || string.IsNullOrEmpty(cfg.magicPublishableKey))
+            if (cfg == null || !cfg.enableMagicEmail || string.IsNullOrEmpty(cfg.magicPublishableKey))
             {
                 IsAuthenticating = false;
                 BlockmakerLog.Error("[BlockmakerAuth] Magic publishable key not configured. Set it on the BlockmakerConfig asset.");
