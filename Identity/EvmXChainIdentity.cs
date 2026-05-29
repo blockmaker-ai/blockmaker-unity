@@ -22,12 +22,7 @@ namespace Blockmaker
             ReownWalletConnector.Instance != null && ReownWalletConnector.Instance.IsConnected;
     #endif
 
-        public bool SupportsAtomicGroupSign =>
-    #if UNITY_WEBGL && !UNITY_EDITOR
-            true;
-    #else
-            false;
-    #endif
+        public bool SupportsAtomicGroupSign => true;
 
         public string EvmAddress { get; }
 
@@ -177,27 +172,148 @@ namespace Blockmaker
                 yield break;
             }
 
-            var results = new string[unsignedTxnsBase64.Length];
-            for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+            // Single transaction — delegate to SignTransaction
+            if (unsignedTxnsBase64.Length == 1)
             {
                 string signed = null;
-                string err    = null;
-
-                yield return SignTransaction(
-                    unsignedTxnsBase64[i],
-                    s => { signed = s; },
-                    e => { err = e; }
-                );
-
-                if (err != null)
-                {
-                    onError?.Invoke(err);
-                    yield break;
-                }
-                results[i] = signed;
+                string err = null;
+                yield return SignTransaction(unsignedTxnsBase64[0], s => { signed = s; }, e => { err = e; });
+                if (err != null) { onError?.Invoke(err); yield break; }
+                onSigned?.Invoke(new[] { signed });
+                yield break;
             }
 
-            onSigned?.Invoke(results);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // WebGL: delegate to JS bridge which handles groups atomically
+            if (BlockmakerAuth.Instance == null)
+            {
+                onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                yield break;
+            }
+
+            int signGen = BlockmakerAuth.Instance.BeginPendingSign();
+
+            var txnsJson = "[" + string.Join(",", System.Array.ConvertAll(unsignedTxnsBase64, t => "\"" + t + "\"")) + "]";
+            BlockmakerWalletBridge.EvmSignGroupTransaction(
+                txnsJson, EvmAddress,
+                BlockmakerAuth.Instance.gameObject.name,
+                nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
+                nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
+            );
+
+            float elapsed = 0f;
+            while (BlockmakerAuth.Instance != null &&
+                   BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen) &&
+                   BlockmakerAuth.Instance.PendingSignedTxns == null &&
+                   BlockmakerAuth.Instance.PendingSignError == null &&
+                   elapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (BlockmakerAuth.Instance == null || !BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen))
+            {
+                onError?.Invoke("The request was interrupted. Please try again.");
+                yield break;
+            }
+
+            if (BlockmakerAuth.Instance.PendingSignedTxns == null && BlockmakerAuth.Instance.PendingSignError == null)
+            {
+                onError?.Invoke("The request timed out. Please try again.");
+                yield break;
+            }
+
+            var webglResults = BlockmakerAuth.Instance.ConsumePendingSignedTxns();
+            var webglError = BlockmakerAuth.Instance.ConsumePendingSignError();
+
+            if (webglResults != null) onSigned?.Invoke(webglResults);
+            else if (webglError != null) onError?.Invoke(webglError);
+            else onError?.Invoke("The request could not be completed. Please try again.");
+#else
+            // Native: atomic group signing via GroupID
+            var connector = ReownWalletConnector.Instance;
+            if (connector == null || !connector.IsConnected)
+            {
+                onError?.Invoke("Your wallet session has ended. Please connect your wallet again to continue.");
+                yield break;
+            }
+
+            try
+            {
+                // Decode first transaction to extract GroupID
+                var firstTxnBytes = Convert.FromBase64String(unsignedTxnsBase64[0]);
+                var groupId = XChainAddressDeriver.ExtractGroupId(firstTxnBytes);
+
+                if (groupId == null)
+                {
+                    // No group field — sign individually (not an atomic group)
+                    var results = new string[unsignedTxnsBase64.Length];
+                    for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+                    {
+                        string signed = null;
+                        string err = null;
+                        yield return SignTransaction(unsignedTxnsBase64[i], s => { signed = s; }, e => { err = e; });
+                        if (err != null) { onError?.Invoke(err); yield break; }
+                        results[i] = signed;
+                    }
+                    onSigned?.Invoke(results);
+                    yield break;
+                }
+
+                // Build EIP-712 typed data with GroupID (not individual TxID)
+                var typedData = XChainAddressDeriver.BuildEip712TypedData(groupId);
+                var program = XChainAddressDeriver.GetLogicSigProgram(EvmAddress);
+
+                string hexSig = null;
+                string signError = null;
+                bool signDone = false;
+
+                connector.SignEvmTypedData(
+                    EvmAddress,
+                    typedData,
+                    onSigned: sig => { hexSig = sig; signDone = true; },
+                    onError: err => { signError = err; signDone = true; }
+                );
+
+                float elapsed = 0f;
+                while (!signDone && elapsed < BlockmakerAuth.WalletSignTimeout)
+                {
+                    elapsed += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+
+                if (!signDone)
+                {
+                    onError?.Invoke("The request timed out. Please try again.");
+                    yield break;
+                }
+
+                if (signError != null)
+                {
+                    onError?.Invoke(signError);
+                    yield break;
+                }
+
+                // Parse the single signature and apply it to ALL transactions
+                var sigArg = XChainAddressDeriver.ParseEvmSignature(hexSig);
+                var signedResults = new string[unsignedTxnsBase64.Length];
+
+                for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+                {
+                    var txnBytes = Convert.FromBase64String(unsignedTxnsBase64[i]);
+                    var signedBytes = XChainAddressDeriver.BuildSignedTransaction(txnBytes, program, sigArg);
+                    signedResults[i] = Convert.ToBase64String(signedBytes);
+                }
+
+                onSigned?.Invoke(signedResults);
+            }
+            catch (Exception ex)
+            {
+                BlockmakerLog.Error($"[EvmXChainIdentity] Group sign error: {ex.Message}");
+                onError?.Invoke("Something went wrong while signing the transactions. Please try again.");
+            }
+#endif
         }
 
         public void SaveSession()

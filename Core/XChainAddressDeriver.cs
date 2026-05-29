@@ -67,6 +67,34 @@ namespace Blockmaker
             return Sha512_256(data);
         }
 
+        /// <summary>
+        /// Extracts the Algorand GroupID from an unsigned transaction's msgpack bytes.
+        /// Returns null if the transaction has no group field (not part of a group).
+        /// </summary>
+        public static byte[] ExtractGroupId(byte[] unsignedTxn)
+        {
+            // Scan for msgpack key "grp": fixstr(3) = 0xa3, then 'g','r','p'
+            byte g = 0x67, r = 0x72, p = 0x70;
+            for (int i = 0; i < unsignedTxn.Length - 37; i++)
+            {
+                if (unsignedTxn[i] != 0xa3 || unsignedTxn[i+1] != g ||
+                    unsignedTxn[i+2] != r || unsignedTxn[i+3] != p)
+                    continue;
+
+                int valStart = i + 4;
+                // Value is bin8 (0xc4) + length (0x20 = 32) + 32 bytes
+                if (valStart + 34 <= unsignedTxn.Length &&
+                    unsignedTxn[valStart] == 0xc4 &&
+                    unsignedTxn[valStart + 1] == 0x20)
+                {
+                    var groupId = new byte[32];
+                    Buffer.BlockCopy(unsignedTxn, valStart + 2, groupId, 0, 32);
+                    return groupId;
+                }
+            }
+            return null;
+        }
+
         public static string BuildEip712TypedData(byte[] txnId)
         {
             var hex = "0x" + BytesToHex(txnId);
