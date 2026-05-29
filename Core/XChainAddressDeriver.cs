@@ -103,13 +103,32 @@ namespace Blockmaker
                 throw new ArgumentException("Expected 65-byte (130 hex char) EVM signature.");
 
             var sig = HexToBytes(hex);
+
+            // Extract r, s, v from the 65-byte signature
+            var r = new byte[32];
+            var s = new byte[32];
+            Buffer.BlockCopy(sig, 0, r, 0, 32);
+            Buffer.BlockCopy(sig, 32, s, 0, 32);
+            byte v = sig[64];
+
+            // Lower-S normalization (prevents ECDSA malleability).
+            // If s > secp256k1_n/2, flip to s = n - s and toggle v.
+            // Matches the official xchain-accounts SDK's normalizeLowerS().
+            if (IsHighS(s))
+            {
+                s = SubtractFromN(s);
+                v = (byte)(v == 27 ? 28 : v == 28 ? 27 : v == 0 ? 1 : 0);
+            }
+
+            // Do NOT normalize v to 0/1 — the TEAL LogicSig subtracts 27 on-chain.
+            // Passing 27/28 as-is matches the official xchain-accounts SDK.
+            if (v != 27 && v != 28 && v != 0 && v != 1)
+                throw new ArgumentException("Invalid EVM signature recovery id");
+
             var arg = new byte[66];
             arg[0] = 0x01;
-            Buffer.BlockCopy(sig, 0, arg, 1, 32);
-            Buffer.BlockCopy(sig, 32, arg, 33, 32);
-            byte v = sig[64];
-            if (v >= 27) v -= 27;
-            if (v > 1) throw new ArgumentException("Invalid EVM signature recovery id");
+            Buffer.BlockCopy(r, 0, arg, 1, 32);
+            Buffer.BlockCopy(s, 0, arg, 33, 32);
             arg[65] = v;
             return arg;
         }
@@ -219,6 +238,40 @@ namespace Blockmaker
                     bits -= 8;
                     result[idx++] = (byte)((buf >> bits) & 0xFF);
                 }
+            }
+            return result;
+        }
+
+        // ── secp256k1 lower-S normalization ───────────────────────────────────────
+
+        // secp256k1 curve order n and n/2 (big-endian, 32 bytes)
+        static readonly byte[] Secp256k1N = new byte[] {
+            0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFE,
+            0xBA,0xAE,0xDC,0xE6,0xAF,0x48,0xA0,0x3B,0xBF,0xD2,0x5E,0x8C,0xD0,0x36,0x41,0x41 };
+        static readonly byte[] Secp256k1HalfN = new byte[] {
+            0x7F,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+            0x5D,0x57,0x6E,0x73,0x57,0xA4,0x50,0x1D,0xDF,0xE9,0x2F,0x46,0x68,0x1B,0x20,0xA0 };
+
+        static bool IsHighS(byte[] s)
+        {
+            for (int i = 0; i < 32; i++)
+            {
+                if (s[i] < Secp256k1HalfN[i]) return false;
+                if (s[i] > Secp256k1HalfN[i]) return true;
+            }
+            return false; // equal to halfN is not high
+        }
+
+        static byte[] SubtractFromN(byte[] s)
+        {
+            var result = new byte[32];
+            int borrow = 0;
+            for (int i = 31; i >= 0; i--)
+            {
+                int diff = Secp256k1N[i] - s[i] - borrow;
+                if (diff < 0) { diff += 256; borrow = 1; }
+                else borrow = 0;
+                result[i] = (byte)diff;
             }
             return result;
         }
