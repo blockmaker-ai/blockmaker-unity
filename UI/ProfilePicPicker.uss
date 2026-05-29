@@ -1,0 +1,349 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   ProfilePicPicker — reusable overlay for choosing default or NFT avatars
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.pfp-overlay {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    align-items:      center;
+    justify-content:  center;
+    display:          none;
+}
+
+.pfp-backdrop {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: rgba(4, 4, 10, 0.78);
+}
+
+.pfp-panel {
+    width:            92%;
+    max-width:        520px;
+    max-height:       80%;
+    flex-direction:   column;
+    background-color: rgb(14, 14, 16);
+    border-top-width:    1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-color:     rgba(255, 255, 255, 0.10);
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    padding-top:      20px;
+    padding-bottom:   16px;
+    padding-left:     24px;
+    padding-right:    24px;
+}
+
+.pfp-title {
+    font-size:         20px;
+    color:             rgb(241, 241, 241);
+    margin-bottom:     14px;
+    -unity-text-align: upper-center;
+    letter-spacing:    1px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────────────────── */
+
+.pfp-tabs {
+    flex-direction:  row;
+    margin-bottom:   14px;
+    align-self:      stretch;
+}
+
+.pfp-tab {
+    flex-grow:           1;
+    height:              34px;
+    background-color:    rgba(255, 255, 255, 0.03);
+    border-top-width:    1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-color:        rgba(255, 255, 255, 0.06);
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    color:               rgba(241, 241, 241, 0.45);
+    font-size:           12px;
+    letter-spacing:      1px;
+    margin-left:         3px;
+    margin-right:        3px;
+    cursor:              link;
+    transition-property: background-color, border-color, color;
+    transition-duration: 0.12s;
+}
+
+.pfp-tab:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+    color:            rgba(241, 241, 241, 0.70);
+}
+
+.pfp-tab--active {
+    background-color: rgba(167, 139, 250, 0.08);
+    border-color:     rgba(167, 139, 250, 0.30);
+    color:            rgb(241, 241, 241);
+}
+
+/* ── Pages ──────────────────────────────────────────────────────────────── */
+
+.pfp-page {
+    align-self: stretch;
+    flex-grow:  1;
+}
+
+.pfp-page--hidden {
+    display: none;
+}
+
+/* ── Grid ───────────────────────────────────────────────────────────────── */
+
+.pfp-scroll {
+    align-self:  stretch;
+    max-height:  280px;
+    min-height:  100px;
+}
+
+.pfp-grid {
+    flex-direction: row;
+    flex-wrap:      wrap;
+}
+
+/* ── Default avatar cards ───────────────────────────────────────────────── */
+
+.pfp-default-card {
+    width:                       88px;
+    height:                      110px;
+    margin-top:                  5px;
+    margin-bottom:               5px;
+    margin-left:                 5px;
+    margin-right:                5px;
+    background-color:            rgba(255, 255, 255, 0.03);
+    border-top-width:            1px;
+    border-right-width:          1px;
+    border-bottom-width:         1px;
+    border-left-width:           1px;
+    border-color:                rgba(255, 255, 255, 0.06);
+    border-top-left-radius:      6px;
+    border-top-right-radius:     6px;
+    border-bottom-left-radius:   6px;
+    border-bottom-right-radius:  6px;
+    padding-top:                 6px;
+    padding-bottom:              6px;
+    padding-left:                6px;
+    padding-right:               6px;
+    align-items:                 center;
+    cursor:                      link;
+    overflow:                    hidden;
+    transition-property:         border-color, background-color;
+    transition-duration:         0.12s;
+}
+
+.pfp-default-card:hover {
+    border-color:     rgba(167, 139, 250, 0.30);
+    background-color: rgba(167, 139, 250, 0.04);
+}
+
+.pfp-default-card--selected {
+    border-color:     rgb(167, 139, 250);
+    background-color: rgba(167, 139, 250, 0.08);
+}
+
+.pfp-default-card__thumb {
+    width:                       72px;
+    height:                      72px;
+    background-color:            rgba(255, 255, 255, 0.04);
+    -unity-background-scale-mode: scale-and-crop;
+    border-top-left-radius:      4px;
+    border-top-right-radius:     4px;
+    border-bottom-left-radius:   4px;
+    border-bottom-right-radius:  4px;
+    margin-bottom:               4px;
+}
+
+.pfp-default-card__name {
+    font-size:              10px;
+    color:                  rgba(241, 241, 241, 0.55);
+    -unity-text-align:      upper-center;
+    overflow:               hidden;
+    text-overflow:          ellipsis;
+    white-space:            nowrap;
+}
+
+/* ── NFT cards (same style as Profile.uss) ──────────────────────────────── */
+
+.pfp-nft-card {
+    width:               128px;
+    margin-top:          6px;
+    margin-bottom:       6px;
+    margin-left:         6px;
+    margin-right:        6px;
+    background-color:    rgba(255, 255, 255, 0.03);
+    border-top-width:    1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-color:        rgba(255, 255, 255, 0.06);
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    padding-top:         8px;
+    padding-bottom:      8px;
+    padding-left:        8px;
+    padding-right:       8px;
+    cursor:              link;
+    overflow:            hidden;
+    transition-property: border-color, background-color;
+    transition-duration: 0.12s;
+}
+
+.pfp-nft-card:hover {
+    border-color:     rgba(167, 139, 250, 0.30);
+    background-color: rgba(167, 139, 250, 0.04);
+}
+
+.pfp-nft-card--selected {
+    border-color:     rgb(167, 139, 250);
+    background-color: rgba(167, 139, 250, 0.08);
+}
+
+.pfp-nft-card__thumb {
+    width:                       100%;
+    height:                      100px;
+    background-color:            rgba(255, 255, 255, 0.04);
+    -unity-background-scale-mode: scale-and-crop;
+    border-top-left-radius:      4px;
+    border-top-right-radius:     4px;
+    margin-bottom:               6px;
+}
+
+.pfp-nft-card__name {
+    font-size:              11px;
+    color:                  rgb(241, 241, 241);
+    overflow:               hidden;
+    text-overflow:          ellipsis;
+    white-space:            nowrap;
+}
+
+.pfp-nft-card__id {
+    font-size: 9px;
+    color:     rgba(241, 241, 241, 0.30);
+}
+
+/* ── Search row ─────────────────────────────────────────────────────────── */
+
+.pfp-search-row {
+    flex-direction:  row;
+    align-items:     center;
+    margin-bottom:   12px;
+    align-self:      stretch;
+}
+
+.pfp-search-input {
+    flex-grow:           1;
+    height:              36px;
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    color:               rgb(241, 241, 241);
+    font-size:           12px;
+    margin-right:        8px;
+    padding-left:        0;
+    padding-right:       0;
+}
+
+.pfp-search-input > .unity-text-field__input {
+    background-color:    rgba(255, 255, 255, 0.03);
+    color:               rgba(241, 241, 241, 0.7);
+    border-top-width:    1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-color:        rgba(255, 255, 255, 0.06);
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    padding-left:        10px;
+    padding-right:       10px;
+    font-size:           12px;
+}
+
+.pfp-search-input > .unity-text-field__input:focus {
+    border-color: rgba(167, 139, 250, 0.30);
+}
+
+.pfp-search-btn {
+    height:              36px;
+    min-width:           70px;
+    background-color:    rgba(167, 139, 250, 0.10);
+    border-top-width:    1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-color:        rgba(167, 139, 250, 0.20);
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    color:               rgba(241, 241, 241, 0.7);
+    font-size:           11px;
+    letter-spacing:      1px;
+    cursor:              link;
+}
+
+.pfp-search-btn:hover {
+    background-color: rgba(167, 139, 250, 0.18);
+}
+
+/* ── Status label ───────────────────────────────────────────────────────── */
+
+.pfp-status {
+    font-size:         12px;
+    color:             rgba(241, 241, 241, 0.35);
+    margin-top:        8px;
+    margin-bottom:     8px;
+    -unity-text-align: middle-center;
+    align-self:        center;
+}
+
+/* ── Cancel button ──────────────────────────────────────────────────────── */
+
+.pfp-cancel-btn {
+    align-self:          center;
+    height:              32px;
+    min-width:           90px;
+    margin-top:          8px;
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-color:        rgba(255, 255, 255, 0.08);
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    color:               rgba(241, 241, 241, 0.50);
+    font-size:           11px;
+    letter-spacing:      1px;
+    cursor:              link;
+    transition-property: border-color, color;
+    transition-duration: 0.12s;
+}
+
+.pfp-cancel-btn:hover {
+    border-color: rgba(255, 255, 255, 0.18);
+    color:        rgba(241, 241, 241, 0.75);
+}

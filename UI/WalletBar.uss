@@ -1,0 +1,152 @@
+/* =========================================================================
+   WalletBar.uss
+   Compact identity bar shown in-game HUD
+   ========================================================================= */
+
+.wb-root {
+    flex-direction:             row;
+    align-items:                center;
+    padding-top:                8px;
+    padding-bottom:             8px;
+    padding-left:               12px;
+    padding-right:              12px;
+    background-color:           rgba(8, 8, 16, 0.90);
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    border-top-width:           1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-top-color:           rgba(255, 255, 255, 0.08);
+    border-left-color:          rgba(255, 255, 255, 0.06);
+    border-right-color:         rgba(0, 0, 0, 0.20);
+    border-bottom-color:        rgba(0, 0, 0, 0.30);
+    min-width:                  240px;
+}
+
+/* ── Avatar ───────────────────────────────────────────────────────────── */
+
+.wb-avatar {
+    width:                      36px;
+    height:                     36px;
+    border-top-left-radius:     18px;
+    border-top-right-radius:    18px;
+    border-bottom-left-radius:  18px;
+    border-bottom-right-radius: 18px;
+    background-color:           rgba(109, 40, 217, 0.28);
+    border-top-width:           2px;
+    border-right-width:         2px;
+    border-bottom-width:        2px;
+    border-left-width:          2px;
+    border-color:               rgba(109, 40, 217, 0.50);
+    align-items:                center;
+    justify-content:            center;
+    flex-shrink:                0;
+    margin-right:               10px;
+    overflow:                   hidden;
+}
+
+.wb-avatar-initial {
+    font-size:         15px;
+    color:             rgba(167, 139, 250, 0.90);
+    -unity-font-style: bold;
+}
+
+/* ── Identity text ────────────────────────────────────────────────────── */
+
+.wb-identity {
+    flex-direction: column;
+    flex-grow:      1;
+    flex-shrink:    1;
+    margin-right:   8px;
+    overflow:       hidden;
+}
+
+.wb-display-name {
+    font-size:         14px;
+    color:             rgba(238, 238, 246, 0.95);
+    -unity-font-style: bold;
+    white-space:       nowrap;
+    overflow:          hidden;
+    text-overflow:     ellipsis;
+}
+
+.wb-sub-label {
+    font-size:     11px;
+    color:         rgba(238, 238, 246, 0.40);
+    white-space:   nowrap;
+    overflow:      hidden;
+    text-overflow: ellipsis;
+    margin-top:    2px;
+}
+
+/* ── Spacer ───────────────────────────────────────────────────────────── */
+
+.wb-spacer {
+    flex-grow: 1;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.wb-btn {
+    font-size:                  12px;
+    padding-top:                5px;
+    padding-bottom:             5px;
+    padding-left:               12px;
+    padding-right:              12px;
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    -unity-font-style:          bold;
+    flex-shrink:                0;
+    cursor:                     link;
+    transition-property:        scale, translate, background-color, border-color, color;
+    transition-duration:        0.12s;
+    transition-timing-function: ease-out;
+}
+
+.wb-btn:hover {
+    scale:     1.03;
+    translate: 0 -1px;
+}
+
+.wb-btn:active {
+    scale:     0.97;
+    translate: 0 1px;
+}
+
+.wb-btn-username {
+    color:            rgba(167, 139, 250, 0.95);
+    background-color: rgba(109, 40, 217, 0.16);
+    border-color:     rgba(109, 40, 217, 0.40);
+    margin-right:     8px;
+    display:          none;
+}
+
+.wb-btn-username--visible {
+    display: flex;
+}
+
+.wb-btn-username:hover {
+    background-color: rgba(109, 40, 217, 0.28);
+    border-color:     rgba(167, 139, 250, 0.55);
+}
+
+.wb-btn-disconnect {
+    color:            rgba(238, 238, 246, 0.40);
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color:     rgba(255, 255, 255, 0.08);
+}
+
+.wb-btn-disconnect:hover {
+    background-color: rgba(248, 113, 113, 0.10);
+    border-color:     rgba(248, 113, 113, 0.25);
+    color:            rgba(248, 113, 113, 0.85);
+}

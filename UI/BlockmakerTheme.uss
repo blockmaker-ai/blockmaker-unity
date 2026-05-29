@@ -1,0 +1,64 @@
+/* =========================================================================
+   BlockmakerTheme.uss
+   SDK Design Tokens
+   Import in every screen USS:  @import url("BlockmakerTheme.uss");
+   Generic dark/purple theme. No game-specific references.
+   Font is intentionally left unset so each game inherits its own.
+   ========================================================================= */
+
+:root {
+    /* Brand */
+    --bm-primary:          #6D28D9;
+    --bm-primary-hover:    #7C3AED;
+    --bm-primary-active:   #5B21B6;
+    --bm-accent:           #A78BFA;
+    --bm-accent-dim:       rgba(167, 139, 250, 0.35);
+
+    /* Backgrounds */
+    --bm-bg:               #0A0A12;
+    --bm-bg-card:          #0D0D14;
+    --bm-panel:            #0D0D14;
+    --bm-surface:          #141420;
+    --bm-surface-2:        #1C1C2A;
+    --bm-surface-hover:    #222236;
+
+    /* Text */
+    --bm-text:             #EEEEF6;
+    --bm-text-secondary:   rgba(238, 238, 246, 0.65);
+    --bm-text-muted:       rgba(238, 238, 246, 0.40);
+    --bm-text-dim:         rgba(238, 238, 246, 0.45);
+
+    /* Borders */
+    --bm-border:           rgba(255, 255, 255, 0.06);
+    --bm-border-bright:    rgba(255, 255, 255, 0.12);
+    --bm-border-primary:   rgba(109, 40, 217, 0.55);
+    --bm-border-accent:    rgba(167, 139, 250, 0.25);
+
+    /* Provider colors */
+    --bm-pera:             #FED700;
+    --bm-defly:            #38BDF8;
+    --bm-evm:              #FBBF24;
+
+    /* Semantic */
+    --bm-error:            #F87171;
+    --bm-success:          #34D399;
+    --bm-warning:          #FBBF24;
+
+    /* Overlay */
+    --bm-backdrop:         rgba(4, 4, 10, 0.78);
+
+    /* Radius */
+    --bm-radius-sm:        8px;
+    --bm-radius:           12px;
+    --bm-radius-lg:        16px;
+    --bm-radius-xl:        20px;
+    --bm-radius-full:      999px;
+
+    /* Spacing */
+    --bm-space-xs:         4px;
+    --bm-space-sm:         8px;
+    --bm-space-md:         16px;
+    --bm-space-lg:         24px;
+    --bm-space-xl:         32px;
+    --bm-space-2xl:        48px;
+}

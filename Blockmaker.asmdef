@@ -1,0 +1,21 @@
+{
+    "name": "Blockmaker",
+    "rootNamespace": "Blockmaker",
+    "references": [
+        "Reown.Sign",
+        "Reown.Core",
+        "Reown.Core.Common",
+        "Reown.Core.Models",
+        "Reown.Core.Network",
+        "Reown.Sign.Unity"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

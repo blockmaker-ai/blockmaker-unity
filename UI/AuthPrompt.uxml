@@ -1,0 +1,148 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="AuthPrompt.uss" />
+
+    <ui:VisualElement name="auth-overlay" class="auth-overlay">
+        <ui:VisualElement class="auth-card">
+
+            <ui:Button name="btn-close" class="auth-close-btn" text="">
+                <ui:VisualElement class="auth-close-bar auth-close-bar--a" />
+                <ui:VisualElement class="auth-close-bar auth-close-bar--b" />
+            </ui:Button>
+
+            <ui:VisualElement class="auth-header">
+                <ui:Label class="auth-title" text="Sign In" />
+            </ui:VisualElement>
+
+            <!-- PAGE: options -->
+            <ui:VisualElement name="page-options" class="auth-page">
+
+                <ui:Button name="btn-email" class="auth-btn auth-btn--primary" text="">
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--email">
+                        <ui:Label class="auth-btn-icon-glyph" text="@" />
+                    </ui:VisualElement>
+                    <ui:Label class="auth-btn-label" text="Continue with Email" />
+                    <ui:VisualElement class="auth-btn-chevron">
+                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                    </ui:VisualElement>
+                </ui:Button>
+
+                <ui:VisualElement class="auth-divider">
+                    <ui:VisualElement class="auth-divider-line" />
+                    <ui:Label class="auth-divider-text" text="OR CONNECT A WALLET" />
+                    <ui:VisualElement class="auth-divider-line" />
+                </ui:VisualElement>
+
+                <ui:Button name="btn-algorand" class="auth-btn auth-btn--wallet" text="">
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--algo">
+                        <ui:Label class="auth-btn-icon-glyph" text="A" />
+                    </ui:VisualElement>
+                    <ui:Label class="auth-btn-label" text="Algorand" />
+                    <ui:VisualElement class="auth-btn-chevron">
+                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                    </ui:VisualElement>
+                </ui:Button>
+
+                <ui:Button name="btn-metamask" class="auth-btn auth-btn--wallet" text="">
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--evm">
+                        <ui:Label class="auth-btn-icon-glyph" text="X" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="auth-btn-body">
+                        <ui:Label class="auth-btn-label" text="Ethereum Wallet" />
+                        <ui:Label class="auth-btn-sub" text="Use your Ethereum wallet on Algorand" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="auth-btn-chevron">
+                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                    </ui:VisualElement>
+                </ui:Button>
+
+            </ui:VisualElement>
+
+            <!-- PAGE: Algorand wallet picker -->
+            <ui:VisualElement name="page-algo-wallets" class="auth-page">
+
+                <ui:VisualElement class="auth-page-nav">
+                    <ui:Button name="btn-back-from-wallets" class="auth-back-btn" text="&lt;" />
+                    <ui:Label class="auth-page-heading" text="Choose Wallet" />
+                </ui:VisualElement>
+
+                <ui:Button name="btn-pera" class="auth-btn auth-btn--wallet" text="">
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--pera">
+                        <ui:Label class="auth-btn-icon-glyph" text="P" />
+                    </ui:VisualElement>
+                    <ui:Label class="auth-btn-label" text="Pera Wallet" />
+                    <ui:VisualElement class="auth-btn-chevron">
+                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                    </ui:VisualElement>
+                </ui:Button>
+
+                <ui:Button name="btn-defly" class="auth-btn auth-btn--wallet" text="">
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--defly">
+                        <ui:Label class="auth-btn-icon-glyph" text="D" />
+                    </ui:VisualElement>
+                    <ui:Label class="auth-btn-label" text="Defly Wallet" />
+                    <ui:VisualElement class="auth-btn-chevron">
+                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                    </ui:VisualElement>
+                </ui:Button>
+
+
+            </ui:VisualElement>
+
+            <!-- PAGE: OTP -->
+            <ui:VisualElement name="page-otp" class="auth-page">
+
+                <ui:VisualElement name="otp-step1" class="auth-step">
+                    <ui:VisualElement class="auth-page-nav">
+                        <ui:Button name="btn-back-options" class="auth-back-btn" text="&lt;" />
+                        <ui:Label class="auth-page-heading" text="Enter your email" />
+                    </ui:VisualElement>
+                    <ui:Label class="auth-field-label" text="EMAIL ADDRESS" />
+                    <ui:TextField name="input-email" class="auth-input" />
+                    <ui:Button name="btn-send-code" class="auth-cta-btn" text="Send Sign-In Code" />
+                </ui:VisualElement>
+
+                <ui:VisualElement name="otp-step2" class="auth-step">
+                    <ui:Label class="auth-page-heading auth-page-heading--standalone" text="Check your inbox" />
+                    <ui:Label name="lbl-sent-to" class="auth-sent-hint" text="" />
+                    <ui:Label class="auth-field-label" text="SIGN-IN CODE" />
+                    <ui:TextField name="input-otp" class="auth-input auth-input--code" max-length="6" />
+                    <ui:Button name="btn-verify" class="auth-cta-btn" text="Verify and Continue" />
+                    <ui:Button name="btn-resend-code" class="auth-link-btn" text="Resend code (60s)" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
+            <!-- PAGE: QR wallet connect -->
+            <ui:VisualElement name="page-qr" class="auth-page auth-page--center">
+
+                <ui:VisualElement class="auth-page-nav">
+                    <ui:Button name="btn-cancel-connect" class="auth-back-btn" text="&lt;" />
+                    <ui:Label name="lbl-qr-provider" class="auth-page-heading" text="Scan with Pera Wallet" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="auth-qr-outer">
+                    <ui:VisualElement class="auth-qr-frame">
+                        <ui:VisualElement name="img-qr" class="auth-qr-image" />
+                        <ui:VisualElement name="qr-loading" class="auth-qr-loading-wrap">
+                            <ui:VisualElement class="auth-qr-spinner" />
+                            <ui:Label class="auth-qr-loading-text" text="Generating..." />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:Label class="auth-qr-hint" text="Open your wallet app and scan the code to connect" />
+                <ui:Button name="btn-copy-wc-link" class="auth-pill-btn" text="Copy Link" />
+            </ui:VisualElement>
+
+            <!-- Wallet address change warning -->
+            <ui:VisualElement name="wallet-warning-banner" class="auth-wallet-warning">
+                <ui:Label name="lbl-wallet-warning" class="auth-wallet-warning-text" text="" />
+            </ui:VisualElement>
+
+            <!-- Status / error -->
+            <ui:Label name="lbl-auth-status" class="auth-status" text="" />
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+
+</ui:UXML>

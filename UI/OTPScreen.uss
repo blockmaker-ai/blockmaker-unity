@@ -1,0 +1,93 @@
+@import url("BlockmakerTheme.uss");
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OTPScreen.uss
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.otp-root {
+    position: absolute;
+    left: 0; top: 0; right: 0; bottom: 0;
+    align-items: center;
+    justify-content: center;
+}
+
+.otp-panel {
+    width: 90%;
+    max-width: 340px;
+}
+
+/* ── Back button ──────────────────────────────────────────────────────── */
+
+.otp-back-btn {
+    align-self: flex-start;
+    background-color: rgba(0, 0, 0, 0);
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-bottom-width: 0;
+    color: var(--bm-text-muted);
+    font-size: 12px;
+    padding: 0 0 12px 0;
+    
+    transition-property: color;
+    transition-duration: 150ms;
+}
+
+.otp-back-btn:hover {
+    color: rgb(167, 139, 250);
+}
+
+/* ── Input fields ─────────────────────────────────────────────────────── */
+
+.otp-field {
+    margin-bottom: 14px;
+}
+
+.otp-input {
+    height: 48px;
+    background-color: var(--bm-surface);
+    border-radius: 10px;
+    border-top-width: 1px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-bottom-width: 1px;
+    border-top-color: rgba(255, 255, 255, 0.09);
+    border-left-color: rgba(255, 255, 255, 0.04);
+    border-right-color: rgba(255, 255, 255, 0.04);
+    border-bottom-color: rgba(0, 0, 0, 0.25);
+    color: rgb(240, 240, 250);
+    font-size: 14px;
+    padding: 0 14px;
+    transition-property: border-top-color;
+    transition-duration: 150ms;
+}
+
+.otp-input:focus {
+    border-top-color: rgba(167, 139, 250, 0.6);
+    border-left-color: rgba(167, 139, 250, 0.3);
+    border-right-color: rgba(167, 139, 250, 0.3);
+}
+
+.otp-code-input {
+    font-size: 22px;
+    -unity-font-style: bold;
+    -unity-text-align: upper-center;
+    letter-spacing: 8px;
+    height: 58px;
+}
+
+/* ── Countdown ────────────────────────────────────────────────────────── */
+
+.otp-countdown {
+    font-size: 11px;
+    color: var(--bm-text-dim);
+    -unity-text-align: upper-center;
+    margin-top: 6px;
+    margin-bottom: 4px;
+}
+
+/* ── Step visibility ──────────────────────────────────────────────────── */
+
+.otp-hidden {
+    display: none;
+}

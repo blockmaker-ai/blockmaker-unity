@@ -1,0 +1,69 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="WalletUpgradePrompt.uss" />
+
+    <!--
+        WalletUpgradePrompt.uxml
+        Slide-up bottom sheet that prompts the player to upgrade from
+        guest/email to a self-custody wallet.
+        Controller: WalletUpgradeController.cs
+        All name="" attributes are queried by the controller - do not rename them.
+    -->
+
+    <ui:VisualElement name="upgrade-root" class="upgrade-root">
+
+        <!-- Dim backdrop: tap to dismiss -->
+        <ui:VisualElement name="upgrade-backdrop" class="upgrade-backdrop" />
+
+        <!-- Slide-up card -->
+        <ui:VisualElement name="upgrade-card" class="upgrade-card">
+
+            <!-- Drag handle bar -->
+            <ui:VisualElement class="upgrade-handle" />
+
+            <!-- Icon -->
+            <ui:VisualElement class="upgrade-icon-circle">
+                <ui:Label class="upgrade-icon-glyph" text="W" />
+            </ui:VisualElement>
+
+            <!-- Copy (set at runtime by WalletUpgradeController) -->
+            <ui:Label name="lbl-upgrade-title" class="upgrade-title" text="Connect a Wallet" />
+            <ui:Label name="lbl-upgrade-body" class="upgrade-body" text="" />
+
+            <!-- Wallet buttons -->
+            <ui:VisualElement class="upgrade-actions">
+                <ui:Button name="btn-pera-upgrade" class="upgrade-wallet-btn" text="">
+                    <ui:VisualElement class="upgrade-wallet-icon upgrade-wallet-icon--pera">
+                        <ui:Label class="upgrade-wallet-icon-glyph" text="P" />
+                    </ui:VisualElement>
+                    <ui:Label class="upgrade-wallet-label" text="Pera Wallet" />
+                    <ui:Label class="upgrade-wallet-arrow" text=">" />
+                </ui:Button>
+
+                <ui:Button name="btn-defly-upgrade" class="upgrade-wallet-btn" text="">
+                    <ui:VisualElement class="upgrade-wallet-icon upgrade-wallet-icon--defly">
+                        <ui:Label class="upgrade-wallet-icon-glyph" text="D" />
+                    </ui:VisualElement>
+                    <ui:Label class="upgrade-wallet-label" text="Defly Wallet" />
+                    <ui:Label class="upgrade-wallet-arrow" text=">" />
+                </ui:Button>
+
+                <ui:Button name="btn-metamask-upgrade" class="upgrade-wallet-btn" text="">
+                    <ui:VisualElement class="upgrade-wallet-icon upgrade-wallet-icon--evm">
+                        <ui:Label class="upgrade-wallet-icon-glyph" text="X" />
+                    </ui:VisualElement>
+                    <ui:Label class="upgrade-wallet-label" text="Ethereum Wallet" />
+                    <ui:Label class="upgrade-wallet-arrow" text=">" />
+                </ui:Button>
+            </ui:VisualElement>
+
+            <!-- Primary CTA -->
+            <ui:Button name="btn-upgrade-wallet" class="upgrade-cta-btn" text="Connect Wallet" />
+
+            <!-- Skip -->
+            <ui:Button name="btn-skip-upgrade" class="upgrade-skip-btn" text="Maybe later" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

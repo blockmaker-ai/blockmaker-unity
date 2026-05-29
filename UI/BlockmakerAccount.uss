@@ -1,0 +1,378 @@
+/* =========================================================================
+   BlockmakerAccount.uss
+   Blockmaker SDK Account Overlay Panel
+   ========================================================================= */
+
+@import url("BlockmakerTheme.uss");
+
+/* ── Root ─────────────────────────────────────────────────────────────── */
+
+.bm-account-root {
+    position:        absolute;
+    left:            0;
+    top:             0;
+    right:           0;
+    bottom:          0;
+    flex-direction:  row;
+    justify-content: flex-end;
+    display:         none;
+}
+
+/* ── Backdrop ─────────────────────────────────────────────────────────── */
+
+.bm-account-backdrop {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: rgba(0, 0, 0, 0.60);
+}
+
+/* ── Panel ────────────────────────────────────────────────────────────── */
+
+.bm-account-panel {
+    position:                   relative;
+    width:                      100%;
+    max-width:                  380px;
+    height:                     100%;
+    flex-direction:             column;
+    background-color:           rgb(13, 13, 20);
+    border-left-width:          1px;
+    border-left-color:          rgba(255, 255, 255, 0.08);
+    border-top-width:           0;
+    border-right-width:         0;
+    border-bottom-width:        0;
+    padding-top:                0;
+    padding-bottom:             28px;
+    padding-left:               0;
+    padding-right:              0;
+    translate:                  0 0;
+    opacity:                    1;
+    transition-property:        translate, opacity;
+    transition-duration:        250ms;
+    transition-timing-function: ease-out;
+}
+
+.bm-account-panel--hidden {
+    translate: 380px 0;
+    opacity:   0;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+
+.bm-account-header {
+    flex-direction:  row;
+    align-items:     center;
+    justify-content: space-between;
+    padding-top:     24px;
+    padding-bottom:  20px;
+    padding-left:    28px;
+    padding-right:   20px;
+}
+
+.bm-account-header-title {
+    font-size:         17px;
+    color:             rgba(238, 238, 246, 0.45);
+    -unity-font-style: bold;
+    letter-spacing:    0.5px;
+}
+
+.bm-account-close-btn {
+    width:                      36px;
+    height:                     36px;
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(255, 255, 255, 0.06);
+    background-color:           rgba(255, 255, 255, 0.03);
+    color:                      rgba(238, 238, 246, 0.30);
+    font-size:                  13px;
+    -unity-text-align:          middle-center;
+    padding-top:                0;
+    padding-bottom:             0;
+    padding-left:               0;
+    padding-right:              0;
+    cursor:                     link;
+    transition-property:        background-color, color, border-color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.bm-account-close-btn:hover {
+    background-color: rgba(248, 113, 113, 0.10);
+    border-color:     rgba(248, 113, 113, 0.18);
+    color:            rgba(248, 113, 113, 0.80);
+}
+
+.bm-account-close-btn:active {
+    scale: 0.90;
+}
+
+/* ── Identity (avatar + name + tier) ──────────────────────────────────── */
+
+.bm-account-identity {
+    align-items:    center;
+    padding-top:    16px;
+    padding-bottom: 28px;
+    padding-left:   28px;
+    padding-right:  28px;
+}
+
+.bm-account-avatar {
+    width:                      76px;
+    height:                     76px;
+    border-top-left-radius:     38px;
+    border-top-right-radius:    38px;
+    border-bottom-left-radius:  38px;
+    border-bottom-right-radius: 38px;
+    background-color:           rgba(109, 40, 217, 0.20);
+    border-top-width:           2px;
+    border-right-width:         2px;
+    border-bottom-width:        2px;
+    border-left-width:          2px;
+    border-color:               rgba(167, 139, 250, 0.28);
+    align-items:                center;
+    justify-content:            center;
+    margin-bottom:              16px;
+}
+
+.bm-account-initial {
+    font-size:         30px;
+    color:             rgb(167, 139, 250);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.bm-account-name {
+    font-size:         20px;
+    color:             rgb(238, 238, 246);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    margin-bottom:     8px;
+}
+
+.bm-account-tier {
+    font-size:                  11px;
+    color:                      rgb(167, 139, 250);
+    background-color:           rgba(109, 40, 217, 0.16);
+    border-top-left-radius:     999px;
+    border-top-right-radius:    999px;
+    border-bottom-left-radius:  999px;
+    border-bottom-right-radius: 999px;
+    padding-top:                4px;
+    padding-bottom:             4px;
+    padding-left:               14px;
+    padding-right:              14px;
+    -unity-text-align:          middle-center;
+    letter-spacing:             0.5px;
+    -unity-font-style:          bold;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────────── */
+
+.bm-account-divider {
+    height:           1px;
+    background-color: rgba(255, 255, 255, 0.05);
+    margin-left:      28px;
+    margin-right:     28px;
+    flex-shrink:      0;
+}
+
+/* ── Section ──────────────────────────────────────────────────────────── */
+
+.bm-account-section {
+    padding-top:    20px;
+    padding-bottom: 20px;
+    padding-left:   28px;
+    padding-right:  28px;
+}
+
+.bm-account-section-label {
+    font-size:      10px;
+    color:          rgba(238, 238, 246, 0.30);
+    margin-bottom:  12px;
+    letter-spacing: 1.5px;
+}
+
+/* ── Address row ──────────────────────────────────────────────────────── */
+
+.bm-account-address-row {
+    flex-direction: row;
+    align-items:    center;
+}
+
+.bm-account-address {
+    flex-grow:    1;
+    font-size:    14px;
+    color:        rgba(238, 238, 246, 0.65);
+    overflow:     hidden;
+    margin-right: 10px;
+}
+
+.bm-account-copy-btn {
+    height:                     34px;
+    min-width:                  58px;
+    background-color:           rgba(255, 255, 255, 0.05);
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(255, 255, 255, 0.08);
+    color:                      rgba(238, 238, 246, 0.45);
+    font-size:                  12px;
+    -unity-text-align:          middle-center;
+    padding-top:                0;
+    padding-bottom:             0;
+    padding-left:               12px;
+    padding-right:              12px;
+    flex-shrink:                0;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.bm-account-copy-btn:hover {
+    background-color: rgba(167, 139, 250, 0.12);
+    border-color:     rgba(167, 139, 250, 0.28);
+    color:            rgb(167, 139, 250);
+}
+
+.bm-account-copy-btn:active {
+    scale: 0.94;
+}
+
+.bm-account-copy-confirm {
+    font-size:  12px;
+    color:      rgb(52, 211, 153);
+    margin-top: 8px;
+    display:    none;
+}
+
+/* ── Username row ─────────────────────────────────────────────────────── */
+
+.bm-account-username-row {
+    flex-direction: row;
+    align-items:    center;
+}
+
+.bm-account-username {
+    flex-grow:  1;
+    font-size:  15px;
+    color:      rgb(238, 238, 246);
+}
+
+.bm-account-change-btn {
+    height:                     34px;
+    min-width:                  66px;
+    background-color:           rgba(255, 255, 255, 0.05);
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(255, 255, 255, 0.08);
+    color:                      rgba(238, 238, 246, 0.45);
+    font-size:                  12px;
+    -unity-text-align:          middle-center;
+    padding-top:                0;
+    padding-bottom:             0;
+    padding-left:               12px;
+    padding-right:              12px;
+    flex-shrink:                0;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.bm-account-change-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color:     rgba(255, 255, 255, 0.16);
+    color:            rgba(238, 238, 246, 0.75);
+}
+
+.bm-account-set-username-btn {
+    height:                     46px;
+    align-self:                 stretch;
+    background-color:           rgba(109, 40, 217, 0.12);
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.18);
+    color:                      rgb(167, 139, 250);
+    font-size:                  14px;
+    -unity-text-align:          middle-center;
+    margin-top:                 6px;
+    cursor:                     link;
+    transition-property:        background-color, border-color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.bm-account-set-username-btn:hover {
+    background-color: rgba(109, 40, 217, 0.22);
+    border-color:     rgba(167, 139, 250, 0.35);
+}
+
+/* ── Spacer ───────────────────────────────────────────────────────────── */
+
+.bm-account-spacer {
+    flex-grow: 1;
+}
+
+/* ── Sign out button ──────────────────────────────────────────────────── */
+
+.bm-account-signout-btn {
+    height:                     48px;
+    align-self:                 stretch;
+    background-color:           rgba(0, 0, 0, 0);
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(248, 113, 113, 0.16);
+    color:                      rgba(248, 113, 113, 0.65);
+    font-size:                  14px;
+    -unity-text-align:          middle-center;
+    margin-top:                 16px;
+    margin-left:                28px;
+    margin-right:               28px;
+    margin-bottom:              8px;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.bm-account-signout-btn:hover {
+    background-color: rgba(248, 113, 113, 0.08);
+    border-color:     rgba(248, 113, 113, 0.35);
+    color:            rgba(248, 113, 113, 0.90);
+}
+
+.bm-account-signout-btn:active {
+    scale: 0.98;
+}

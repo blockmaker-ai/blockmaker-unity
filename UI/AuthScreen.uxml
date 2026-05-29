@@ -1,0 +1,86 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="AuthScreen.uss" />
+
+    <!--
+        AuthScreen.uxml
+        Full-screen auth overlay. Two panels are swapped by AuthScreenController:
+          panel-main    — shown when no session (login options)
+          panel-address — shown when a session exists (connected state)
+    -->
+
+    <ui:VisualElement name="auth-root" class="auth-root">
+
+        <!-- ── Backdrop ──────────────────────────────────────────── -->
+        <ui:VisualElement name="backdrop" class="auth-backdrop" />
+
+        <!-- ── Main panel: no session ────────────────────────────── -->
+        <ui:VisualElement name="panel-main" class="auth-panel">
+
+            <!-- Logo / title area -->
+            <ui:VisualElement class="auth-header">
+                <ui:Label name="lbl-game-title"    class="auth-title"    text="My Game" />
+                <ui:Label name="lbl-game-subtitle" class="auth-subtitle" text="Sign in to continue" />
+            </ui:VisualElement>
+
+            <!-- Status line (errors, loading messages) -->
+            <ui:Label name="lbl-status" class="auth-status" text="" />
+
+            <!-- Wallet connect buttons -->
+            <ui:VisualElement class="auth-section">
+                <ui:Label class="auth-section-label" text="CONNECT WALLET" />
+                <ui:Button name="btn-pera"  class="auth-btn auth-btn-wallet" text="Pera Wallet" />
+                <ui:Button name="btn-defly" class="auth-btn auth-btn-wallet" text="Defly Wallet" />
+                <ui:Button name="btn-metamask" class="auth-btn auth-btn-wallet" text="Ethereum Wallet" />
+            </ui:VisualElement>
+
+            <!-- Divider -->
+            <ui:VisualElement class="auth-divider">
+                <ui:VisualElement class="auth-divider-line" />
+                <ui:Label class="auth-divider-label" text="OR" />
+                <ui:VisualElement class="auth-divider-line" />
+            </ui:VisualElement>
+
+            <!-- Email sign-in -->
+            <ui:VisualElement class="auth-section">
+                <ui:Label class="auth-section-label" text="SIGN IN" />
+                <ui:Button name="btn-email" class="auth-btn auth-btn-email" text="Continue with Email" />
+            </ui:VisualElement>
+
+            <!-- Divider -->
+            <ui:VisualElement class="auth-divider">
+                <ui:VisualElement class="auth-divider-line" />
+                <ui:Label class="auth-divider-label" text="OR" />
+                <ui:VisualElement class="auth-divider-line" />
+            </ui:VisualElement>
+
+            <!-- Guest -->
+            <ui:Button name="btn-guest" class="auth-btn auth-btn-ghost" text="Play as Guest" />
+
+        </ui:VisualElement>
+
+        <!-- ── Address panel: session active ─────────────────────── -->
+        <ui:VisualElement name="panel-address" class="auth-panel auth-panel-hidden">
+
+            <ui:VisualElement class="auth-header">
+                <ui:Label name="lbl-game-title-2"    class="auth-title"    text="My Game" />
+                <ui:Label name="lbl-provider-name"   class="auth-subtitle" text="Connected" />
+            </ui:VisualElement>
+
+            <!-- Wallet address display -->
+            <ui:VisualElement class="auth-address-box">
+                <ui:Label class="auth-section-label" text="YOUR WALLET" />
+                <ui:Label name="lbl-address" class="auth-address" text="" />
+            </ui:VisualElement>
+
+            <!-- Status line -->
+            <ui:Label name="lbl-status-2" class="auth-status" text="" />
+
+            <!-- Actions -->
+            <ui:Button name="btn-continue" class="auth-btn auth-btn-primary" text="Continue to Game" />
+            <ui:Button name="btn-disconnect" class="auth-btn auth-btn-ghost auth-btn-sm" text="Disconnect" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

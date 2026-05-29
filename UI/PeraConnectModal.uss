@@ -1,0 +1,269 @@
+/* =========================================================================
+   PeraConnectModal.uss
+   Pera wallet connection modal — dark card, large logo, big QR.
+   ========================================================================= */
+
+@import url("BlockmakerTheme.uss");
+
+
+/* ── Overlay ─────────────────────────────────────────────────────────── */
+
+.pera-overlay {
+    position:        absolute;
+    left:            0;
+    top:             0;
+    right:           0;
+    bottom:          0;
+    align-items:     center;
+    justify-content: center;
+}
+
+.pera-backdrop {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: rgba(4, 4, 10, 0.78);
+}
+
+.pera-hidden {
+    display: none;
+}
+
+
+/* ── Card ────────────────────────────────────────────────────────────── */
+
+.pera-card {
+    width:                      92%;
+    max-width:                  528px;
+    background-color:           #141418;
+    border-top-left-radius:     22px;
+    border-top-right-radius:    22px;
+    border-bottom-left-radius:  22px;
+    border-bottom-right-radius: 22px;
+    border-top-width:           1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-top-color:           rgba(255, 255, 255, 0.07);
+    border-left-color:          rgba(255, 255, 255, 0.04);
+    border-right-color:         rgba(255, 255, 255, 0.04);
+    border-bottom-color:        rgba(0, 0, 0, 0.40);
+    padding-top:                31px;
+    padding-bottom:             31px;
+    padding-left:               35px;
+    padding-right:              35px;
+    align-items:                center;
+}
+
+
+/* ── Back button (top-left corner) ───────────────────────────────────── */
+
+.pera-back-btn {
+    position:            absolute;
+    left:                22px;
+    top:                 22px;
+    background-color:    rgba(255, 255, 255, 0.06);
+    border-top-width:    1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-top-color:    rgba(255, 255, 255, 0.08);
+    border-left-color:   rgba(255, 255, 255, 0.06);
+    border-right-color:  rgba(255, 255, 255, 0.06);
+    border-bottom-color: rgba(255, 255, 255, 0.03);
+    border-top-left-radius:     9px;
+    border-top-right-radius:    9px;
+    border-bottom-left-radius:  9px;
+    border-bottom-right-radius: 9px;
+    color:               rgba(240, 240, 248, 0.50);
+    font-size:           18px;
+    width:               40px;
+    height:              40px;
+    padding-left:        0;
+    padding-right:       0;
+    padding-top:         0;
+    padding-bottom:      0;
+    cursor:              link;
+    transition-property: background-color, color;
+    transition-duration: 120ms;
+}
+
+.pera-back-btn:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+    color:            rgba(240, 240, 248, 0.85);
+}
+
+.pera-back-btn:active {
+    background-color: rgba(255, 255, 255, 0.04);
+    color:            rgba(240, 240, 248, 0.35);
+}
+
+
+/* ── Pera logo (large, centered) ─────────────────────────────────────── */
+
+.pera-logo {
+    width:                        88px;
+    height:                       88px;
+    margin-top:                   13px;
+    margin-bottom:                18px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+
+/* ── Title ───────────────────────────────────────────────────────────── */
+
+.pera-title {
+    font-size:         20px;
+    -unity-font-style: bold;
+    color:             rgba(240, 240, 248, 0.90);
+    margin-bottom:     24px;
+    letter-spacing:    -0.3px;
+    -unity-text-align: upper-center;
+}
+
+
+/* ── QR code ─────────────────────────────────────────────────────────── */
+
+.pera-qr-frame {
+    width:                      352px;
+    height:                     352px;
+    background-color:           #FFFFFF;
+    border-top-left-radius:     15px;
+    border-top-right-radius:    15px;
+    border-bottom-left-radius:  15px;
+    border-bottom-right-radius: 15px;
+    padding-top:                9px;
+    padding-bottom:             9px;
+    padding-left:               9px;
+    padding-right:              9px;
+    align-items:                center;
+    justify-content:            center;
+    margin-bottom:              15px;
+}
+
+.pera-qr {
+    width:                        334px;
+    height:                       334px;
+    -unity-background-scale-mode: scale-to-fit;
+}
+
+.pera-qr-frame-sm {
+    width:  264px;
+    height: 264px;
+}
+
+.pera-qr-sm {
+    width:  246px;
+    height: 246px;
+}
+
+
+/* ── Status ──────────────────────────────────────────────────────────── */
+
+.pera-status {
+    font-size:         14px;
+    color:             rgba(240, 240, 248, 0.38);
+    margin-bottom:     20px;
+    -unity-text-align: upper-center;
+}
+
+
+/* ── Divider ─────────────────────────────────────────────────────────── */
+
+.pera-divider {
+    width:            100%;
+    height:           1px;
+    background-color: rgba(255, 255, 255, 0.06);
+    margin-bottom:    15px;
+}
+
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+
+.pera-footer {
+    flex-direction:  row;
+    align-items:     center;
+    justify-content: center;
+}
+
+.pera-footer-hint {
+    font-size:    14px;
+    color:        rgba(240, 240, 248, 0.30);
+    margin-right: 7px;
+}
+
+.pera-footer-link {
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-left-width:   0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    color:               #FED700;
+    font-size:           14px;
+    -unity-font-style:   bold;
+    height:              24px;
+    padding-top:         0;
+    padding-bottom:      0;
+    padding-left:        0;
+    padding-right:       0;
+    cursor:              link;
+    transition-property: color;
+    transition-duration: 120ms;
+}
+
+.pera-footer-link:hover {
+    color: #FFEB55;
+}
+
+.pera-footer-link:active {
+    color: #D4B300;
+}
+
+
+/* ── Store buttons ───────────────────────────────────────────────────── */
+
+.pera-store-btn {
+    background-color:           rgba(255, 255, 255, 0.05);
+    border-top-width:           1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-top-color:           rgba(255, 255, 255, 0.08);
+    border-left-color:          rgba(255, 255, 255, 0.05);
+    border-right-color:         rgba(255, 255, 255, 0.05);
+    border-bottom-color:        rgba(255, 255, 255, 0.03);
+    border-top-left-radius:     11px;
+    border-top-right-radius:    11px;
+    border-bottom-left-radius:  11px;
+    border-bottom-right-radius: 11px;
+    color:                      rgba(240, 240, 248, 0.70);
+    font-size:                  14px;
+    -unity-font-style:          bold;
+    height:                     44px;
+    min-width:                  143px;
+    padding-left:               22px;
+    padding-right:              22px;
+    padding-top:                0;
+    padding-bottom:             0;
+    margin-left:                6px;
+    margin-right:               6px;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        120ms;
+}
+
+.pera-store-btn:hover {
+    background-color:    rgba(254, 215, 0, 0.10);
+    border-top-color:    rgba(254, 215, 0, 0.22);
+    border-left-color:   rgba(254, 215, 0, 0.15);
+    border-right-color:  rgba(254, 215, 0, 0.15);
+    border-bottom-color: rgba(254, 215, 0, 0.08);
+    color:               #FED700;
+}
+
+.pera-store-btn:active {
+    background-color: rgba(254, 215, 0, 0.04);
+    color:            #D4B300;
+}

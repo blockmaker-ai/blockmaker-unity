@@ -1,0 +1,74 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="BlockmakerAccount.uss" />
+
+    <!--
+        BlockmakerAccount.uxml - Blockmaker SDK Account Overlay Panel
+        Lightweight right-aligned slide-in panel for viewing account details.
+        All name="" attributes are queried by controllers - do not rename them.
+    -->
+
+    <ui:VisualElement name="bm-account-root" class="bm-account-root">
+
+        <!-- Backdrop: click to dismiss -->
+        <ui:VisualElement name="bm-account-backdrop" class="bm-account-backdrop" />
+
+        <!-- Right-aligned slide-in panel -->
+        <ui:VisualElement name="bm-account-panel" class="bm-account-panel">
+
+            <!-- Header -->
+            <ui:VisualElement class="bm-account-header">
+                <ui:Label class="bm-account-header-title" text="Account" />
+                <ui:Button name="btn-account-close" class="bm-account-close-btn" text="X" />
+            </ui:VisualElement>
+
+            <!-- Avatar + identity -->
+            <ui:VisualElement class="bm-account-identity">
+                <ui:VisualElement name="bm-account-avatar" class="bm-account-avatar">
+                    <ui:Label name="bm-account-initial" class="bm-account-initial" text="?" />
+                </ui:VisualElement>
+                <ui:Label name="bm-account-name" class="bm-account-name" text="Player" />
+                <ui:Label name="bm-account-tier" class="bm-account-tier" text="Guest" />
+            </ui:VisualElement>
+
+            <!-- Divider -->
+            <ui:VisualElement class="bm-account-divider" />
+
+            <!-- Wallet address section -->
+            <ui:VisualElement class="bm-account-section">
+                <ui:Label class="bm-account-section-label" text="WALLET ADDRESS" />
+                <ui:VisualElement class="bm-account-address-row">
+                    <ui:Label name="bm-account-address" class="bm-account-address" text="Not connected" />
+                    <ui:Button name="btn-account-copy" class="bm-account-copy-btn" text="Copy" />
+                </ui:VisualElement>
+                <ui:Label name="bm-account-copy-confirm" class="bm-account-copy-confirm" text="Copied!" />
+            </ui:VisualElement>
+
+            <!-- Divider -->
+            <ui:VisualElement class="bm-account-divider" />
+
+            <!-- Username section -->
+            <ui:VisualElement name="bm-account-username-section" class="bm-account-section">
+                <ui:Label class="bm-account-section-label" text="USERNAME" />
+                <!-- Has username state -->
+                <ui:VisualElement class="bm-account-username-row">
+                    <ui:Label name="bm-account-username" class="bm-account-username" text="" />
+                    <ui:Button name="btn-account-change-username" class="bm-account-change-btn" text="Change" />
+                </ui:VisualElement>
+                <!-- No username state -->
+                <ui:Button name="btn-account-set-username" class="bm-account-set-username-btn" text="Set Username" />
+            </ui:VisualElement>
+
+            <!-- Spacer -->
+            <ui:VisualElement class="bm-account-spacer" />
+
+            <!-- Divider -->
+            <ui:VisualElement class="bm-account-divider" />
+
+            <!-- Sign out -->
+            <ui:Button name="btn-account-signout" class="bm-account-signout-btn" text="Sign Out" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

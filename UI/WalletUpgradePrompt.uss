@@ -1,0 +1,297 @@
+/* =========================================================================
+   WalletUpgradePrompt.uss
+   Blockmaker SDK Wallet Upgrade Bottom Sheet
+   ========================================================================= */
+
+@import url("BlockmakerTheme.uss");
+
+/* ── Root ─────────────────────────────────────────────────────────────── */
+
+.upgrade-root {
+    position:        absolute;
+    left:            0;
+    top:             0;
+    right:           0;
+    bottom:          0;
+    justify-content: flex-end;
+    align-items:     center;
+}
+
+/* ── Backdrop ─────────────────────────────────────────────────────────── */
+
+.upgrade-backdrop {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: rgba(4, 4, 10, 0.78);
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────── */
+
+.upgrade-card {
+    position:                   relative;
+    width:                      92%;
+    max-width:                  540px;
+    background-color:           rgb(13, 13, 20);
+    border-top-left-radius:     24px;
+    border-top-right-radius:    24px;
+    border-bottom-left-radius:  0;
+    border-bottom-right-radius: 0;
+    border-top-width:           1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-bottom-width:        0;
+    border-top-color:           rgba(255, 255, 255, 0.10);
+    border-left-color:          rgba(255, 255, 255, 0.05);
+    border-right-color:         rgba(255, 255, 255, 0.05);
+    padding-top:                16px;
+    padding-bottom:             44px;
+    padding-left:               36px;
+    padding-right:              36px;
+    align-items:                center;
+    translate:                  0 0;
+    opacity:                    1;
+    transition-property:        translate, opacity;
+    transition-duration:        280ms;
+    transition-timing-function: ease-out;
+}
+
+.upgrade-card--hidden {
+    translate: 0 300px;
+    opacity:   0;
+}
+
+/* ── Drag handle ──────────────────────────────────────────────────────── */
+
+.upgrade-handle {
+    width:                      44px;
+    height:                     4px;
+    background-color:           rgba(255, 255, 255, 0.10);
+    border-top-left-radius:     2px;
+    border-top-right-radius:    2px;
+    border-bottom-left-radius:  2px;
+    border-bottom-right-radius: 2px;
+    margin-bottom:              28px;
+    align-self:                 center;
+}
+
+/* ── Icon ─────────────────────────────────────────────────────────────── */
+
+.upgrade-icon-circle {
+    width:                      56px;
+    height:                     56px;
+    border-top-left-radius:     28px;
+    border-top-right-radius:    28px;
+    border-bottom-left-radius:  28px;
+    border-bottom-right-radius: 28px;
+    background-color:           rgba(109, 40, 217, 0.18);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.22);
+    align-items:                center;
+    justify-content:            center;
+    margin-bottom:              24px;
+}
+
+.upgrade-icon-glyph {
+    font-size:         22px;
+    color:             rgb(167, 139, 250);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* ── Text ─────────────────────────────────────────────────────────────── */
+
+.upgrade-title {
+    font-size:         24px;
+    -unity-font-style: bold;
+    color:             rgb(238, 238, 246);
+    margin-bottom:     12px;
+    -unity-text-align: upper-center;
+    letter-spacing:    -0.3px;
+}
+
+.upgrade-body {
+    font-size:         14px;
+    color:             rgba(238, 238, 246, 0.45);
+    white-space:       normal;
+    -unity-text-align: upper-center;
+    margin-bottom:     32px;
+    max-width:         360px;
+}
+
+/* ── Wallet buttons ───────────────────────────────────────────────────── */
+
+.upgrade-actions {
+    align-self:    stretch;
+    margin-bottom: 16px;
+}
+
+.upgrade-wallet-btn {
+    flex-direction:             row;
+    align-items:                center;
+    height:                     60px;
+    background-color:           rgb(20, 20, 30);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-top-color:           rgba(255, 255, 255, 0.08);
+    border-right-color:         rgba(255, 255, 255, 0.05);
+    border-left-color:          rgba(255, 255, 255, 0.05);
+    border-bottom-color:        rgba(0, 0, 0, 0.35);
+    padding-top:                0;
+    padding-bottom:             0;
+    padding-left:               0;
+    padding-right:              0;
+    margin-bottom:              10px;
+    cursor:                     link;
+    transition-property:        scale, background-color, border-color;
+    transition-duration:        0.18s;
+    transition-timing-function: ease-in-out;
+}
+
+.upgrade-wallet-btn:hover {
+    background-color:   rgb(28, 28, 42);
+    border-top-color:   rgba(167, 139, 250, 0.22);
+    border-right-color: rgba(167, 139, 250, 0.12);
+    border-left-color:  rgba(167, 139, 250, 0.12);
+    scale:              1.015;
+}
+
+.upgrade-wallet-btn:active {
+    scale: 0.985;
+}
+
+.upgrade-wallet-icon {
+    width:                      44px;
+    height:                     44px;
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    align-items:                center;
+    justify-content:            center;
+    flex-shrink:                0;
+    margin-left:                10px;
+}
+
+.upgrade-wallet-icon-glyph {
+    font-size:         16px;
+    color:             rgba(238, 238, 246, 0.45);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+/* Provider icon colors */
+
+.upgrade-wallet-icon--pera {
+    background-color: rgba(254, 215, 0, 0.12);
+}
+
+.upgrade-wallet-icon--pera .upgrade-wallet-icon-glyph {
+    color: rgb(254, 215, 0);
+}
+
+.upgrade-wallet-icon--defly {
+    background-color: rgba(56, 189, 248, 0.12);
+}
+
+.upgrade-wallet-icon--defly .upgrade-wallet-icon-glyph {
+    color: rgb(56, 189, 248);
+}
+
+.upgrade-wallet-icon--evm {
+    background-color: rgba(245, 158, 11, 0.14);
+}
+
+.upgrade-wallet-icon--evm .upgrade-wallet-icon-glyph {
+    color: rgb(251, 191, 36);
+}
+
+.upgrade-wallet-label {
+    flex-grow:         1;
+    font-size:         15px;
+    color:             rgba(238, 238, 246, 0.85);
+    -unity-text-align: middle-left;
+    padding-left:      14px;
+}
+
+.upgrade-wallet-arrow {
+    font-size:          18px;
+    color:              rgba(255, 255, 255, 0.10);
+    margin-right:       18px;
+    flex-shrink:        0;
+    transition-property: color;
+    transition-duration: 0.18s;
+}
+
+.upgrade-wallet-btn:hover .upgrade-wallet-arrow {
+    color: rgba(167, 139, 250, 0.40);
+}
+
+/* ── CTA ──────────────────────────────────────────────────────────────── */
+
+.upgrade-cta-btn {
+    align-self:                 stretch;
+    height:                     58px;
+    background-color:           rgb(109, 40, 217);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    border-top-width:           1px;
+    border-right-width:         0;
+    border-bottom-width:        0;
+    border-left-width:          0;
+    border-top-color:           rgba(167, 139, 250, 0.35);
+    color:                      rgb(255, 255, 255);
+    font-size:                  16px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    margin-bottom:              10px;
+    cursor:                     link;
+    transition-property:        scale, background-color;
+    transition-duration:        0.18s;
+    transition-timing-function: ease-in-out;
+}
+
+.upgrade-cta-btn:hover {
+    background-color: rgb(124, 58, 237);
+    scale:            1.015;
+}
+
+.upgrade-cta-btn:active {
+    background-color: rgb(91, 33, 182);
+    scale:            0.985;
+}
+
+/* ── Skip ─────────────────────────────────────────────────────────────── */
+
+.upgrade-skip-btn {
+    height:              44px;
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    color:               rgba(238, 238, 246, 0.25);
+    font-size:           13px;
+    -unity-text-align:   middle-center;
+    cursor:              link;
+    transition-property: color;
+    transition-duration: 0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.upgrade-skip-btn:hover {
+    color: rgba(238, 238, 246, 0.55);
+}

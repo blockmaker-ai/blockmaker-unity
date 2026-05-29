@@ -1,0 +1,56 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="PeraConnectModal.uss" />
+
+    <ui:VisualElement name="pera-root" class="pera-overlay">
+        <ui:VisualElement class="pera-backdrop" />
+
+        <!-- ── Connect Panel ─────────────────────────────────── -->
+        <ui:VisualElement name="panel-connect" class="pera-card">
+
+            <ui:Button name="btn-back" class="pera-back-btn" text="&#x2190;" />
+
+            <ui:VisualElement name="img-pera-icon" class="pera-logo" />
+
+            <ui:Label class="pera-title" text="Connect Wallet" />
+
+            <ui:VisualElement class="pera-qr-frame">
+                <ui:VisualElement name="qr-connect" class="pera-qr" />
+            </ui:VisualElement>
+
+            <ui:Label name="lbl-connect-status" class="pera-status" text="Scan with your Pera Wallet" />
+
+            <ui:VisualElement class="pera-divider" />
+
+            <ui:VisualElement class="pera-footer">
+                <ui:Label name="lbl-footer-hint" class="pera-footer-hint" text="Don&#x2019;t have Pera?" />
+                <ui:Button name="btn-show-download" class="pera-footer-link" text="Download &#x2192;" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+        <!-- ── Download Panel ────────────────────────────────── -->
+        <ui:VisualElement name="panel-download" class="pera-card pera-hidden">
+
+            <ui:Button name="btn-download-back" class="pera-back-btn" text="&#x2190;" />
+
+            <ui:VisualElement name="img-pera-icon-2" class="pera-logo" />
+
+            <ui:Label name="lbl-dl-title" class="pera-title" text="Get Pera Wallet" />
+
+            <ui:VisualElement class="pera-qr-frame pera-qr-frame-sm">
+                <ui:VisualElement name="qr-download" class="pera-qr pera-qr-sm" />
+            </ui:VisualElement>
+
+            <ui:Label name="lbl-dl-status" class="pera-status" text="Scan to visit perawallet.app" />
+
+            <ui:VisualElement class="pera-divider" />
+
+            <ui:VisualElement class="pera-footer">
+                <ui:Button name="btn-ios" class="pera-store-btn" text="App Store" />
+                <ui:Button name="btn-android" class="pera-store-btn" text="Google Play" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+</ui:UXML>

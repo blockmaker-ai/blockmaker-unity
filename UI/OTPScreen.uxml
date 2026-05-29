@@ -1,0 +1,56 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="OTPScreen.uss" />
+
+    <!--
+        OTPScreen.uxml
+        Two-step email OTP flow.
+          step-1  — enter email, tap "Send Code"
+          step-2  — enter OTP code, tap "Verify", countdown to resend
+    -->
+
+    <ui:VisualElement name="otp-root" class="otp-root">
+
+        <ui:VisualElement name="backdrop" class="auth-backdrop" />
+
+        <ui:VisualElement name="otp-panel" class="auth-panel otp-panel">
+
+            <!-- Back button -->
+            <ui:Button name="btn-back" class="otp-back-btn" text="← Back" />
+
+            <ui:VisualElement class="auth-header">
+                <ui:Label class="auth-title" text="Email Login" />
+                <ui:Label name="lbl-otp-subtitle" class="auth-subtitle" text="Enter your email to receive a code" />
+            </ui:VisualElement>
+
+            <!-- Status / error -->
+            <ui:Label name="lbl-otp-status" class="auth-status" text="" />
+
+            <!-- ── Step 1: email entry ──────────────────────────── -->
+            <ui:VisualElement name="step-1">
+                <ui:VisualElement class="otp-field">
+                    <ui:Label class="auth-section-label" text="EMAIL ADDRESS" />
+                    <ui:TextField name="input-email" class="otp-input" placeholder-text="you@example.com"
+                        keyboard-type="EmailAddress" />
+                </ui:VisualElement>
+                <ui:Button name="btn-send-code" class="auth-btn auth-btn-primary" text="Send Code" />
+            </ui:VisualElement>
+
+            <!-- ── Step 2: OTP entry ───────────────────────────── -->
+            <ui:VisualElement name="step-2" class="otp-hidden">
+                <ui:VisualElement class="otp-field">
+                    <ui:Label class="auth-section-label" text="VERIFICATION CODE" />
+                    <ui:TextField name="input-otp" class="otp-input otp-code-input"
+                        placeholder-text="000000"
+                        max-length="6"
+                        keyboard-type="NumberPad" />
+                </ui:VisualElement>
+                <ui:Button name="btn-verify" class="auth-btn auth-btn-primary" text="Verify" />
+                <ui:Label name="lbl-countdown" class="otp-countdown" text="" />
+                <ui:Button name="btn-resend" class="auth-btn auth-btn-ghost auth-btn-sm" text="Resend Code" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

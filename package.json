@@ -1,0 +1,26 @@
+{
+    "name": "com.blockmaker.sdk",
+    "version": "1.0.0",
+    "displayName": "Blockmaker SDK",
+    "description": "Open-source wallet, auth, NFT, and transaction SDK for Unity games on Algorand. Supports Pera, Defly, MetaMask, and email login.",
+    "unity": "6000.0",
+    "author": {
+        "name": "Blockmaker",
+        "url": "https://github.com/blockmaker-ai"
+    },
+    "keywords": [
+        "algorand",
+        "wallet",
+        "nft",
+        "web3",
+        "auth",
+        "blockchain",
+        "gamedev",
+        "pera",
+        "defly",
+        "walletconnect"
+    ],
+    "dependencies": {},
+    "samples": [],
+    "_dependencies_note": "This package requires the Reown SDK (WalletConnect v2) for wallet connection features. Install it via the Reown Unity SDK documentation before importing Blockmaker."
+}

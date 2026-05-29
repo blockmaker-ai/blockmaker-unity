@@ -1,0 +1,744 @@
+/* =========================================================================
+   AuthPrompt.uss
+   Blockmaker SDK Auth Modal
+   ========================================================================= */
+
+@import url("BlockmakerTheme.uss");
+
+/* ── Overlay ──────────────────────────────────────────────────────────── */
+
+.auth-overlay {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: rgba(4, 4, 10, 0.78);
+    align-items:      center;
+    justify-content:  center;
+    display:          none;
+}
+
+/* ── Card ─────────────────────────────────────────────────────────────── */
+
+.auth-card {
+    width:                      92%;
+    max-width:                  560px;
+    flex-direction:             column;
+    align-items:                stretch;
+    background-color:           rgb(13, 13, 20);
+    border-top-left-radius:     20px;
+    border-top-right-radius:    20px;
+    border-bottom-left-radius:  20px;
+    border-bottom-right-radius: 20px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-top-color:           rgba(255, 255, 255, 0.10);
+    border-right-color:         rgba(255, 255, 255, 0.05);
+    border-left-color:          rgba(255, 255, 255, 0.05);
+    border-bottom-color:        rgba(0, 0, 0, 0.50);
+    overflow:                   hidden;
+    padding-bottom:             12px;
+}
+
+/* ── Close button (cross made from two rotated bars) ──────────────────── */
+
+.auth-close-btn {
+    position:                   absolute;
+    top:                        20px;
+    right:                      20px;
+    width:                      36px;
+    height:                     36px;
+    border-top-left-radius:     18px;
+    border-top-right-radius:    18px;
+    border-bottom-left-radius:  18px;
+    border-bottom-right-radius: 18px;
+    border-top-width:           0;
+    border-right-width:         0;
+    border-bottom-width:        0;
+    border-left-width:          0;
+    background-color:           rgba(255, 255, 255, 0.06);
+    padding-top:                0;
+    padding-bottom:             0;
+    padding-left:               0;
+    padding-right:              0;
+    align-items:                center;
+    justify-content:            center;
+    cursor:                     link;
+    transition-property:        background-color;
+    transition-duration:        0.18s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+}
+
+.auth-close-btn:active {
+    scale: 0.88;
+}
+
+.auth-close-bar {
+    position:         absolute;
+    width:            16px;
+    height:           2px;
+    background-color: rgba(238, 238, 246, 0.45);
+    border-top-left-radius:     1px;
+    border-top-right-radius:    1px;
+    border-bottom-left-radius:  1px;
+    border-bottom-right-radius: 1px;
+    transition-property:        background-color;
+    transition-duration:        0.18s;
+}
+
+.auth-close-bar--a {
+    rotate: 45deg;
+}
+
+.auth-close-bar--b {
+    rotate: -45deg;
+}
+
+.auth-close-btn:hover .auth-close-bar {
+    background-color: rgba(238, 238, 246, 0.80);
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+
+.auth-header {
+    flex-direction:  column;
+    align-items:     center;
+    padding-top:     40px;
+    padding-bottom:  4px;
+    padding-left:    40px;
+    padding-right:   40px;
+}
+
+.auth-title {
+    font-size:         32px;
+    color:             rgb(238, 238, 246);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    letter-spacing:    -0.5px;
+}
+
+/* ── Pages ─────────────────────────────────────────────────────────────── */
+
+.auth-page {
+    flex-direction: column;
+    padding-top:    20px;
+    padding-bottom: 24px;
+    padding-left:   40px;
+    padding-right:  40px;
+    display:        none;
+}
+
+.auth-page--center {
+    align-items: center;
+}
+
+/* ── Page navigation (back arrow + heading) ────────────────────────────── */
+
+.auth-page-nav {
+    flex-direction: row;
+    align-items:    center;
+    margin-bottom:  28px;
+    align-self:     stretch;
+}
+
+.auth-back-btn {
+    width:                      42px;
+    height:                     42px;
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(255, 255, 255, 0.08);
+    background-color:           rgba(255, 255, 255, 0.04);
+    color:                      rgba(238, 238, 246, 0.45);
+    font-size:                  22px;
+    -unity-text-align:          middle-center;
+    padding-top:                0;
+    padding-bottom:             2px;
+    padding-left:               0;
+    padding-right:              2px;
+    margin-right:               16px;
+    flex-shrink:                0;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-back-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color:     rgba(255, 255, 255, 0.14);
+    color:            rgba(238, 238, 246, 0.80);
+}
+
+.auth-back-btn:active {
+    scale: 0.90;
+}
+
+.auth-page-heading {
+    font-size:         24px;
+    color:             rgb(238, 238, 246);
+    -unity-font-style: bold;
+    letter-spacing:    -0.3px;
+}
+
+.auth-page-heading--standalone {
+    margin-bottom: 24px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-btn {
+    flex-direction:             row;
+    align-items:                center;
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    padding-top:                0;
+    padding-bottom:             0;
+    padding-left:               0;
+    padding-right:              0;
+    margin-bottom:              12px;
+    cursor:                     link;
+    transition-property:        scale, background-color, border-color;
+    transition-duration:        0.18s;
+    transition-timing-function: ease-in-out;
+}
+
+/* ── Primary button (Email) ───────────────────────────────────────────── */
+
+.auth-btn--primary {
+    height:             66px;
+    background-color:   rgb(109, 40, 217);
+    border-top-color:   rgba(167, 139, 250, 0.45);
+    border-right-color: rgba(167, 139, 250, 0.20);
+    border-left-color:  rgba(167, 139, 250, 0.20);
+    border-bottom-color:rgba(75, 25, 160, 0.70);
+}
+
+.auth-btn--primary:hover {
+    background-color:   rgb(124, 58, 237);
+    border-top-color:   rgba(167, 139, 250, 0.60);
+    border-right-color: rgba(167, 139, 250, 0.35);
+    border-left-color:  rgba(167, 139, 250, 0.35);
+    scale:              1.015;
+}
+
+.auth-btn--primary:active {
+    background-color: rgb(91, 33, 182);
+    scale:            0.985;
+}
+
+/* ── Wallet buttons ───────────────────────────────────────────────────── */
+
+.auth-btn--wallet {
+    height:              64px;
+    background-color:    rgb(20, 20, 30);
+    border-top-width:    0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+}
+
+.auth-btn--wallet:hover {
+    background-color: rgb(28, 28, 42);
+    scale:            1.015;
+}
+
+.auth-btn--wallet:active {
+    background-color: rgb(16, 16, 24);
+    scale:            0.985;
+}
+
+.auth-btn:disabled {
+    opacity: 0.45;
+}
+
+/* ── Button icon area ─────────────────────────────────────────────────── */
+
+.auth-btn-icon {
+    width:                      46px;
+    height:                     46px;
+    border-top-left-radius:     13px;
+    border-top-right-radius:    13px;
+    border-bottom-left-radius:  13px;
+    border-bottom-right-radius: 13px;
+    align-items:                center;
+    justify-content:            center;
+    flex-shrink:                0;
+    margin-left:                10px;
+}
+
+.auth-btn-icon-glyph {
+    font-size:         18px;
+    -unity-text-align: middle-center;
+    -unity-font-style: bold;
+    color:             rgba(238, 238, 246, 0.45);
+}
+
+/* ── Provider icon colors ─────────────────────────────────────────────── */
+
+.auth-btn-icon--email {
+    background-color: rgba(124, 58, 237, 0.28);
+}
+
+.auth-btn-icon--email .auth-btn-icon-glyph {
+    color:     rgb(167, 139, 250);
+    font-size: 22px;
+}
+
+.auth-btn-icon--algo {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.auth-btn-icon--algo .auth-btn-icon-glyph {
+    color: rgb(240, 240, 246);
+}
+
+.auth-btn-icon--evm {
+    background-color: rgba(245, 158, 11, 0.14);
+}
+
+.auth-btn-icon--evm .auth-btn-icon-glyph {
+    color: rgb(251, 191, 36);
+}
+
+.auth-btn-icon--pera {
+    background-color: rgba(254, 215, 0, 0.12);
+}
+
+.auth-btn-icon--pera .auth-btn-icon-glyph {
+    color: rgb(254, 215, 0);
+}
+
+.auth-btn-icon--defly {
+    background-color: rgba(56, 189, 248, 0.12);
+}
+
+.auth-btn-icon--defly .auth-btn-icon-glyph {
+    color: rgb(56, 189, 248);
+}
+
+/* Primary button overrides (after provider colors for specificity) */
+.auth-btn--primary .auth-btn-icon-glyph {
+    color:     rgba(255, 255, 255, 0.90);
+    font-size: 22px;
+}
+
+/* ── Button body (two-line labels) ────────────────────────────────────── */
+
+.auth-btn-body {
+    flex-direction: column;
+    flex-grow:      1;
+    align-items:    flex-start;
+    padding-left:   16px;
+}
+
+.auth-btn-body .auth-btn-label {
+    padding-left:  0;
+    flex-grow:     0;
+    margin-bottom: 3px;
+    -unity-text-align: upper-left;
+}
+
+/* ── Button label ─────────────────────────────────────────────────────── */
+
+.auth-btn-label {
+    flex-grow:         1;
+    font-size:         16px;
+    color:             rgba(238, 238, 246, 0.88);
+    -unity-text-align: middle-left;
+    padding-left:      16px;
+}
+
+.auth-btn--primary .auth-btn-label {
+    color:             rgb(255, 255, 255);
+    font-size:         17px;
+    -unity-font-style: bold;
+}
+
+.auth-btn-sub {
+    font-size: 12px;
+    color:     rgba(238, 238, 246, 0.32);
+}
+
+/* ── Button chevron ───────────────────────────────────────────────────── */
+
+.auth-btn-chevron {
+    width:           52px;
+    align-self:      stretch;
+    align-items:     center;
+    justify-content: center;
+    flex-shrink:     0;
+}
+
+.auth-btn-chevron-glyph {
+    font-size:          20px;
+    color:              rgba(255, 255, 255, 0.10);
+    -unity-text-align:  middle-center;
+    transition-property: color;
+    transition-duration: 0.18s;
+}
+
+.auth-btn--primary:hover .auth-btn-chevron-glyph {
+    color: rgba(255, 255, 255, 0.50);
+}
+
+.auth-btn--wallet:hover .auth-btn-chevron-glyph {
+    color: rgba(167, 139, 250, 0.45);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DIVIDER
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-divider {
+    flex-direction: row;
+    align-items:    center;
+    margin-top:     10px;
+    margin-bottom:  20px;
+}
+
+.auth-divider-line {
+    flex-grow:        1;
+    height:           1px;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.auth-divider-text {
+    font-size:      11px;
+    color:          rgba(238, 238, 246, 0.20);
+    margin-left:    18px;
+    margin-right:   18px;
+    letter-spacing: 1.5px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   OTP STEPS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-step {
+    flex-direction: column;
+    display:        none;
+}
+
+.auth-field-label {
+    font-size:      11px;
+    color:          rgba(238, 238, 246, 0.32);
+    margin-bottom:  10px;
+    letter-spacing: 1.5px;
+}
+
+.auth-sent-hint {
+    font-size:     14px;
+    color:         rgba(238, 238, 246, 0.42);
+    margin-bottom: 24px;
+}
+
+/* ── Text fields ──────────────────────────────────────────────────────── */
+
+.auth-input {
+    height:              56px;
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    margin-bottom:       20px;
+    color:               rgb(238, 238, 246);
+    font-size:           16px;
+    padding-left:        0;
+    padding-right:       0;
+}
+
+.auth-input > .unity-base-text-field__input {
+    background-color:           rgb(20, 20, 30);
+    color:                      rgb(238, 238, 246);
+    border-top-width:           0;
+    border-left-width:          0;
+    border-right-width:         0;
+    border-bottom-width:        0;
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    padding-left:               18px;
+    padding-right:              18px;
+    padding-top:                4px;
+    padding-bottom:             4px;
+    font-size:                  16px;
+    --unity-cursor-color:       rgb(167, 139, 250);
+    box-shadow:                 0 0 0 0 rgba(0, 0, 0, 0);
+    transition-property:        border-color, background-color;
+    transition-duration:        0.2s;
+}
+
+.auth-input > .unity-base-text-field__input:focus {
+    background-color:    rgb(16, 16, 26);
+    box-shadow:          0 0 0 0 rgba(0, 0, 0, 0);
+}
+
+.auth-input--code > .unity-base-text-field__input {
+    font-size:         36px;
+    letter-spacing:    16px;
+    -unity-text-align: middle-center;
+    color:             rgb(167, 139, 250);
+}
+
+/* ── CTA button ───────────────────────────────────────────────────────── */
+
+.auth-cta-btn {
+    height:                     60px;
+    background-color:           rgb(109, 40, 217);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    border-top-width:           1px;
+    border-right-width:         0;
+    border-bottom-width:        0;
+    border-left-width:          0;
+    border-top-color:           rgba(167, 139, 250, 0.35);
+    color:                      rgb(255, 255, 255);
+    font-size:                  17px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    align-self:                 stretch;
+    margin-bottom:              0;
+    cursor:                     link;
+    transition-property:        scale, background-color;
+    transition-duration:        0.18s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-cta-btn:hover {
+    background-color: rgb(124, 58, 237);
+    scale:            1.015;
+}
+
+.auth-cta-btn:active {
+    background-color: rgb(91, 33, 182);
+    scale:            0.985;
+}
+
+/* ── Link button ──────────────────────────────────────────────────────── */
+
+.auth-link-btn {
+    height:              44px;
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    color:               rgba(238, 238, 246, 0.28);
+    font-size:           13px;
+    -unity-text-align:   middle-center;
+    cursor:              link;
+    transition-property: color;
+    transition-duration: 0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-link-btn:hover {
+    color: rgba(238, 238, 246, 0.60);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QR CONNECT PAGE
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-qr-outer {
+    align-self:                 center;
+    padding-top:                6px;
+    padding-bottom:             6px;
+    padding-left:               6px;
+    padding-right:              6px;
+    border-top-left-radius:     20px;
+    border-top-right-radius:    20px;
+    border-bottom-left-radius:  20px;
+    border-bottom-right-radius: 20px;
+    background-color:           rgba(124, 58, 237, 0.06);
+    border-top-width:           2px;
+    border-right-width:         2px;
+    border-bottom-width:        2px;
+    border-left-width:          2px;
+    border-color:               rgba(167, 139, 250, 0.16);
+    margin-bottom:              28px;
+}
+
+.auth-qr-frame {
+    width:                      360px;
+    height:                     360px;
+    align-items:                center;
+    justify-content:            center;
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    overflow:                   hidden;
+}
+
+.auth-qr-image {
+    width:                      348px;
+    height:                     348px;
+    background-color:           rgb(255, 255, 255);
+    background-size:            contain;
+    flex-shrink:                0;
+    align-self:                 center;
+    display:                    none;
+}
+
+.auth-qr-loading-wrap {
+    width:                      276px;
+    height:                     276px;
+    background-color:           rgba(255, 255, 255, 0.02);
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(255, 255, 255, 0.05);
+    align-items:                center;
+    justify-content:            center;
+    flex-direction:             column;
+    align-self:                 center;
+}
+
+.auth-qr-spinner {
+    width:                      48px;
+    height:                     48px;
+    border-top-left-radius:     24px;
+    border-top-right-radius:    24px;
+    border-bottom-left-radius:  24px;
+    border-bottom-right-radius: 24px;
+    border-top-width:           3px;
+    border-right-width:         3px;
+    border-bottom-width:        3px;
+    border-left-width:          3px;
+    border-top-color:           rgb(124, 58, 237);
+    border-right-color:         rgba(124, 58, 237, 0.10);
+    border-bottom-color:        rgba(124, 58, 237, 0.10);
+    border-left-color:          rgba(124, 58, 237, 0.10);
+    margin-bottom:              16px;
+}
+
+.auth-qr-loading-text {
+    font-size:         13px;
+    color:             rgba(238, 238, 246, 0.32);
+    -unity-text-align: middle-center;
+}
+
+.auth-qr-hint {
+    font-size:         14px;
+    color:             rgba(238, 238, 246, 0.35);
+    -unity-text-align: middle-center;
+    margin-bottom:     18px;
+    padding-left:      16px;
+    padding-right:     16px;
+}
+
+/* ── Copy-link text button ────────────────────────────────────────────── */
+
+.auth-pill-btn {
+    background-color:           rgba(0, 0, 0, 0);
+    border-top-width:           0;
+    border-right-width:         0;
+    border-bottom-width:        0;
+    border-left-width:          0;
+    color:                      rgba(167, 139, 250, 0.55);
+    font-size:                  12px;
+    -unity-font-style:          normal;
+    -unity-text-align:          middle-center;
+    padding-left:               4px;
+    padding-right:              4px;
+    padding-top:                4px;
+    padding-bottom:             4px;
+    cursor:                     link;
+    display:                    none;
+    transition-property:        color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-pill-btn:hover {
+    color: rgba(167, 139, 250, 0.85);
+}
+
+.auth-pill-btn:active {
+    color: rgba(167, 139, 250, 0.45);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STATUS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-status {
+    font-size:         13px;
+    color:             rgba(238, 238, 246, 0.50);
+    white-space:       normal;
+    margin-top:        4px;
+    margin-bottom:     20px;
+    margin-left:       40px;
+    margin-right:      40px;
+    display:           none;
+    -unity-text-align: middle-center;
+}
+
+.auth-status--error {
+    color:   rgb(248, 113, 113);
+    display: flex;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   WALLET ADDRESS CHANGE WARNING
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-wallet-warning {
+    display:                     none;
+    margin-top:                  8px;
+    margin-bottom:               8px;
+    margin-left:                 24px;
+    margin-right:                24px;
+    padding-top:                 12px;
+    padding-bottom:              12px;
+    padding-left:                16px;
+    padding-right:               16px;
+    background-color:            rgba(251, 191, 36, 0.10);
+    border-top-width:            1px;
+    border-right-width:          1px;
+    border-bottom-width:         1px;
+    border-left-width:           1px;
+    border-color:                rgba(251, 191, 36, 0.30);
+    border-top-left-radius:      8px;
+    border-top-right-radius:     8px;
+    border-bottom-left-radius:   8px;
+    border-bottom-right-radius:  8px;
+}
+
+.auth-wallet-warning-text {
+    font-size:         12px;
+    color:             rgba(251, 191, 36, 0.95);
+    white-space:       normal;
+    -unity-text-align: upper-left;
+}

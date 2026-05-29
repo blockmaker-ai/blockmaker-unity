@@ -1,0 +1,47 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="ProfilePicPicker.uss" />
+
+    <ui:VisualElement name="overlay-pfp-picker" class="pfp-overlay">
+
+        <ui:VisualElement class="pfp-backdrop" />
+
+        <ui:VisualElement class="pfp-panel">
+
+            <ui:Label class="pfp-title" text="Choose Profile Picture" />
+
+            <!-- Tab bar -->
+            <ui:VisualElement class="pfp-tabs">
+                <ui:Button name="tab-defaults" class="pfp-tab pfp-tab--active" text="Default" />
+                <ui:Button name="tab-nfts"     class="pfp-tab"                 text="My NFTs" />
+            </ui:VisualElement>
+
+            <!-- Default avatars tab -->
+            <ui:VisualElement name="page-defaults" class="pfp-page">
+                <ui:ScrollView class="pfp-scroll">
+                    <ui:VisualElement name="defaults-grid" class="pfp-grid" />
+                </ui:ScrollView>
+            </ui:VisualElement>
+
+            <!-- NFT search tab -->
+            <ui:VisualElement name="page-nfts" class="pfp-page pfp-page--hidden">
+                <ui:VisualElement class="pfp-search-row">
+                    <ui:TextField name="input-nft-search" class="pfp-search-input" />
+                    <ui:Button name="btn-nft-search" class="pfp-search-btn" text="Search" />
+                </ui:VisualElement>
+                <ui:ScrollView class="pfp-scroll">
+                    <ui:VisualElement name="nft-grid" class="pfp-grid" />
+                </ui:ScrollView>
+                <ui:Label name="lbl-nft-status" class="pfp-status" text="Search your wallet for NFTs." />
+            </ui:VisualElement>
+
+            <!-- Status / error label -->
+            <ui:Label name="lbl-pfp-status" class="pfp-status" text="" />
+
+            <!-- Actions -->
+            <ui:Button name="btn-pfp-cancel" class="pfp-cancel-btn" text="Cancel" />
+
+        </ui:VisualElement>
+
+    </ui:VisualElement>
+
+</ui:UXML>

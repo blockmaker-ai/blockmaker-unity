@@ -1,0 +1,316 @@
+/* =========================================================================
+   AuthScreen.uss
+   Blockmaker SDK Full-Screen Auth (Boot Screen)
+   All colors reference BlockmakerTheme.uss variables so games can retheme
+   the auth screen by overriding :root custom properties.
+   ========================================================================= */
+
+@import url("BlockmakerTheme.uss");
+
+/* ── Fullscreen root ──────────────────────────────────────────────────── */
+
+.auth-root {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    align-items:      center;
+    justify-content:  center;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.auth-backdrop {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: var(--bm-backdrop);
+}
+
+/* ── Panel ────────────────────────────────────────────────────────────── */
+
+.auth-panel {
+    position:                   absolute;
+    width:                      90%;
+    max-width:                  420px;
+    min-width:                  280px;
+    background-color:           var(--bm-panel);
+    border-top-left-radius:     var(--bm-radius-xl);
+    border-top-right-radius:    var(--bm-radius-xl);
+    border-bottom-left-radius:  var(--bm-radius-xl);
+    border-bottom-right-radius: var(--bm-radius-xl);
+    border-top-width:           1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-top-color:           var(--bm-border-bright);
+    border-left-color:          var(--bm-border);
+    border-right-color:         var(--bm-border);
+    border-bottom-color:        rgba(0, 0, 0, 0.50);
+    padding-top:                36px;
+    padding-bottom:             var(--bm-space-xl);
+    padding-left:               var(--bm-space-xl);
+    padding-right:              var(--bm-space-xl);
+    align-items:                stretch;
+    opacity:                    1;
+    transition-property:        opacity, translate;
+    transition-duration:        220ms;
+    transition-timing-function: ease-out;
+}
+
+.auth-panel-hidden {
+    opacity:   0;
+    translate: 0 10px;
+    display:   none;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+
+.auth-header {
+    align-items:    center;
+    margin-bottom:  28px;
+}
+
+.auth-title {
+    font-size:         28px;
+    -unity-font-style: bold;
+    color:             var(--bm-text);
+    margin-bottom:     var(--bm-space-sm);
+    letter-spacing:    -0.5px;
+}
+
+.auth-subtitle {
+    font-size:         14px;
+    color:             var(--bm-text-muted);
+    white-space:       normal;
+    -unity-text-align: upper-center;
+    max-width:         300px;
+}
+
+/* ── Status label ─────────────────────────────────────────────────────── */
+
+.auth-status {
+    font-size:         12px;
+    color:             var(--bm-error);
+    white-space:       normal;
+    min-height:        20px;
+    margin-bottom:     12px;
+    -unity-text-align: upper-center;
+}
+
+/* ── Section label ────────────────────────────────────────────────────── */
+
+.auth-section-label {
+    font-size:         10px;
+    -unity-font-style: bold;
+    color:             var(--bm-text-dim);
+    letter-spacing:    1.5px;
+    margin-bottom:     10px;
+}
+
+/* ── Buttons base ─────────────────────────────────────────────────────── */
+
+.auth-btn {
+    height:                     56px;
+    border-top-left-radius:     var(--bm-radius);
+    border-top-right-radius:    var(--bm-radius);
+    border-bottom-left-radius:  var(--bm-radius);
+    border-bottom-right-radius: var(--bm-radius);
+    font-size:                  15px;
+    -unity-font-style:          bold;
+    margin-bottom:              10px;
+    white-space:                nowrap;
+    cursor:                     link;
+    transition-property:        background-color, border-color, scale, translate;
+    transition-duration:        150ms;
+    transition-timing-function: ease-out;
+}
+
+/* ── Primary button ───────────────────────────────────────────────────── */
+
+.auth-btn-primary {
+    background-color:    var(--bm-primary);
+    border-top-width:    1px;
+    border-left-width:   0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    border-top-color:    var(--bm-accent-dim);
+    color:               rgb(255, 255, 255);
+}
+
+.auth-btn-primary:hover {
+    background-color: var(--bm-primary-hover);
+    scale:            1.02;
+    translate:        0 -1px;
+}
+
+.auth-btn-primary:active {
+    background-color: var(--bm-primary-active);
+    scale:            0.98;
+    translate:        0 1px;
+}
+
+/* ── Wallet buttons ───────────────────────────────────────────────────── */
+
+.auth-btn-wallet {
+    background-color:    var(--bm-surface);
+    border-top-width:    1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-top-color:    rgba(255, 255, 255, 0.08);
+    border-left-color:   var(--bm-border);
+    border-right-color:  var(--bm-border);
+    border-bottom-color: rgba(0, 0, 0, 0.30);
+    color:               var(--bm-text-secondary);
+}
+
+.auth-btn-wallet:hover {
+    background-color:  var(--bm-surface-hover);
+    border-top-color:  rgba(167, 139, 250, 0.30);
+    border-left-color: rgba(167, 139, 250, 0.15);
+    border-right-color:rgba(167, 139, 250, 0.15);
+    scale:             1.015;
+    translate:         0 -1px;
+}
+
+.auth-btn-wallet:active {
+    background-color: var(--bm-bg);
+    scale:            0.98;
+    translate:        0 1px;
+}
+
+/* ── Email button ─────────────────────────────────────────────────────── */
+
+.auth-btn-email {
+    background-color:    var(--bm-bg);
+    border-top-width:    1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-top-color:    var(--bm-border-accent);
+    border-left-color:   rgba(167, 139, 250, 0.10);
+    border-right-color:  rgba(167, 139, 250, 0.10);
+    border-bottom-color: rgba(0, 0, 0, 0.30);
+    color:               var(--bm-accent);
+}
+
+.auth-btn-email:hover {
+    background-color: var(--bm-surface-hover);
+    border-top-color: rgba(167, 139, 250, 0.45);
+    scale:            1.015;
+    translate:        0 -1px;
+}
+
+.auth-btn-email:active {
+    scale:     0.98;
+    translate: 0 1px;
+}
+
+/* ── Ghost button ─────────────────────────────────────────────────────── */
+
+.auth-btn-ghost {
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-left-width:   0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    color:               var(--bm-text-dim);
+}
+
+.auth-btn-ghost:hover {
+    color: var(--bm-accent);
+}
+
+.auth-btn-ghost:active {
+    color: var(--bm-primary-hover);
+}
+
+.auth-btn:disabled {
+    opacity: 0.45;
+}
+
+.auth-btn-sm {
+    height:            40px;
+    font-size:         13px;
+    -unity-font-style: normal;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────────── */
+
+.auth-divider {
+    flex-direction: row;
+    align-items:    center;
+    margin-top:     6px;
+    margin-bottom:  14px;
+}
+
+.auth-divider-line {
+    flex-grow:        1;
+    height:           1px;
+    background-color: var(--bm-border);
+}
+
+.auth-divider-label {
+    font-size:         10px;
+    -unity-font-style: bold;
+    color:             rgba(238, 238, 246, 0.40);
+    letter-spacing:    1.5px;
+    margin-left:       12px;
+    margin-right:      12px;
+}
+
+/* ── Address box ──────────────────────────────────────────────────────── */
+
+.auth-address-box {
+    background-color:           var(--bm-bg);
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    border-top-width:           1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-top-color:           var(--bm-border);
+    border-left-color:          var(--bm-border);
+    border-right-color:         var(--bm-border);
+    border-bottom-color:        rgba(0, 0, 0, 0.25);
+    padding-top:                14px;
+    padding-bottom:             14px;
+    padding-left:               var(--bm-space-md);
+    padding-right:              var(--bm-space-md);
+    margin-bottom:              20px;
+}
+
+.auth-address {
+    font-size:         14px;
+    color:             var(--bm-accent);
+    -unity-font-style: bold;
+    white-space:       nowrap;
+    overflow:          hidden;
+    text-overflow:     ellipsis;
+    margin-top:        6px;
+}
+
+/* ── Section wrapper ──────────────────────────────────────────────────── */
+
+.auth-section {
+    margin-bottom: 6px;
+}
+
+/* ── Responsive scaling ─────────────────────────────────────────────────
+   Unity USS does not support CSS @media queries. To adapt the auth screen
+   for different resolutions and DPI, configure PanelSettings on your
+   UIDocument:
+     1. Set "Scale Mode" to "Scale With Screen Size"
+     2. Set "Reference Resolution" (e.g. 1920x1080)
+     3. Set "Screen Match Mode" to "Match Width Or Height"
+   This lets the entire UI toolkit tree scale proportionally.
+
+   The styles below use percentage widths, min-width, and max-width so the
+   auth panel remains readable at any reference resolution without needing
+   breakpoints.
+   ───────────────────────────────────────────────────────────────────────── */

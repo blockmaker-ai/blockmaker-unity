@@ -1,0 +1,36 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" editor-extension-mode="False">
+    <Style src="WalletBar.uss" />
+
+    <!--
+        WalletBar.uxml
+        Compact identity bar shown in-game HUD. Displays profile image,
+        display name, sub-label (varies by tier), and action buttons.
+        Controlled by WalletBarController.cs.
+    -->
+
+    <ui:VisualElement name="wallet-bar-root" class="wb-root">
+
+        <!-- Profile image (32×32 circle) -->
+        <ui:VisualElement name="wb-avatar" class="wb-avatar">
+            <!-- Fallback initial shown when no image is set -->
+            <ui:Label name="wb-avatar-initial" class="wb-avatar-initial" text="?" />
+        </ui:VisualElement>
+
+        <!-- Name + sub-label stack -->
+        <ui:VisualElement class="wb-identity">
+            <ui:Label name="wb-display-name" class="wb-display-name" text="Guest" />
+            <ui:Label name="wb-sub-label"    class="wb-sub-label"    text="" />
+        </ui:VisualElement>
+
+        <!-- Spacer -->
+        <ui:VisualElement class="wb-spacer" />
+
+        <!-- "Set username" — only visible for users without a username -->
+        <ui:Button name="wb-btn-username" class="wb-btn wb-btn-username" text="Set username" />
+
+        <!-- Disconnect / logout -->
+        <ui:Button name="wb-btn-disconnect" class="wb-btn wb-btn-disconnect" text="Disconnect" />
+
+    </ui:VisualElement>
+
+</ui:UXML>
