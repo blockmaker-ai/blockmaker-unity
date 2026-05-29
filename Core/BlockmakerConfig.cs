@@ -41,6 +41,13 @@ namespace Blockmaker
         [Tooltip("Enable xChain Accounts — lets EVM wallet users sign Algorand transactions from their existing wallet.")]
         public bool enableEvmXChain = true;
 
+        [Header("Branding")]
+        [Tooltip("URL shown in wallet apps when players approve connections. Defaults to your server URL if empty.")]
+        public string dAppUrl = "";
+
+        [Tooltip("Icon URL shown in wallet apps. Leave empty for default.")]
+        public string dAppIconUrl = "";
+
         [Header("Timeouts (seconds)")]
         public float defaultTimeoutSeconds  = 10f;
         public float rewardTimeoutSeconds   = 20f;

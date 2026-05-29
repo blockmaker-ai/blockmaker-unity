@@ -139,8 +139,12 @@ namespace Blockmaker
 
             try
             {
-                var url = Application.absoluteURL;
-                if (string.IsNullOrEmpty(url)) url = "https://blockmaker.ai";
+                var cfg = BlockmakerAuth.Instance?.blockmakerConfig;
+                var url = cfg?.dAppUrl;
+                if (string.IsNullOrEmpty(url)) url = Application.absoluteURL;
+                if (string.IsNullOrEmpty(url)) url = cfg?.serverUrl ?? "https://example.com";
+                var icon = cfg?.dAppIconUrl;
+                if (string.IsNullOrEmpty(icon)) icon = url.TrimEnd('/') + "/icon.png";
 
                 _signClient = await SignClientUnity.Create(new SignClientOptions
                 {
@@ -149,9 +153,9 @@ namespace Blockmaker
                     Metadata = new Metadata
                     {
                         Name        = Application.productName,
-                        Description = $"{Application.productName} — powered by Blockmaker",
+                        Description = Application.productName,
                         Url         = url,
-                        Icons       = new[] { "https://blockmaker.ai/icon.png" }
+                        Icons       = new[] { icon }
                     }
                 });
 

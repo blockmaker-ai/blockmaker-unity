@@ -773,11 +773,14 @@ namespace Blockmaker
         private IEnumerator PeraNativeWCv1Flow()
         {
             CleanupWCv1();
+            var dAppUrl = blockmakerConfig?.dAppUrl;
+            if (string.IsNullOrEmpty(dAppUrl)) dAppUrl = blockmakerConfig?.serverUrl ?? "https://example.com";
+
             _wcv1Client = new WalletConnectV1Client(
                 chainId: 4160,
                 appName: Application.productName,
                 appDescription: Application.productName,
-                appUrl: "https://blockmaker.io"
+                appUrl: dAppUrl
             );
 
             string wcUri    = _wcv1Client.Uri;

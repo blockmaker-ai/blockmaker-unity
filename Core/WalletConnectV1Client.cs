@@ -102,16 +102,16 @@ namespace Blockmaker
         public WalletConnectV1Client(
             string bridgeUrl = null,
             int    chainId   = 4160,
-            string appName   = "Blockmaker",
-            string appDescription = "Blockmaker SDK",
-            string appUrl    = "https://blockmaker.io")
+            string appName   = null,
+            string appDescription = null,
+            string appUrl    = null)
         {
             _syncContext     = SynchronizationContext.Current;
             _bridgeUrl      = bridgeUrl ?? PERA_BRIDGES[GenerateRandomBytes(1)[0] % PERA_BRIDGES.Length];
             _chainId        = chainId;
-            _appName        = appName;
-            _appDescription = appDescription;
-            _appUrl         = appUrl;
+            _appName        = appName ?? Application.productName;
+            _appDescription = appDescription ?? Application.productName;
+            _appUrl         = appUrl ?? "https://example.com";
 
             _key            = GenerateRandomBytes(32);
             _handshakeTopic = Guid.NewGuid().ToString();

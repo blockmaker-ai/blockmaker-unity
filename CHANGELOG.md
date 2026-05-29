@@ -11,7 +11,7 @@
 - Session persistence via encrypted SecurePrefs (AES-256-CBC + HMAC)
 - Proactive JWT token refresh
 - Profile management (username claim/change, NFT profile pictures, default avatars)
-- Token balance tracking (NikoBalanceTracker)
+- Token balance tracking (TokenBalanceTracker)
 - NFT metadata parsing (ARC-69) with configurable IPFS gateway
 - QR code generation for wallet pairing
 - Full Algorand address checksum validation

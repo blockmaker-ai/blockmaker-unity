@@ -454,7 +454,7 @@ namespace Blockmaker
         public long   amountMicroAlgo;
         public long   assetId;
         public string reason;
-        public string raceId;
+        public string contextId;
         public string code;
         public string error;
     }
@@ -465,7 +465,7 @@ namespace Blockmaker
         public long   assetId;
         public long   amountMicroAlgo;
         public string reason;
-        public string raceId;
+        public string contextId;
     }
 
     // ── Transaction builder types ───────────────────────────────────────────────
