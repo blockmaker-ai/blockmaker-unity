@@ -30,6 +30,8 @@ Open `Packages/manifest.json` in your project folder and add:
 **In `"dependencies"`:**
 ```json
 "com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
+"com.nethereum.unity": "4.19.2",
+"com.reown.sign.nethereum": "1.6.0",
 "com.reown.sign.unity": "1.6.0",
 ```
 
