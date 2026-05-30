@@ -58,9 +58,14 @@ Go to **Blockmaker > Setup Scene** in the menu bar. This automatically:
 - Creates a BlockmakerConfig asset
 - Adds BlockmakerAuth with the config wired up
 - Adds the auth UI with all UXML assets pre-assigned
-- Creates PanelSettings and EventSystem if needed
+- Creates PanelSettings if needed
+- Adds a Connect Wallet button
 
 Hit Play — the wallet system is ready. No API keys or signups needed.
+
+### Sample scene
+
+Want to see it working first? In **Package Manager > Blockmaker SDK > Samples**, import the **Wallet Demo**. Add the `WalletDemo` script to an empty GameObject and hit Play — includes wallet connection and transaction signing.
 
 ## Usage
 
