@@ -21,6 +21,15 @@ public static class BlockmakerBootSceneSetup
         // ── 1. Find or create BlockmakerConfig ─────────────────────────────
         var config = FindOrCreateConfig();
 
+        // ── Fix default bundle ID (Reown relay rejects Unity template IDs)
+        if (PlayerSettings.applicationIdentifier != null &&
+            PlayerSettings.applicationIdentifier.Contains("unity.template"))
+        {
+            var newId = $"com.{PlayerSettings.companyName.ToLower().Replace(" ", "")}.{PlayerSettings.productName.ToLower().Replace(" ", "")}";
+            PlayerSettings.SetApplicationIdentifier(UnityEditor.Build.NamedBuildTarget.Standalone, newId);
+            Debug.Log($"[Blockmaker] Set bundle ID to {newId} (Reown requires a real app identifier)");
+        }
+
         // ── 2. _Blockmaker GameObject ──────────────────────────────────────
         var blockmakerGo = GameObject.Find("_Blockmaker");
         if (blockmakerGo == null)
