@@ -501,7 +501,7 @@ namespace Blockmaker
                 var uri = connectData.Uri;
                 var qrTexture = CreateQRTexture(uri);
                 if (qrTexture != null)
-                    FireEvent(OnQRReady, "Ethereum Wallet", uri, qrTexture);
+                    FireEvent(OnQRReady, "EVM Wallet", uri, qrTexture);
 
                 var approvalTask = connectData.Approval;
                 var timeoutTask  = Task.Delay(TimeSpan.FromSeconds(ConnectTimeoutSeconds));
@@ -538,7 +538,7 @@ namespace Blockmaker
 
                 BlockmakerLog.Info($"[ReownWalletConnector] EVM wallet connected: {evmAddress}");
                 onConnected?.Invoke(evmAddress);
-                FireEvent(OnConnected, "Ethereum Wallet", evmAddress);
+                FireEvent(OnConnected, "EVM Wallet", evmAddress);
             }
             catch (OperationCanceledException)
             {
