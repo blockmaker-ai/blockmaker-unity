@@ -8,7 +8,7 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 |--------|-------------|
 | **Pera** | QR code scan (WalletConnect v1) |
 | **Defly** | QR code scan (WalletConnect v2) |
-| **EVM wallets** | MetaMask, Rainbow, etc. via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts) — signs with an EVM wallet, gets an Algorand address |
+| **X-Chain** | Any EVM wallet (MetaMask, Rainbow, Coinbase + more) via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts) |
 | **Email** | Magic SDK (WebGL) or server-managed OTP (all platforms) |
 
 ## Getting Started
@@ -25,7 +25,7 @@ In Unity: **Window > Package Manager > + > Add package from git URL**
 https://github.com/blockmaker-ai/blockmaker-unity.git
 ```
 
-You also need the [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/installation) for Defly and EVM wallet support.
+> **Note:** You also need the [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/installation) installed in your project.
 
 ### 3. Configure
 
@@ -34,7 +34,7 @@ You also need the [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/ins
    - **Server URL** — from step 1
    - **API Key** — from step 1
 
-That's it — Pera, Defly, xChain, and email login all work out of the box.
+That's it — Pera, Defly, X-Chain, and email login all work out of the box.
 
 ### 4. Add to your scene
 
@@ -47,39 +47,35 @@ Add a `BlockmakerAuth` component to any GameObject and assign your config. Done.
 ```csharp
 using Blockmaker;
 
-// Connect Pera (QR code)
+// Pera (QR code)
 BlockmakerAuth.Instance.ConnectWallet("Pera",
     identity => Debug.Log($"Connected: {identity.Address}"),
     error    => Debug.Log(error)
 );
 
-// Connect Defly (QR code)
+// Defly (QR code)
 BlockmakerAuth.Instance.ConnectWallet("Defly",
     identity => Debug.Log($"Connected: {identity.Address}"),
     error    => Debug.Log(error)
 );
 
-// Connect an EVM wallet (MetaMask, Rainbow, etc.)
+// X-Chain — any EVM wallet (MetaMask, Rainbow, Coinbase + more)
 BlockmakerAuth.Instance.ConnectEvm(
-    identity => Debug.Log($"EVM connected: {identity.Address}"),
+    identity => Debug.Log($"Connected: {identity.Address}"),
     error    => Debug.Log(error)
 );
 
-// Email login (Magic SDK on WebGL, OTP on other platforms)
+// Email login
 BlockmakerAuth.Instance.ConnectMagicEmail("player@example.com",
-    identity => Debug.Log($"Email signed in: {identity.Address}"),
+    identity => Debug.Log($"Signed in: {identity.Address}"),
     error    => Debug.Log(error)
 );
 ```
 
 ### Async/await
 
-All connect and sign methods have async overloads:
-
 ```csharp
 var identity = await BlockmakerAuth.Instance.ConnectWalletAsync("Pera");
-Debug.Log($"Connected: {identity.Address}");
-
 var evmIdentity = await BlockmakerAuth.Instance.ConnectEvmAsync();
 ```
 
@@ -94,7 +90,7 @@ yield return identity.SignTransaction(unsignedTxnBase64,
     error  => Debug.Log(error)
 );
 
-// Atomic group (all wallet types, all platforms)
+// Atomic group
 yield return identity.SignTransactions(unsignedTxnsBase64,
     signed => Debug.Log($"Signed {signed.Length} transactions"),
     error  => Debug.Log(error)
@@ -134,7 +130,6 @@ void HandleIdentityChanged(IBlockmakerIdentity identity)
 
 ```csharp
 BlockmakerAuth.Instance.Logout();
-// Identity reverts to Guest, session is cleared, tokens invalidated
 ```
 
 ## Pre-built UI
@@ -143,7 +138,7 @@ The SDK includes ready-to-use UI screens built with UI Toolkit:
 
 - **Auth screen** — wallet selection, QR display, email OTP flow
 - **Wallet bar** — shows connected address, tier badge
-- **QR modal** — Pera/Defly connection with copy-link fallback
+- **QR modal** — Pera/Defly/X-Chain connection with copy-link fallback
 - **Wallet upgrade prompt** — nudges guests to connect
 
 All UI is optional — you can build your own using the `BlockmakerAuth` API directly.
@@ -166,8 +161,8 @@ BlockmakerLog.OnLog += (level, msg) => MyLogger.Log(msg);
 |-------|-------------|
 | `serverUrl` | Your Blockmaker server URL (from the developer signup) |
 | `apiKey` | Your API key (`sk_` prefix) — **only used in the Unity Editor, never shipped in player builds** |
-| `walletConnectProjectId` | Optional — your own WalletConnect project ID. Leave empty to use the Blockmaker shared ID (works out of the box) |
-| `magicPublishableKey` | Optional — Magic SDK key for email login on WebGL. Get one at [dashboard.magic.link](https://dashboard.magic.link) |
+| `walletConnectProjectId` | Optional — your own WalletConnect project ID. Leave empty to use the shared default |
+| `magicPublishableKey` | Optional — Magic SDK key for email login on WebGL |
 | `dAppUrl` | Optional — URL shown in wallet apps when players approve a connection |
 | `dAppIconUrl` | Optional — icon shown in wallet apps |
 | `walletSignTimeoutSeconds` | How long to wait for wallet approval (default: 120 seconds) |
