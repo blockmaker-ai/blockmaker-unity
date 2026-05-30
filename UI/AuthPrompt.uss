@@ -303,15 +303,17 @@
 }
 
 .auth-btn-icon--evm {
-    background-color: rgba(245, 158, 11, 0.14);
+    background-image: url("xchain-logo.png");
+    -unity-background-scale-mode: scale-to-fit;
+    background-size: 100% 100%;
+    background-position: center;
 }
 
 .auth-btn-icon--evm .auth-btn-icon-glyph {
-    color: rgb(251, 191, 36);
+    display: none;
 }
 
 .auth-btn-icon--pera {
-    background-color: rgb(254, 215, 0);
     background-image: url("pera-logo.png");
     -unity-background-scale-mode: scale-to-fit;
     background-size: 100% 100%;
@@ -323,11 +325,14 @@
 }
 
 .auth-btn-icon--defly {
-    background-color: rgba(56, 189, 248, 0.12);
+    background-image: url("defly-logo.png");
+    -unity-background-scale-mode: scale-to-fit;
+    background-size: 100% 100%;
+    background-position: center;
 }
 
 .auth-btn-icon--defly .auth-btn-icon-glyph {
-    color: rgb(56, 189, 248);
+    display: none;
 }
 
 /* Primary button overrides (after provider colors for specificity) */
