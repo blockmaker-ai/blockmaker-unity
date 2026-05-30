@@ -65,7 +65,21 @@ public static class BlockmakerBootSceneSetup
         if (authPrompt.peraConnectAsset == null)
             authPrompt.peraConnectAsset = LoadAsset<VisualTreeAsset>("UI/PeraConnectModal.uxml");
 
-        // ── 4. EventSystem ─────────────────────────────────────────────────
+        // ── 4. _ConnectButton (example UI) ──────────────────────────────────
+        var connectGo = GameObject.Find("_ConnectButton");
+        if (connectGo == null)
+        {
+            connectGo = new GameObject("_ConnectButton");
+
+            var btnDoc = connectGo.AddComponent<UIDocument>();
+            btnDoc.sortingOrder = 200;
+            if (btnDoc.panelSettings == null && panelSettings != null)
+                btnDoc.panelSettings = panelSettings;
+
+            connectGo.AddComponent<BlockmakerConnectButton>();
+        }
+
+        // ── 5. EventSystem ─────────────────────────────────────────────────
         var eventSystem = Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>();
         if (eventSystem == null)
         {
