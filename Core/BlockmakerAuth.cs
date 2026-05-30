@@ -787,7 +787,8 @@ namespace Blockmaker
         {
             CleanupWCv1();
             var dAppUrl = blockmakerConfig?.dAppUrl;
-            if (string.IsNullOrEmpty(dAppUrl)) dAppUrl = blockmakerConfig?.serverUrl ?? "https://example.com";
+            if (string.IsNullOrEmpty(dAppUrl)) dAppUrl = blockmakerConfig?.serverUrl;
+            if (string.IsNullOrEmpty(dAppUrl)) dAppUrl = BlockmakerConfig.DefaultServerUrl;
 
             _wcv1Client = new WalletConnectV1Client(
                 chainId: 4160,

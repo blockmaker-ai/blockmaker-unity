@@ -111,7 +111,7 @@ namespace Blockmaker
             _chainId        = chainId;
             _appName        = appName ?? Application.productName;
             _appDescription = appDescription ?? Application.productName;
-            _appUrl         = appUrl ?? "https://example.com";
+            _appUrl         = string.IsNullOrEmpty(appUrl) ? BlockmakerConfig.DefaultServerUrl : appUrl;
 
             _key            = GenerateRandomBytes(32);
             _handshakeTopic = Guid.NewGuid().ToString();
@@ -138,7 +138,9 @@ namespace Blockmaker
             _chainId        = session.chainId;
             _appName        = Application.productName;
             _appDescription = Application.productName;
-            _appUrl         = BlockmakerAuth.Instance?.blockmakerConfig?.dAppUrl ?? "https://example.com";
+            var cfgUrl = BlockmakerAuth.Instance?.blockmakerConfig?.dAppUrl;
+            if (string.IsNullOrEmpty(cfgUrl)) cfgUrl = BlockmakerAuth.Instance?.blockmakerConfig?.serverUrl;
+            _appUrl = string.IsNullOrEmpty(cfgUrl) ? BlockmakerConfig.DefaultServerUrl : cfgUrl;
 
             _key            = HexToBytes(session.keyHex);
             _handshakeTopic = "";

@@ -142,7 +142,8 @@ namespace Blockmaker
                 var cfg = BlockmakerAuth.Instance?.blockmakerConfig;
                 var url = cfg?.dAppUrl;
                 if (string.IsNullOrEmpty(url)) url = Application.absoluteURL;
-                if (string.IsNullOrEmpty(url)) url = cfg?.serverUrl ?? "https://example.com";
+                if (string.IsNullOrEmpty(url)) url = cfg?.serverUrl;
+                if (string.IsNullOrEmpty(url)) url = BlockmakerConfig.DefaultServerUrl;
                 var icon = cfg?.dAppIconUrl;
                 if (string.IsNullOrEmpty(icon)) icon = url.TrimEnd('/') + "/icon.png";
 
