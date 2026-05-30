@@ -53,11 +53,14 @@ Save and reopen Unity.
 
 ## Setup
 
-1. **Assets > Create > Blockmaker > Config**
-2. Add a **BlockmakerAuth** component to any GameObject
-3. Assign your config asset to it
+Go to **Blockmaker > Setup Scene** in the menu bar. This automatically:
 
-Done — all wallet types work out of the box. No API keys or signups needed.
+- Creates a BlockmakerConfig asset
+- Adds BlockmakerAuth with the config wired up
+- Adds the auth UI with all UXML assets pre-assigned
+- Creates PanelSettings and EventSystem if needed
+
+Hit Play — the wallet system is ready. No API keys or signups needed.
 
 ## Usage
 
