@@ -292,10 +292,14 @@
 
 .auth-btn-icon--algo {
     background-color: rgba(255, 255, 255, 0.09);
+    background-image: url("algorand-logo.png");
+    -unity-background-scale-mode: scale-to-fit;
+    background-size: 60% 60%;
+    background-position: center;
 }
 
 .auth-btn-icon--algo .auth-btn-icon-glyph {
-    color: rgb(240, 240, 246);
+    display: none;
 }
 
 .auth-btn-icon--evm {
@@ -308,10 +312,14 @@
 
 .auth-btn-icon--pera {
     background-color: rgba(254, 215, 0, 0.12);
+    background-image: url("pera-logo.png");
+    -unity-background-scale-mode: scale-to-fit;
+    background-size: 60% 60%;
+    background-position: center;
 }
 
 .auth-btn-icon--pera .auth-btn-icon-glyph {
-    color: rgb(254, 215, 0);
+    display: none;
 }
 
 .auth-btn-icon--defly {
