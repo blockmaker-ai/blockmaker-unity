@@ -55,6 +55,8 @@ namespace Blockmaker
         private Coroutine _checkUsernameCoroutine;
         private bool _isOpen;
         private bool _isChangingUsername;
+        private ProfilePicPickerController _pickerCtrl;
+        private VisualElement _pickerRoot;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -327,9 +329,44 @@ namespace Blockmaker
 
         private void OpenPicturePicker()
         {
-            // Use the existing ProfilePicPickerController if the UXML is loaded
-            // For now, show a simple status message
-            SetStatus("Profile picture picker coming soon.");
+            if (_pickerCtrl != null)
+            {
+                _pickerCtrl.Open();
+                return;
+            }
+
+            // Load the picker UXML from the package
+            VisualTreeAsset pickerAsset = null;
+            #if UNITY_EDITOR
+            pickerAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
+                "Packages/com.blockmaker.sdk/UI/ProfilePicPicker.uxml");
+            #endif
+
+            if (pickerAsset == null)
+            {
+                SetStatus("Profile picture picker is not available.", true);
+                return;
+            }
+
+            // Instantiate and add to our panel
+            _pickerRoot = pickerAsset.Instantiate();
+            _pickerRoot.style.position = Position.Absolute;
+            _pickerRoot.style.left = 0;
+            _pickerRoot.style.top = 0;
+            _pickerRoot.style.right = 0;
+            _pickerRoot.style.bottom = 0;
+            _root.Add(_pickerRoot);
+
+            // Get avatar set from config
+            var avatarSet = BlockmakerAuth.Instance?.blockmakerConfig?.defaultAvatarSet;
+
+            _pickerCtrl = new ProfilePicPickerController(_pickerRoot, avatarSet, this);
+            _pickerCtrl.OnPicChanged += () =>
+            {
+                Refresh();
+                BlockmakerProfileManager.Instance?.RefreshProfile();
+            };
+            _pickerCtrl.Open();
         }
 
         // ── Copy Address ──────────────────────────────────────────────────────
