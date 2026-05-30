@@ -21,6 +21,12 @@
         "walletconnect"
     ],
     "dependencies": {},
-    "samples": [],
+    "samples": [
+        {
+            "displayName": "Wallet Demo",
+            "description": "Minimal scene with Connect Wallet button and wallet selection modal",
+            "path": "Samples~/WalletDemo"
+        }
+    ],
     "_dependencies_note": "This package requires the Reown SDK (WalletConnect v2) for wallet connection features. Install it via the Reown Unity SDK documentation before importing Blockmaker."
 }
