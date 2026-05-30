@@ -13,33 +13,7 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 
 ## Installation
 
-### Step 1 — Add the Reown registry
-
-Open `Packages/manifest.json` in your Unity project and add this `scopedRegistries` block at the end, just before the final `}`:
-
-```json
-"scopedRegistries": [
-  {
-    "name": "OpenUPM",
-    "url": "https://package.openupm.com",
-    "scopes": [
-      "com.reown",
-      "com.nethereum",
-      "com.cysharp"
-    ]
-  }
-]
-```
-
-Then add this line inside the `"dependencies"` section:
-
-```json
-"com.reown.sign.unity": "1.6.0",
-```
-
-Save the file.
-
-### Step 2 — Add the Blockmaker SDK
+### Step 1 — Install the Blockmaker SDK
 
 In Unity: **Window > Package Manager > + > Add package from git URL**
 
@@ -47,40 +21,19 @@ In Unity: **Window > Package Manager > + > Add package from git URL**
 https://github.com/blockmaker-ai/blockmaker-unity.git
 ```
 
-Wait for Unity to resolve both packages. Once it compiles with no errors, you're ready.
+### Step 2 — Install the Reown dependency
+
+A dialog will pop up asking to install the Reown SDK. Click **"Install Reown SDK"** and Unity will handle the rest.
+
+If the dialog doesn't appear, go to **Blockmaker > Install Reown SDK** in the menu bar.
 
 ### Step 3 — Set up your scene
 
-1. **Assets > Create > Blockmaker > Config** — creates a config asset (no fields required, defaults work)
+1. **Assets > Create > Blockmaker > Config**
 2. Add a **BlockmakerAuth** component to any GameObject
 3. Assign your config asset to it
 
-Done — all wallet types work out of the box.
-
-### Full manifest.json example
-
-If you prefer, here's what a clean `manifest.json` looks like with both packages:
-
-```json
-{
-  "dependencies": {
-    "com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
-    "com.reown.sign.unity": "1.6.0",
-    ...your other packages...
-  },
-  "scopedRegistries": [
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": [
-        "com.reown",
-        "com.nethereum",
-        "com.cysharp"
-      ]
-    }
-  ]
-}
-```
+Done — all wallet types work out of the box. No API keys or signups needed.
 
 ## Usage
 
