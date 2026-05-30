@@ -15,7 +15,7 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 
 ### One-click install
 
-1. **[Download BlockmakerInstaller.cs](Installer~/BlockmakerInstaller.cs)**
+1. **[Download BlockmakerInstaller.cs](https://raw.githubusercontent.com/blockmaker-ai/blockmaker-unity/main/Installer~/BlockmakerInstaller.cs)** (right-click → Save As)
 2. Drag it into your Unity project (anywhere in the Assets folder)
 3. A dialog will appear — click **Install**
 4. Unity installs everything automatically. Done.
