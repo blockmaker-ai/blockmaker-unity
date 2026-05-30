@@ -101,6 +101,47 @@
 }
 
 
+.pera-close-btn {
+    position:            absolute;
+    right:               22px;
+    top:                 22px;
+    background-color:    rgba(255, 255, 255, 0.06);
+    border-top-width:    1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-bottom-width: 1px;
+    border-top-color:    rgba(255, 255, 255, 0.08);
+    border-left-color:   rgba(255, 255, 255, 0.06);
+    border-right-color:  rgba(255, 255, 255, 0.06);
+    border-bottom-color: rgba(255, 255, 255, 0.03);
+    border-top-left-radius:     9px;
+    border-top-right-radius:    9px;
+    border-bottom-left-radius:  9px;
+    border-bottom-right-radius: 9px;
+    color:               rgba(240, 240, 248, 0.50);
+    font-size:           16px;
+    width:               40px;
+    height:              40px;
+    padding-left:        0;
+    padding-right:       0;
+    padding-top:         0;
+    padding-bottom:      0;
+    cursor:              link;
+    transition-property: background-color, color;
+    transition-duration: 120ms;
+}
+
+.pera-close-btn:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+    color:            rgba(240, 240, 248, 0.85);
+}
+
+.pera-close-btn:active {
+    background-color: rgba(255, 255, 255, 0.04);
+    color:            rgba(240, 240, 248, 0.35);
+}
+
+
 /* ── Pera logo (large, centered) ─────────────────────────────────────── */
 
 .pera-logo {

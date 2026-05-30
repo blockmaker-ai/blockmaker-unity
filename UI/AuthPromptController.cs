@@ -189,6 +189,7 @@ namespace Blockmaker
                     BlockmakerAuth.Instance?.CancelEvmConnect();
                     ShowOptionsPage();
                 };
+                _peraCtrl.OnCloseClicked = () => Hide();
                 _peraRoot.style.display = DisplayStyle.None;
             }
 

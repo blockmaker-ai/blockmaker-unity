@@ -237,6 +237,13 @@ namespace Blockmaker
                     BlockmakerAuth.Instance?.CancelWalletConnect();
                     BlockmakerAuth.Instance?.CancelEvmConnect();
                 };
+                _peraCtrl.OnCloseClicked = () =>
+                {
+                    BlockmakerAuth.Instance?.CancelWalletConnect();
+                    BlockmakerAuth.Instance?.CancelEvmConnect();
+                    _peraCtrl?.Close();
+                    Hide();
+                };
                 _peraRoot.style.display = DisplayStyle.None;
             }
         }

@@ -8,6 +8,7 @@
         <ui:VisualElement name="panel-connect" class="pera-card">
 
             <ui:Button name="btn-back" class="pera-back-btn" text="&#x2190;" />
+            <ui:Button name="btn-close" class="pera-close-btn" text="&#x2715;" />
 
             <ui:VisualElement name="img-pera-icon" class="pera-logo" />
 
@@ -32,6 +33,7 @@
         <ui:VisualElement name="panel-download" class="pera-card pera-hidden">
 
             <ui:Button name="btn-download-back" class="pera-back-btn" text="&#x2190;" />
+            <ui:Button name="btn-close-dl" class="pera-close-btn" text="&#x2715;" />
 
             <ui:VisualElement name="img-pera-icon-2" class="pera-logo" />
 

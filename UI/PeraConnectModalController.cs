@@ -42,6 +42,7 @@ namespace Blockmaker
         private string _androidUrl;
 
         public Action OnBackClicked { get; set; }
+        public Action OnCloseClicked { get; set; }
 
         public PeraConnectModalController(VisualElement root)
         {
@@ -67,8 +68,13 @@ namespace Blockmaker
             var btnIos          = root.Q<Button>("btn-ios");
             var btnAndroid      = root.Q<Button>("btn-android");
 
+            var btnClose       = root.Q<Button>("btn-close");
+            var btnCloseDl     = root.Q<Button>("btn-close-dl");
+
             if (btnBack != null)         btnBack.clicked         += HandleBack;
             if (btnDownloadBack != null)  btnDownloadBack.clicked += ShowConnectPanel;
+            if (btnClose != null)        btnClose.clicked        += HandleClose;
+            if (btnCloseDl != null)      btnCloseDl.clicked      += HandleClose;
             if (btnShowDownload != null)  btnShowDownload.clicked += ShowDownloadPanel;
             if (btnIos != null)          btnIos.clicked          += () => { if (!string.IsNullOrEmpty(_iosUrl)) Application.OpenURL(_iosUrl); };
             if (btnAndroid != null)      btnAndroid.clicked      += () => { if (!string.IsNullOrEmpty(_androidUrl)) Application.OpenURL(_androidUrl); };
@@ -153,6 +159,12 @@ namespace Blockmaker
         {
             Close();
             OnBackClicked?.Invoke();
+        }
+
+        private void HandleClose()
+        {
+            Close();
+            OnCloseClicked?.Invoke();
         }
 
         private void HandleQRReady(string provider, string uri, Texture2D _)
