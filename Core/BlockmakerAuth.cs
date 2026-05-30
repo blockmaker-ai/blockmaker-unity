@@ -298,7 +298,13 @@ namespace Blockmaker
 
             if (cfg == null)
             {
-                BlockmakerLog.Warning("[BlockmakerAuth] No BlockmakerConfig found. Assign one on BlockmakerAuth or create via Assets > Create > Blockmaker > Config.");
+                BlockmakerLog.Info("[BlockmakerAuth] No BlockmakerConfig found — wallet auth works without a server. Create a config via Assets > Create > Blockmaker > Config to enable email login and server features.");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(cfg.serverUrl))
+            {
+                BlockmakerLog.Info("[BlockmakerAuth] No server URL configured — wallet auth (Pera, Defly, X-Chain) works without a server. Set a server URL to enable email login and server features.");
                 return;
             }
 
