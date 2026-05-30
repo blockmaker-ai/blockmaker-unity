@@ -16,8 +16,10 @@ namespace Blockmaker
     public class BlockmakerConfig : ScriptableObject
     {
         [Header("Server")]
-        [Tooltip("Base URL of your Blockmaker server e.g. https://your-server.up.railway.app")]
+        [Tooltip("Optional — your Blockmaker server URL. Leave empty to use the shared default.")]
         public string serverUrl = "";
+
+        internal const string DefaultServerUrl = "https://blockmaker-production.up.railway.app";
 
         [Tooltip("Short unique ID for your game (e.g. 'myrace'). Used to namespace saved sessions so multiple Blockmaker games on the same device don't conflict. If left empty, falls back to Application.identifier.")]
         public string gameId = "";
@@ -60,17 +62,15 @@ namespace Blockmaker
 
         private void OnValidate()
         {
-            if (string.IsNullOrEmpty(serverUrl))
-                BlockmakerLog.Warning("[BlockmakerConfig] Server URL is empty — all API calls will fail. Set it to your server's base URL (e.g. https://your-server.up.railway.app).");
-            else if (!serverUrl.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase) &&
-                     !serverUrl.StartsWith("http://localhost", System.StringComparison.OrdinalIgnoreCase) &&
-                     !serverUrl.StartsWith("http://127.0.0.1", System.StringComparison.OrdinalIgnoreCase))
-                BlockmakerLog.Warning("[BlockmakerConfig] Server URL does not use HTTPS. All tokens and API keys will be sent in plaintext. Use HTTPS in production.");
+            // Server URL and API key are optional — shared defaults are used when empty.
+            if (!string.IsNullOrEmpty(serverUrl) &&
+                !serverUrl.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase) &&
+                !serverUrl.StartsWith("http://localhost", System.StringComparison.OrdinalIgnoreCase) &&
+                !serverUrl.StartsWith("http://127.0.0.1", System.StringComparison.OrdinalIgnoreCase))
+                BlockmakerLog.Warning("[BlockmakerConfig] Server URL does not use HTTPS. Use HTTPS in production.");
 
-            if (string.IsNullOrEmpty(apiKey))
-                BlockmakerLog.Warning("[BlockmakerConfig] API key is empty — authenticated API calls will fail. Set your sk_ key from the dashboard.");
-            else if (!apiKey.StartsWith("sk_"))
-                BlockmakerLog.Warning("[BlockmakerConfig] API key should start with 'sk_'. Check your key at the dashboard.");
+            if (!string.IsNullOrEmpty(apiKey) && !apiKey.StartsWith("sk_"))
+                BlockmakerLog.Warning("[BlockmakerConfig] API key should start with 'sk_'.");
 
             // WalletConnect Project ID is optional — falls back to Blockmaker's shared ID.
             // Magic SDK is WebGL-only. Email login via OTP works on all platforms.

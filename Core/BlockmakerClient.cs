@@ -45,16 +45,10 @@ namespace Blockmaker
                 enabled = false;
                 return;
             }
-            _baseUrl = config.serverUrl.TrimEnd('/');
-
-            if (string.IsNullOrEmpty(_baseUrl))
-            {
-                BlockmakerLog.Error("[BlockmakerClient] serverUrl is empty in BlockmakerConfig. " +
-                               "Set it to your Blockmaker server URL (e.g. https://your-server.up.railway.app).");
-                Instance = null;
-                enabled = false;
-                return;
-            }
+            var url = config.serverUrl;
+            if (string.IsNullOrEmpty(url))
+                url = BlockmakerConfig.DefaultServerUrl;
+            _baseUrl = url.TrimEnd('/');
 
         }
 
@@ -71,16 +65,13 @@ namespace Blockmaker
         public void InitFromAuth()
         {
             if (config == null) return;
-            if (string.IsNullOrEmpty(config.serverUrl))
-            {
-                BlockmakerLog.Error("[BlockmakerClient] Server URL is empty in BlockmakerConfig. Please set it in the Inspector.");
-                return;
-            }
+            var url = config.serverUrl;
+            if (string.IsNullOrEmpty(url))
+                url = BlockmakerConfig.DefaultServerUrl;
             enabled = true;
             if (Instance == null) Instance = this;
-            _baseUrl = config.serverUrl.TrimEnd('/');
-            BlockmakerLog.Info($"[BlockmakerClient] Initialized from auth — baseUrl: {_baseUrl}");
-
+            _baseUrl = url.TrimEnd('/');
+            BlockmakerLog.Info($"[BlockmakerClient] Initialized — server: {_baseUrl}");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════

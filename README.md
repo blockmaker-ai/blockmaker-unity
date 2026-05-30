@@ -4,12 +4,12 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 
 ## Supported Wallets
 
-| Wallet | How it works | Server needed? |
-|--------|-------------|----------------|
-| **Pera** | QR code scan (WalletConnect v1) | No |
-| **Defly** | QR code scan (WalletConnect v2) | No |
-| **X-Chain** | Any EVM wallet (MetaMask, Rainbow, Coinbase + more) via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts) | No |
-| **Email** | Magic SDK (WebGL) or server-managed OTP (all platforms) | Yes |
+| Wallet | How it works |
+|--------|-------------|
+| **Pera** | QR code scan (WalletConnect v1) |
+| **Defly** | QR code scan (WalletConnect v2) |
+| **X-Chain** | Any EVM wallet (MetaMask, Rainbow, Coinbase + more) via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts) |
+| **Email** | Magic SDK (WebGL) or server-managed OTP (all platforms) |
 
 ## Getting Started
 
@@ -23,17 +23,13 @@ https://github.com/blockmaker-ai/blockmaker-unity.git
 
 > **Note:** You also need the [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/installation) installed in your project.
 
-### 2. Add to your scene
+### 2. Create a config
 
-Add a `BlockmakerAuth` component to any GameObject. That's it — Pera, Defly, and X-Chain wallet connections work immediately. No server, no API key, no signup.
+**Assets > Create > Blockmaker > Config** — assign it to your BlockmakerAuth component.
 
-### 3. Optional — enable email login and server features
+### 3. Add to your scene
 
-If you want email login, server-signed transactions, or profile management:
-
-1. Go to [blockmaker.ai/developers](https://blockmaker.ai/developers) — get your API key instantly
-2. **Assets > Create > Blockmaker > Config** — paste your Server URL and API Key
-3. Assign the config to your BlockmakerAuth component
+Add a `BlockmakerAuth` component to any GameObject and assign your config. Done — all wallet types work out of the box.
 
 ## Usage
 
@@ -60,7 +56,7 @@ BlockmakerAuth.Instance.ConnectEvm(
     error    => Debug.Log(error)
 );
 
-// Email login (requires server)
+// Email login
 BlockmakerAuth.Instance.ConnectMagicEmail("player@example.com",
     identity => Debug.Log($"Signed in: {identity.Address}"),
     error    => Debug.Log(error)
@@ -154,8 +150,8 @@ BlockmakerLog.OnLog += (level, msg) => MyLogger.Log(msg);
 
 | Field | Description |
 |-------|-------------|
-| `serverUrl` | Optional — your Blockmaker server URL. Only needed for email login and server features |
-| `apiKey` | Optional — your API key (`sk_` prefix). **Only used in the Unity Editor, never shipped in player builds** |
+| `serverUrl` | Optional — your own Blockmaker server URL. Leave empty to use the shared default |
+| `apiKey` | Optional — your own API key (`sk_` prefix). **Only used in the Unity Editor, never shipped in player builds** |
 | `walletConnectProjectId` | Optional — your own WalletConnect project ID. Leave empty to use the shared default |
 | `magicPublishableKey` | Optional — Magic SDK key for email login on WebGL |
 | `dAppUrl` | Optional — URL shown in wallet apps when players approve a connection |
@@ -174,6 +170,5 @@ MIT — see [LICENSE](LICENSE).
 
 ## Links
 
-- [Get your API key](https://blockmaker.ai/developers) (optional — for email login and server features)
 - [Report an issue](https://github.com/blockmaker-ai/blockmaker-unity/issues)
 - Built on [Algorand](https://algorand.co)
