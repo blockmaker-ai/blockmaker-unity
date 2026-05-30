@@ -220,10 +220,17 @@ namespace Blockmaker
         [HideInInspector]
         public string walletConnectProjectId = "";
 
-        private string ResolvedWalletConnectProjectId =>
-            !string.IsNullOrEmpty(blockmakerConfig?.walletConnectProjectId)
-                ? blockmakerConfig.walletConnectProjectId
-                : walletConnectProjectId;
+        private string ResolvedWalletConnectProjectId
+        {
+            get
+            {
+                if (!string.IsNullOrEmpty(blockmakerConfig?.walletConnectProjectId))
+                    return blockmakerConfig.walletConnectProjectId;
+                if (!string.IsNullOrEmpty(walletConnectProjectId))
+                    return walletConnectProjectId;
+                return BlockmakerConfig.DefaultWalletConnectProjectId;
+            }
+        }
 
         // ── Proactive token refresh ─────────────────────────────────────────────
         private Coroutine _tokenRefreshCoroutine;

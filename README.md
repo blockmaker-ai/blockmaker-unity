@@ -33,7 +33,8 @@ You also need the [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/ins
 2. Fill in:
    - **Server URL** — from step 1
    - **API Key** — from step 1
-   - **WalletConnect Project ID** — free from [cloud.walletconnect.com](https://cloud.walletconnect.com)
+
+That's it — Pera, Defly, xChain, and email login all work out of the box.
 
 ### 4. Add to your scene
 
@@ -165,7 +166,7 @@ BlockmakerLog.OnLog += (level, msg) => MyLogger.Log(msg);
 |-------|-------------|
 | `serverUrl` | Your Blockmaker server URL (from the developer signup) |
 | `apiKey` | Your API key (`sk_` prefix) — **only used in the Unity Editor, never shipped in player builds** |
-| `walletConnectProjectId` | Free project ID from [cloud.walletconnect.com](https://cloud.walletconnect.com) |
+| `walletConnectProjectId` | Optional — your own WalletConnect project ID. Leave empty to use the Blockmaker shared ID (works out of the box) |
 | `magicPublishableKey` | Optional — Magic SDK key for email login on WebGL. Get one at [dashboard.magic.link](https://dashboard.magic.link) |
 | `dAppUrl` | Optional — URL shown in wallet apps when players approve a connection |
 | `dAppIconUrl` | Optional — icon shown in wallet apps |

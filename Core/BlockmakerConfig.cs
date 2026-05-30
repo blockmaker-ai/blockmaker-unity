@@ -27,8 +27,10 @@ namespace Blockmaker
         public string apiKey = "";
 
         [Header("WalletConnect")]
-        [Tooltip("Free project ID from https://cloud.walletconnect.com — required for Pera/Defly wallet QR connection.")]
+        [Tooltip("Optional — your own WalletConnect project ID from https://cloud.walletconnect.com. Leave empty to use the Blockmaker shared ID (works out of the box).")]
         public string walletConnectProjectId = "";
+
+        internal const string DefaultWalletConnectProjectId = "dc1f45e68a8fb53fa03adb645365c9bd";
 
         [Header("Magic SDK (Email Wallet)")]
         [Tooltip("Magic publishable API key (pk_live_ prefix). Get one at https://dashboard.magic.link")]
@@ -70,11 +72,8 @@ namespace Blockmaker
             else if (!apiKey.StartsWith("sk_"))
                 BlockmakerLog.Warning("[BlockmakerConfig] API key should start with 'sk_'. Check your key at the dashboard.");
 
-            if (string.IsNullOrEmpty(walletConnectProjectId))
-                BlockmakerLog.Warning("[BlockmakerConfig] WalletConnect Project ID is empty — wallet QR connection will not work. Get a free ID at https://cloud.walletconnect.com");
-
+            // WalletConnect Project ID is optional — falls back to Blockmaker's shared ID.
             // Magic SDK is WebGL-only. Email login via OTP works on all platforms.
-            // No warning needed — Magic is silently skipped on non-WebGL.
         }
     }
 }
