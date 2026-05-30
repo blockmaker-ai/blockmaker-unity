@@ -70,29 +70,99 @@ namespace Blockmaker
         /// <summary>
         /// Extracts the Algorand GroupID from an unsigned transaction's msgpack bytes.
         /// Returns null if the transaction has no group field (not part of a group).
+        /// Walks the top-level msgpack map keys structurally (not a brute-force scan)
+        /// to avoid false matches inside binary field values.
         /// </summary>
-        public static byte[] ExtractGroupId(byte[] unsignedTxn)
+        public static byte[] ExtractGroupId(byte[] d)
         {
-            // Scan for msgpack key "grp": fixstr(3) = 0xa3, then 'g','r','p'
-            byte g = 0x67, r = 0x72, p = 0x70;
-            for (int i = 0; i < unsignedTxn.Length - 37; i++)
-            {
-                if (unsignedTxn[i] != 0xa3 || unsignedTxn[i+1] != g ||
-                    unsignedTxn[i+2] != r || unsignedTxn[i+3] != p)
-                    continue;
+            if (d == null || d.Length < 2) return null;
+            int pos = 0;
 
-                int valStart = i + 4;
-                // Value is bin8 (0xc4) + length (0x20 = 32) + 32 bytes
-                if (valStart + 34 <= unsignedTxn.Length &&
-                    unsignedTxn[valStart] == 0xc4 &&
-                    unsignedTxn[valStart + 1] == 0x20)
+            // Read top-level fixmap or map16 entry count
+            int mapSize;
+            byte header = d[pos++];
+            if ((header & 0xF0) == 0x80)
+                mapSize = header & 0x0F;
+            else if (header == 0xDE && pos + 1 < d.Length)
+                { mapSize = (d[pos] << 8) | d[pos + 1]; pos += 2; }
+            else
+                return null;
+
+            for (int entry = 0; entry < mapSize && pos < d.Length; entry++)
+            {
+                // Read key (must be fixstr for Algorand canonical msgpack)
+                if (pos >= d.Length) return null;
+                byte kh = d[pos];
+                if ((kh & 0xE0) != 0xA0) return null; // not a fixstr
+                int keyLen = kh & 0x1F;
+                pos++;
+                if (pos + keyLen > d.Length) return null;
+
+                bool isGrp = keyLen == 3 && d[pos] == 0x67 && d[pos+1] == 0x72 && d[pos+2] == 0x70;
+                pos += keyLen;
+
+                if (isGrp)
                 {
-                    var groupId = new byte[32];
-                    Buffer.BlockCopy(unsignedTxn, valStart + 2, groupId, 0, 32);
-                    return groupId;
+                    // Value must be bin8 with length 32
+                    if (pos + 34 > d.Length) return null;
+                    if (d[pos] == 0xc4 && d[pos+1] == 0x20)
+                    {
+                        var groupId = new byte[32];
+                        Buffer.BlockCopy(d, pos + 2, groupId, 0, 32);
+                        return groupId;
+                    }
+                    return null; // grp key found but value format unexpected
                 }
+
+                // Skip value — need to walk past it to reach next key
+                if (pos >= d.Length) return null;
+                pos = SkipMsgpackValue(d, pos);
+                if (pos < 0) return null;
             }
             return null;
+        }
+
+        static int SkipMsgpackValue(byte[] d, int pos)
+        {
+            if (pos >= d.Length) return -1;
+            byte b = d[pos++];
+
+            // positive fixint (0x00-0x7f) or negative fixint (0xe0-0xff)
+            if (b <= 0x7f || b >= 0xe0) return pos;
+            // fixstr (0xa0-0xbf)
+            if ((b & 0xE0) == 0xA0) return pos + (b & 0x1F);
+            // fixarray (0x90-0x9f)
+            if ((b & 0xF0) == 0x90) { int n = b & 0x0F; for (int i = 0; i < n; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
+            // fixmap (0x80-0x8f)
+            if ((b & 0xF0) == 0x80) { int n = b & 0x0F; for (int i = 0; i < n * 2; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
+
+            switch (b)
+            {
+                case 0xc0: return pos; // nil
+                case 0xc2: case 0xc3: return pos; // bool
+                case 0xc4: if (pos >= d.Length) return -1; return pos + 1 + d[pos]; // bin8
+                case 0xc5: if (pos + 1 >= d.Length) return -1; return pos + 2 + ((d[pos] << 8) | d[pos+1]); // bin16
+                case 0xc6: if (pos + 3 >= d.Length) return -1; return pos + 4 + ((d[pos] << 24) | (d[pos+1] << 16) | (d[pos+2] << 8) | d[pos+3]); // bin32
+                case 0xca: return pos + 4; // float32
+                case 0xcb: return pos + 8; // float64
+                case 0xcc: return pos + 1; // uint8
+                case 0xcd: return pos + 2; // uint16
+                case 0xce: return pos + 4; // uint32
+                case 0xcf: return pos + 8; // uint64
+                case 0xd0: return pos + 1; // int8
+                case 0xd1: return pos + 2; // int16
+                case 0xd2: return pos + 4; // int32
+                case 0xd3: return pos + 8; // int64
+                case 0xd9: if (pos >= d.Length) return -1; return pos + 1 + d[pos]; // str8
+                case 0xda: if (pos + 1 >= d.Length) return -1; return pos + 2 + ((d[pos] << 8) | d[pos+1]); // str16
+                case 0xdc: // array16
+                    if (pos + 1 >= d.Length) return -1;
+                    { int n = (d[pos] << 8) | d[pos+1]; pos += 2; for (int i = 0; i < n; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
+                case 0xde: // map16
+                    if (pos + 1 >= d.Length) return -1;
+                    { int n = (d[pos] << 8) | d[pos+1]; pos += 2; for (int i = 0; i < n * 2; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
+                default: return -1;
+            }
         }
 
         public static string BuildEip712TypedData(byte[] txnId)
@@ -145,12 +215,15 @@ namespace Blockmaker
             if (IsHighS(s))
             {
                 s = SubtractFromN(s);
-                v = (byte)(v == 27 ? 28 : v == 28 ? 27 : v == 0 ? 1 : 0);
+                v = (byte)(v == 27 ? 28 : v == 28 ? 27 : v == 0 ? 1 : v == 1 ? 0 : v);
             }
 
-            // Do NOT normalize v to 0/1 — the TEAL LogicSig subtracts 27 on-chain.
-            // Passing 27/28 as-is matches the official xchain-accounts SDK.
-            if (v != 27 && v != 28 && v != 0 && v != 1)
+            // Normalize v to 27/28 — the TEAL LogicSig subtracts 27 on-chain.
+            // Some wallets return 0/1 (non-EIP-155), others return 27/28.
+            if (v == 0) v = 27;
+            else if (v == 1) v = 28;
+
+            if (v != 27 && v != 28)
                 throw new ArgumentException("Invalid EVM signature recovery id");
 
             var arg = new byte[66];

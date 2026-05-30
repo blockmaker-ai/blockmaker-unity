@@ -239,63 +239,80 @@ namespace Blockmaker
                 yield break;
             }
 
+            // Extract GroupID (non-yielding setup in try-catch)
+            byte[] groupId;
+            string typedData;
+            byte[] program;
             try
             {
-                // Decode first transaction to extract GroupID
                 var firstTxnBytes = Convert.FromBase64String(unsignedTxnsBase64[0]);
-                var groupId = XChainAddressDeriver.ExtractGroupId(firstTxnBytes);
+                groupId = XChainAddressDeriver.ExtractGroupId(firstTxnBytes);
+                typedData = null;
+                program = null;
 
-                if (groupId == null)
+                if (groupId != null)
                 {
-                    // No group field — sign individually (not an atomic group)
-                    var results = new string[unsignedTxnsBase64.Length];
-                    for (int i = 0; i < unsignedTxnsBase64.Length; i++)
-                    {
-                        string signed = null;
-                        string err = null;
-                        yield return SignTransaction(unsignedTxnsBase64[i], s => { signed = s; }, e => { err = e; });
-                        if (err != null) { onError?.Invoke(err); yield break; }
-                        results[i] = signed;
-                    }
-                    onSigned?.Invoke(results);
-                    yield break;
+                    typedData = XChainAddressDeriver.BuildEip712TypedData(groupId);
+                    program = XChainAddressDeriver.GetLogicSigProgram(EvmAddress);
                 }
+            }
+            catch (Exception ex)
+            {
+                BlockmakerLog.Error($"[EvmXChainIdentity] Group sign setup error: {ex.Message}");
+                onError?.Invoke("Something went wrong while signing the transactions. Please try again.");
+                yield break;
+            }
 
-                // Build EIP-712 typed data with GroupID (not individual TxID)
-                var typedData = XChainAddressDeriver.BuildEip712TypedData(groupId);
-                var program = XChainAddressDeriver.GetLogicSigProgram(EvmAddress);
-
-                string hexSig = null;
-                string signError = null;
-                bool signDone = false;
-
-                connector.SignEvmTypedData(
-                    EvmAddress,
-                    typedData,
-                    onSigned: sig => { hexSig = sig; signDone = true; },
-                    onError: err => { signError = err; signDone = true; }
-                );
-
-                float elapsed = 0f;
-                while (!signDone && elapsed < BlockmakerAuth.WalletSignTimeout)
+            if (groupId == null)
+            {
+                // No group field — sign individually (not an atomic group)
+                var results = new string[unsignedTxnsBase64.Length];
+                for (int i = 0; i < unsignedTxnsBase64.Length; i++)
                 {
-                    elapsed += Time.unscaledDeltaTime;
-                    yield return null;
+                    string signed = null;
+                    string err = null;
+                    yield return SignTransaction(unsignedTxnsBase64[i], s => { signed = s; }, e => { err = e; });
+                    if (err != null) { onError?.Invoke(err); yield break; }
+                    results[i] = signed;
                 }
+                onSigned?.Invoke(results);
+                yield break;
+            }
 
-                if (!signDone)
-                {
-                    onError?.Invoke("The request timed out. Please try again.");
-                    yield break;
-                }
+            // Sign GroupID with EVM wallet (yield statements outside try-catch)
+            string hexSig = null;
+            string signError = null;
+            bool signDone = false;
 
-                if (signError != null)
-                {
-                    onError?.Invoke(signError);
-                    yield break;
-                }
+            connector.SignEvmTypedData(
+                EvmAddress,
+                typedData,
+                onSigned: sig => { hexSig = sig; signDone = true; },
+                onError: err => { signError = err; signDone = true; }
+            );
 
-                // Parse the single signature and apply it to ALL transactions
+            float elapsed = 0f;
+            while (!signDone && elapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (!signDone)
+            {
+                onError?.Invoke("The request timed out. Please try again.");
+                yield break;
+            }
+
+            if (signError != null)
+            {
+                onError?.Invoke(signError);
+                yield break;
+            }
+
+            // Build all signed transactions (non-yielding, in try-catch)
+            try
+            {
                 var sigArg = XChainAddressDeriver.ParseEvmSignature(hexSig);
                 var signedResults = new string[unsignedTxnsBase64.Length];
 
