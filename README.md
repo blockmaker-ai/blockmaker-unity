@@ -13,10 +13,27 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 
 ## Installation
 
-Open your project's `Packages/manifest.json` file and add these lines:
+### One-click install
 
-**1.** Add the scoped registry block at the bottom of the file, just before the last `}`:
+1. **[Download BlockmakerInstaller.cs](Installer~/BlockmakerInstaller.cs)**
+2. Drag it into your Unity project (anywhere in the Assets folder)
+3. A dialog will appear — click **Install**
+4. Unity installs everything automatically. Done.
 
+You can delete the installer file after installation.
+
+<details>
+<summary><b>Manual install (if you prefer)</b></summary>
+
+Open `Packages/manifest.json` in your project folder and add:
+
+**In `"dependencies"`:**
+```json
+"com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
+"com.reown.sign.unity": "1.6.0",
+```
+
+**At the bottom of the file, before the last `}`:**
 ```json
 ,
 "scopedRegistries": [
@@ -28,35 +45,7 @@ Open your project's `Packages/manifest.json` file and add these lines:
 ]
 ```
 
-**2.** Add these two lines at the top of the `"dependencies"` section:
-
-```json
-"com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
-"com.reown.sign.unity": "1.6.0",
-```
-
-**3.** Save the file and open Unity. Both packages will install automatically.
-
-<details>
-<summary><b>Full manifest.json example (click to expand)</b></summary>
-
-```json
-{
-  "dependencies": {
-    "com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
-    "com.reown.sign.unity": "1.6.0",
-    "com.unity.ugui": "2.0.0",
-    ...your other packages...
-  },
-  "scopedRegistries": [
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": ["com.reown", "com.nethereum", "com.cysharp"]
-    }
-  ]
-}
-```
+Save and reopen Unity.
 
 </details>
 
