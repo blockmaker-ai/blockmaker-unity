@@ -54,6 +54,7 @@ namespace Blockmaker
         private Coroutine _copyCoroutine;
         private Coroutine _checkUsernameCoroutine;
         private bool _isOpen;
+        private bool _isChangingUsername;
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
@@ -201,8 +202,10 @@ namespace Blockmaker
                 _usernameSection.style.display = (loggedIn && showUsernames) ? DisplayStyle.Flex : DisplayStyle.None;
 
             bool hasUser = BlockmakerProfileManager.HasUsername;
-            if (_hasUsername != null) _hasUsername.style.display = hasUser ? DisplayStyle.Flex : DisplayStyle.None;
-            if (_noUsername != null) _noUsername.style.display = (!hasUser && BlockmakerProfileManager.ShouldShowUsernameNudge()) ? DisplayStyle.Flex : DisplayStyle.None;
+            if (hasUser) _isChangingUsername = false;
+            if (_hasUsername != null) _hasUsername.style.display = (hasUser && !_isChangingUsername) ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_noUsername != null) _noUsername.style.display = (!hasUser && BlockmakerProfileManager.ShouldShowUsernameNudge()) || _isChangingUsername ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_claimBtn != null) _claimBtn.text = _isChangingUsername ? "Change Username" : "Claim Username";
             if (hasUser && _username != null) _username.text = BlockmakerProfileManager.Profile?.username ?? "";
 
             // Profile picture nudge
@@ -281,27 +284,32 @@ namespace Blockmaker
             if (string.IsNullOrEmpty(username) || username.Length < 3) return;
 
             if (_claimBtn != null) _claimBtn.SetEnabled(false);
-            SetStatus("Claiming username...");
 
-            BlockmakerProfileManager.Instance?.ClaimUsername(username,
-                profile =>
-                {
-                    SetStatus("");
-                    Refresh();
-                },
-                err =>
-                {
-                    SetStatus(err, true);
-                    if (_claimBtn != null) _claimBtn.SetEnabled(true);
-                }
-            );
+            if (_isChangingUsername)
+            {
+                SetStatus("Changing username...");
+                BlockmakerProfileManager.Instance?.ChangeUsername(username,
+                    profile => { _isChangingUsername = false; SetStatus(""); Refresh(); },
+                    err => { SetStatus(err, true); if (_claimBtn != null) _claimBtn.SetEnabled(true); }
+                );
+            }
+            else
+            {
+                SetStatus("Claiming username...");
+                BlockmakerProfileManager.Instance?.ClaimUsername(username,
+                    profile => { SetStatus(""); Refresh(); },
+                    err => { SetStatus(err, true); if (_claimBtn != null) _claimBtn.SetEnabled(true); }
+                );
+            }
         }
 
         private void StartUsernameChange()
         {
+            _isChangingUsername = true;
             if (_hasUsername != null) _hasUsername.style.display = DisplayStyle.None;
             if (_noUsername != null) _noUsername.style.display = DisplayStyle.Flex;
             if (_usernameInput != null) _usernameInput.value = "";
+            if (_claimBtn != null) _claimBtn.text = "Change Username";
             SetUsernameStatus("", false);
         }
 
