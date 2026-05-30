@@ -121,7 +121,7 @@ namespace Blockmaker
             if (provider == "MetaMask")
             {
                 if (_connectFooter != null) _connectFooter.style.display = DisplayStyle.Flex;
-                if (_lblFooterHint != null) _lblFooterHint.text = "Works with MetaMask, Rainbow & more";
+                if (_lblFooterHint != null) _lblFooterHint.text = "MetaMask, Rainbow, Coinbase + more";
                 if (_btnShowDownload != null) _btnShowDownload.style.display = DisplayStyle.None;
             }
             else
@@ -175,7 +175,7 @@ namespace Blockmaker
             if (_qrConnect != null && _connectQrTexture != null)
                 _qrConnect.style.backgroundImage = new StyleBackground(_connectQrTexture);
 
-            SetStatus($"Scan with your {provider} Wallet");
+            SetStatus($"Scan with {provider}");
         }
 
         private void ShowConnectPanel()

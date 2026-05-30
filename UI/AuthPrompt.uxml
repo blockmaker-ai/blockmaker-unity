@@ -43,7 +43,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
                         <ui:Label class="auth-btn-label" text="EVM Wallet" />
-                        <ui:Label class="auth-btn-sub" text="MetaMask, Rainbow, Coinbase &amp; more" />
+                        <ui:Label class="auth-btn-sub" text="MetaMask, Rainbow, Coinbase + more" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:Label class="auth-btn-chevron-glyph" text=">" />
