@@ -47,20 +47,20 @@
 
 .auth-close-btn {
     position:                   absolute;
-    top:                        20px;
-    right:                      20px;
+    top:                        16px;
+    right:                      16px;
     z-index:                    100;
-    width:                      36px;
-    height:                     36px;
-    border-top-left-radius:     18px;
-    border-top-right-radius:    18px;
-    border-bottom-left-radius:  18px;
-    border-bottom-right-radius: 18px;
+    width:                      32px;
+    height:                     32px;
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
     border-top-width:           0;
     border-right-width:         0;
     border-bottom-width:        0;
     border-left-width:          0;
-    background-color:           rgba(255, 255, 255, 0.06);
+    background-color:           transparent;
     padding-top:                0;
     padding-bottom:             0;
     padding-left:               0;
@@ -68,42 +68,26 @@
     align-items:                center;
     justify-content:            center;
     cursor:                     link;
-    transition-property:        background-color;
-    transition-duration:        0.18s;
+    color:                      rgba(255, 255, 255, 0.25);
+    font-size:                  18px;
+    -unity-font-style:          normal;
+    transition-property:        background-color, color;
+    transition-duration:        0.15s;
     transition-timing-function: ease-in-out;
 }
 
 .auth-close-btn:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.06);
+    color:            rgba(255, 255, 255, 0.60);
 }
 
 .auth-close-btn:active {
-    scale: 0.88;
+    background-color: rgba(255, 255, 255, 0.03);
+    color:            rgba(255, 255, 255, 0.35);
 }
 
 .auth-close-bar {
-    position:         absolute;
-    width:            16px;
-    height:           2px;
-    background-color: rgba(238, 238, 246, 0.45);
-    border-top-left-radius:     1px;
-    border-top-right-radius:    1px;
-    border-bottom-left-radius:  1px;
-    border-bottom-right-radius: 1px;
-    transition-property:        background-color;
-    transition-duration:        0.18s;
-}
-
-.auth-close-bar--a {
-    rotate: 45deg;
-}
-
-.auth-close-bar--b {
-    rotate: -45deg;
-}
-
-.auth-close-btn:hover .auth-close-bar {
-    background-color: rgba(238, 238, 246, 0.80);
+    display: none;
 }
 
 /* ── Header ───────────────────────────────────────────────────────────── */
