@@ -239,16 +239,15 @@ namespace Blockmaker
                 yield break;
             }
 
-            // Extract GroupID (non-yielding setup in try-catch)
-            byte[] groupId;
-            string typedData;
-            byte[] program;
+            // Extract GroupID (non-yielding setup — catch sets error flag instead of yielding)
+            byte[] groupId = null;
+            string typedData = null;
+            byte[] program = null;
+            string setupError = null;
             try
             {
                 var firstTxnBytes = Convert.FromBase64String(unsignedTxnsBase64[0]);
                 groupId = XChainAddressDeriver.ExtractGroupId(firstTxnBytes);
-                typedData = null;
-                program = null;
 
                 if (groupId != null)
                 {
@@ -259,7 +258,12 @@ namespace Blockmaker
             catch (Exception ex)
             {
                 BlockmakerLog.Error($"[EvmXChainIdentity] Group sign setup error: {ex.Message}");
-                onError?.Invoke("Something went wrong while signing the transactions. Please try again.");
+                setupError = "Something went wrong while signing the transactions. Please try again.";
+            }
+
+            if (setupError != null)
+            {
+                onError?.Invoke(setupError);
                 yield break;
             }
 
