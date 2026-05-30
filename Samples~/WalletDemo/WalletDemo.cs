@@ -39,14 +39,12 @@ public class WalletDemo : MonoBehaviour
         _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
         uiDoc.panelSettings = _panelSettings;
 
-        #if UNITY_EDITOR
-        uiDoc.visualTreeAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-            "Packages/com.blockmaker.sdk/UI/AuthPrompt.uxml");
+        var authPromptAsset = LoadUxml("UI/AuthPrompt.uxml");
+        if (authPromptAsset != null)
+            uiDoc.visualTreeAsset = authPromptAsset;
 
         var authPrompt = authUiGo.AddComponent<AuthPromptController>();
-        authPrompt.peraConnectAsset = UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(
-            "Packages/com.blockmaker.sdk/UI/PeraConnectModal.uxml");
-        #endif
+        authPrompt.peraConnectAsset = LoadUxml("UI/PeraConnectModal.uxml");
 
         // ── 4. Connect button ──────────────────────────────────────────────
         var btnGo = new GameObject("_ConnectButton");
@@ -69,6 +67,20 @@ public class WalletDemo : MonoBehaviour
         BlockmakerAuth.OnIdentityChanged += HandleIdentityChanged;
 
         Debug.Log("[WalletDemo] Wallet system ready. Click 'Connect Wallet' to start.");
+    }
+
+    private void OnDestroy()
+    {
+        BlockmakerAuth.OnIdentityChanged -= HandleIdentityChanged;
+    }
+
+    private static VisualTreeAsset LoadUxml(string path)
+    {
+        #if UNITY_EDITOR
+        return UnityEditor.AssetDatabase.LoadAssetAtPath<VisualTreeAsset>($"Packages/com.blockmaker.sdk/{path}");
+        #else
+        return Resources.Load<VisualTreeAsset>(System.IO.Path.GetFileNameWithoutExtension(path));
+        #endif
     }
 
     private void BuildDemoPanel()
@@ -107,16 +119,13 @@ public class WalletDemo : MonoBehaviour
         title.style.marginBottom = 12;
         _demoPanel.Add(title);
 
-        // Sign single transaction button
         _signBtn = CreateButton("Sign Transaction (0 ALGO to self)", () => StartCoroutine(SignSingleTransaction()));
         _demoPanel.Add(_signBtn);
 
-        // Sign group button
         _groupSignBtn = CreateButton("Sign Atomic Group (2 txns)", () => StartCoroutine(SignGroupTransaction()));
         _groupSignBtn.style.marginTop = 8;
         _demoPanel.Add(_groupSignBtn);
 
-        // Status label
         _statusLabel = new Label("");
         _statusLabel.style.fontSize = 12;
         _statusLabel.style.color = new Color(0.53f, 0.53f, 0.53f);
@@ -173,8 +182,6 @@ public class WalletDemo : MonoBehaviour
             : new Color(0.063f, 0.725f, 0.506f);
     }
 
-    // ── Single Transaction Signing ──────────────────────────────────────────
-
     private IEnumerator SignSingleTransaction()
     {
         var identity = BlockmakerAuth.Instance?.Identity;
@@ -184,15 +191,20 @@ public class WalletDemo : MonoBehaviour
             yield break;
         }
 
+        if (BlockmakerClient.Instance == null)
+        {
+            SetStatus("Server not connected.", true);
+            yield break;
+        }
+
         SetStatus("Building transaction...");
         _signBtn.SetEnabled(false);
 
-        // Build a 0-ALGO payment to self via the server
         string unsignedTxn = null;
         string buildError = null;
         bool buildDone = false;
 
-        BlockmakerClient.Instance?.BuildPayment(
+        BlockmakerClient.Instance.BuildPayment(
             identity.Address, 0, "Blockmaker SDK — test transaction",
             result => { unsignedTxn = result.unsignedTxnBase64; buildDone = true; },
             err => { buildError = err; buildDone = true; }
@@ -203,21 +215,19 @@ public class WalletDemo : MonoBehaviour
 
         if (!buildDone || buildError != null)
         {
-            SetStatus(buildError ?? "Failed to build transaction.", true);
+            SetStatus(buildError ?? "Timed out building transaction.", true);
             _signBtn.SetEnabled(true);
             yield break;
         }
 
         SetStatus("Approve in your wallet app...");
 
-        // Sign with the connected wallet
         string signedTxn = null;
         string signError = null;
-        bool signDone = false;
 
         yield return identity.SignTransaction(unsignedTxn,
-            s => { signedTxn = s; signDone = true; },
-            e => { signError = e; signDone = true; }
+            s => { signedTxn = s; },
+            e => { signError = e; }
         );
 
         _signBtn.SetEnabled(true);
@@ -233,8 +243,6 @@ public class WalletDemo : MonoBehaviour
         }
     }
 
-    // ── Atomic Group Signing ────────────────────────────────────────────────
-
     private IEnumerator SignGroupTransaction()
     {
         var identity = BlockmakerAuth.Instance?.Identity;
@@ -244,21 +252,26 @@ public class WalletDemo : MonoBehaviour
             yield break;
         }
 
+        if (BlockmakerClient.Instance == null)
+        {
+            SetStatus("Server not connected.", true);
+            yield break;
+        }
+
         SetStatus("Building 2 transactions...");
         _groupSignBtn.SetEnabled(false);
 
-        // Build two 0-ALGO payments to self
         string txn1 = null, txn2 = null;
         string buildError = null;
         int completed = 0;
 
-        BlockmakerClient.Instance?.BuildPayment(
+        BlockmakerClient.Instance.BuildPayment(
             identity.Address, 0, "Blockmaker SDK — group txn 1",
             result => { txn1 = result.unsignedTxnBase64; completed++; },
             err => { buildError = err; completed++; }
         );
 
-        BlockmakerClient.Instance?.BuildPayment(
+        BlockmakerClient.Instance.BuildPayment(
             identity.Address, 0, "Blockmaker SDK — group txn 2",
             result => { txn2 = result.unsignedTxnBase64; completed++; },
             err => { buildError = err; completed++; }
@@ -269,14 +282,13 @@ public class WalletDemo : MonoBehaviour
 
         if (buildError != null || txn1 == null || txn2 == null)
         {
-            SetStatus(buildError ?? "Failed to build transactions.", true);
+            SetStatus(buildError ?? "Timed out building transactions.", true);
             _groupSignBtn.SetEnabled(true);
             yield break;
         }
 
         SetStatus("Approve group in your wallet app...");
 
-        // Sign both as an atomic group
         string[] signedTxns = null;
         string signError = null;
 
