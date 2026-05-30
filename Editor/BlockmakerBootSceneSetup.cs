@@ -79,14 +79,7 @@ public static class BlockmakerBootSceneSetup
             connectGo.AddComponent<BlockmakerConnectButton>();
         }
 
-        // ── 5. EventSystem ─────────────────────────────────────────────────
-        var eventSystem = Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>();
-        if (eventSystem == null)
-        {
-            var esGo = new GameObject("EventSystem");
-            esGo.AddComponent<UnityEngine.EventSystems.EventSystem>();
-            esGo.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
-        }
+        // UI Toolkit handles its own input — no EventSystem needed.
 
         // ── Done ───────────────────────────────────────────────────────────
         UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(
