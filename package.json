@@ -18,7 +18,9 @@
         "gamedev",
         "pera",
         "defly",
-        "walletconnect"
+        "walletconnect",
+        "profile",
+        "username"
     ],
     "dependencies": {},
     "samples": [

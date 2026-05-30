@@ -1,0 +1,417 @@
+/* =========================================================================
+   BlockmakerProfile.uss
+   SDK Profile Screen — slide-in panel
+   ========================================================================= */
+
+@import url("BlockmakerTheme.uss");
+
+/* ── Root + Backdrop ─────────────────────────────────────────────────── */
+
+.bm-profile-root {
+    position:        absolute;
+    left:            0;
+    top:             0;
+    right:           0;
+    bottom:          0;
+    flex-direction:  row;
+    justify-content: flex-end;
+    display:         none;
+}
+
+.bm-profile-backdrop {
+    position:         absolute;
+    left:             0;
+    top:              0;
+    right:            0;
+    bottom:           0;
+    background-color: rgba(0, 0, 0, 0.60);
+}
+
+/* ── Panel ────────────────────────────────────────────────────────────── */
+
+.bm-profile-panel {
+    position:          relative;
+    width:             100%;
+    max-width:         420px;
+    height:            100%;
+    flex-direction:    column;
+    background-color:  var(--bm-bg-card, rgb(13, 13, 20));
+    border-left-width: 1px;
+    border-left-color: rgba(255, 255, 255, 0.08);
+    padding-bottom:    0;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────── */
+
+.bm-profile-header {
+    flex-direction:  row;
+    align-items:     center;
+    justify-content: space-between;
+    padding-left:    24px;
+    padding-right:   16px;
+    padding-top:     20px;
+    padding-bottom:  20px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.bm-profile-title {
+    font-size:                  16px;
+    color:                      var(--bm-text, rgb(238, 238, 246));
+    -unity-font-style:          bold;
+}
+
+.bm-profile-close {
+    width:               32px;
+    height:              32px;
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    border-top-width:    0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    border-right-width:  0;
+    background-color:    transparent;
+    color:               rgba(255, 255, 255, 0.25);
+    font-size:           18px;
+    padding-left:        0;
+    padding-right:       0;
+    padding-top:         0;
+    padding-bottom:      0;
+    align-items:         center;
+    justify-content:     center;
+    cursor:              link;
+}
+
+.bm-profile-close:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    color:            rgba(255, 255, 255, 0.60);
+}
+
+/* ── Scroll area ─────────────────────────────────────────────────────── */
+
+.bm-profile-scroll {
+    flex-grow: 1;
+}
+
+/* ── Identity section ────────────────────────────────────────────────── */
+
+.bm-profile-identity {
+    align-items:    center;
+    padding-top:    28px;
+    padding-bottom: 24px;
+}
+
+.bm-profile-avatar {
+    width:                      72px;
+    height:                     72px;
+    border-top-left-radius:     36px;
+    border-top-right-radius:    36px;
+    border-bottom-left-radius:  36px;
+    border-bottom-right-radius: 36px;
+    background-color:           var(--bm-surface, rgb(20, 20, 32));
+    border-top-width:           2px;
+    border-bottom-width:        2px;
+    border-left-width:          2px;
+    border-right-width:         2px;
+    border-top-color:           rgba(167, 139, 250, 0.25);
+    border-bottom-color:        rgba(167, 139, 250, 0.25);
+    border-left-color:          rgba(167, 139, 250, 0.25);
+    border-right-color:         rgba(167, 139, 250, 0.25);
+    align-items:                center;
+    justify-content:            center;
+    margin-bottom:              12px;
+    -unity-background-scale-mode: scale-and-crop;
+}
+
+.bm-profile-avatar-initial {
+    font-size:           28px;
+    color:               var(--bm-accent, rgb(167, 139, 250));
+    -unity-text-align:   middle-center;
+    -unity-font-style:   bold;
+}
+
+.bm-profile-display-name {
+    font-size:         18px;
+    color:             var(--bm-text, rgb(238, 238, 246));
+    -unity-font-style: bold;
+    margin-bottom:     4px;
+}
+
+.bm-profile-tier {
+    font-size:      12px;
+    color:          var(--bm-text-muted, rgba(238, 238, 246, 0.40));
+    letter-spacing: 0.5px;
+}
+
+/* ── Sections ────────────────────────────────────────────────────────── */
+
+.bm-profile-section {
+    padding-left:   24px;
+    padding-right:  24px;
+    padding-top:    16px;
+    padding-bottom: 16px;
+}
+
+.bm-profile-section-label {
+    font-size:      10px;
+    color:          var(--bm-text-muted, rgba(238, 238, 246, 0.40));
+    letter-spacing: 1px;
+    margin-bottom:  8px;
+}
+
+.bm-profile-divider {
+    height:           1px;
+    background-color: rgba(255, 255, 255, 0.06);
+    margin-left:      24px;
+    margin-right:     24px;
+}
+
+/* ── Address ─────────────────────────────────────────────────────────── */
+
+.bm-profile-address-row {
+    flex-direction: row;
+    align-items:    center;
+}
+
+.bm-profile-address {
+    flex-grow:  1;
+    font-size:  13px;
+    color:      var(--bm-text-secondary, rgba(238, 238, 246, 0.65));
+}
+
+.bm-profile-copy-btn {
+    font-size:           11px;
+    color:               var(--bm-accent, rgb(167, 139, 250));
+    background-color:    transparent;
+    border-top-width:    1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-top-color:    rgba(167, 139, 250, 0.20);
+    border-bottom-color: rgba(167, 139, 250, 0.20);
+    border-left-color:   rgba(167, 139, 250, 0.20);
+    border-right-color:  rgba(167, 139, 250, 0.20);
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    padding-left:   10px;
+    padding-right:  10px;
+    padding-top:    4px;
+    padding-bottom: 4px;
+    cursor:         link;
+}
+
+.bm-profile-copy-confirm {
+    font-size: 11px;
+    color:     var(--bm-accent, rgb(167, 139, 250));
+    display:   none;
+    margin-top: 4px;
+}
+
+/* ── Username ────────────────────────────────────────────────────────── */
+
+.bm-profile-username-row {
+    flex-direction: row;
+    align-items:    center;
+}
+
+.bm-profile-username {
+    flex-grow:         1;
+    font-size:         14px;
+    color:             var(--bm-text, rgb(238, 238, 246));
+    -unity-font-style: bold;
+}
+
+.bm-profile-small-btn {
+    font-size:           11px;
+    color:               var(--bm-text-secondary, rgba(238, 238, 246, 0.65));
+    background-color:    rgba(255, 255, 255, 0.06);
+    border-top-width:    0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    border-right-width:  0;
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    padding-left:   10px;
+    padding-right:  10px;
+    padding-top:    5px;
+    padding-bottom: 5px;
+    cursor:         link;
+}
+
+.bm-profile-input {
+    background-color:           var(--bm-surface, rgb(20, 20, 32));
+    border-top-width:           1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-top-color:           rgba(255, 255, 255, 0.08);
+    border-bottom-color:        rgba(255, 255, 255, 0.08);
+    border-left-color:          rgba(255, 255, 255, 0.08);
+    border-right-color:         rgba(255, 255, 255, 0.08);
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    padding-left:    10px;
+    padding-right:   10px;
+    padding-top:     8px;
+    padding-bottom:  8px;
+    font-size:       13px;
+    color:           var(--bm-text, rgb(238, 238, 246));
+    margin-bottom:   8px;
+}
+
+.bm-profile-username-status {
+    font-size: 11px;
+    color:     var(--bm-text-muted, rgba(238, 238, 246, 0.40));
+    display:   none;
+    margin-bottom: 8px;
+}
+
+/* ── Nudge cards ─────────────────────────────────────────────────────── */
+
+.bm-profile-nudge {
+    background-color:           rgba(109, 40, 217, 0.06);
+    border-top-width:           1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-right-width:         1px;
+    border-top-color:           rgba(167, 139, 250, 0.12);
+    border-bottom-color:        rgba(167, 139, 250, 0.12);
+    border-left-color:          rgba(167, 139, 250, 0.12);
+    border-right-color:         rgba(167, 139, 250, 0.12);
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    padding-left:    16px;
+    padding-right:   16px;
+    padding-top:     14px;
+    padding-bottom:  14px;
+    margin-left:     24px;
+    margin-right:    24px;
+    margin-top:      4px;
+    margin-bottom:   4px;
+}
+
+.bm-profile-nudge-text {
+    font-size:     13px;
+    color:         rgba(167, 139, 250, 0.75);
+    margin-bottom: 10px;
+}
+
+.bm-profile-nudge-btn {
+    align-self:          flex-start;
+    font-size:           12px;
+    color:               var(--bm-accent, rgb(167, 139, 250));
+    background-color:    rgba(109, 40, 217, 0.12);
+    border-top-width:    1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-top-color:    rgba(167, 139, 250, 0.20);
+    border-bottom-color: rgba(167, 139, 250, 0.20);
+    border-left-color:   rgba(167, 139, 250, 0.20);
+    border-right-color:  rgba(167, 139, 250, 0.20);
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    padding-left:   14px;
+    padding-right:  14px;
+    padding-top:    7px;
+    padding-bottom: 7px;
+    cursor:         link;
+    -unity-font-style: bold;
+}
+
+.bm-profile-nudge-btn:hover {
+    background-color: rgba(109, 40, 217, 0.20);
+}
+
+/* ── Change picture button ───────────────────────────────────────────── */
+
+.bm-profile-change-pic-btn {
+    align-self:          flex-start;
+    font-size:           12px;
+    color:               var(--bm-text-secondary, rgba(238, 238, 246, 0.65));
+    background-color:    rgba(255, 255, 255, 0.06);
+    border-top-width:    0;
+    border-bottom-width: 0;
+    border-left-width:   0;
+    border-right-width:  0;
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    padding-left:   14px;
+    padding-right:  14px;
+    padding-top:    8px;
+    padding-bottom: 8px;
+    cursor:         link;
+}
+
+.bm-profile-change-pic-btn:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────── */
+
+.bm-profile-footer {
+    padding-left:   24px;
+    padding-right:  24px;
+    padding-bottom: 20px;
+}
+
+.bm-profile-signout-btn {
+    width:               100%;
+    font-size:           13px;
+    color:               rgba(239, 68, 68, 0.80);
+    background-color:    rgba(239, 68, 68, 0.06);
+    border-top-width:    1px;
+    border-bottom-width: 1px;
+    border-left-width:   1px;
+    border-right-width:  1px;
+    border-top-color:    rgba(239, 68, 68, 0.12);
+    border-bottom-color: rgba(239, 68, 68, 0.12);
+    border-left-color:   rgba(239, 68, 68, 0.12);
+    border-right-color:  rgba(239, 68, 68, 0.12);
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    padding-top:    10px;
+    padding-bottom: 10px;
+    margin-top:     12px;
+    cursor:         link;
+}
+
+.bm-profile-signout-btn:hover {
+    background-color: rgba(239, 68, 68, 0.12);
+    color:            rgb(239, 68, 68);
+}
+
+/* ── Status label ────────────────────────────────────────────────────── */
+
+.bm-profile-status {
+    font-size:    12px;
+    color:        var(--bm-text-muted, rgba(238, 238, 246, 0.40));
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-top:  8px;
+    display:      none;
+}
+
+.bm-profile-status--error {
+    color: rgb(239, 68, 68);
+}
+
+.bm-profile-status--success {
+    color: rgb(16, 185, 129);
+}

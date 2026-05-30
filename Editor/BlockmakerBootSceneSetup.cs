@@ -92,6 +92,38 @@ public static class BlockmakerBootSceneSetup
             connectGo.AddComponent<BlockmakerConnectButton>();
         }
 
+        // ── 5. _ProfileUI ───────────────────────────────────────────────────
+        var profileGo = GameObject.Find("_ProfileUI");
+        if (profileGo == null)
+        {
+            profileGo = new GameObject("_ProfileUI");
+
+            var profileDoc = profileGo.AddComponent<UIDocument>();
+            profileDoc.sortingOrder = 150;
+            if (profileDoc.panelSettings == null && panelSettings != null)
+                profileDoc.panelSettings = panelSettings;
+
+            var profileUxml = LoadAsset<VisualTreeAsset>("UI/BlockmakerProfile.uxml");
+            if (profileUxml != null)
+                profileDoc.visualTreeAsset = profileUxml;
+
+            profileGo.AddComponent<BlockmakerProfileController>();
+        }
+
+        // ── 6. _ProfileButton ──────────────────────────────────────────────
+        var profileBtnGo = GameObject.Find("_ProfileButton");
+        if (profileBtnGo == null)
+        {
+            profileBtnGo = new GameObject("_ProfileButton");
+
+            var profileBtnDoc = profileBtnGo.AddComponent<UIDocument>();
+            profileBtnDoc.sortingOrder = 210;
+            if (profileBtnDoc.panelSettings == null && panelSettings != null)
+                profileBtnDoc.panelSettings = panelSettings;
+
+            profileBtnGo.AddComponent<BlockmakerProfileButton>();
+        }
+
         // UI Toolkit handles its own input — no EventSystem needed.
 
         // ── Done ───────────────────────────────────────────────────────────

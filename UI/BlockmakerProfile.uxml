@@ -1,0 +1,86 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="False">
+    <Style src="BlockmakerProfile.uss" />
+
+    <ui:VisualElement name="bm-profile-root" class="bm-profile-root">
+        <ui:VisualElement name="bm-profile-backdrop" class="bm-profile-backdrop" />
+
+        <ui:VisualElement name="bm-profile-panel" class="bm-profile-panel">
+
+            <!-- Header -->
+            <ui:VisualElement class="bm-profile-header">
+                <ui:Label class="bm-profile-title" text="Profile" />
+                <ui:Button name="btn-profile-close" class="bm-profile-close" text="&#x2715;" />
+            </ui:VisualElement>
+
+            <ui:ScrollView class="bm-profile-scroll">
+
+                <!-- Avatar + Identity -->
+                <ui:VisualElement class="bm-profile-identity">
+                    <ui:VisualElement name="bm-profile-avatar" class="bm-profile-avatar">
+                        <ui:Label name="bm-profile-avatar-initial" class="bm-profile-avatar-initial" text="?" />
+                    </ui:VisualElement>
+                    <ui:Label name="bm-profile-display-name" class="bm-profile-display-name" text="Guest" />
+                    <ui:Label name="bm-profile-tier" class="bm-profile-tier" text="Guest" />
+                </ui:VisualElement>
+
+                <!-- Nudge: Profile Picture -->
+                <ui:VisualElement name="bm-profile-pic-nudge" class="bm-profile-nudge">
+                    <ui:Label class="bm-profile-nudge-text" text="Add a profile picture to stand out" />
+                    <ui:Button name="btn-profile-set-picture" class="bm-profile-nudge-btn" text="Choose Picture" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="bm-profile-divider" />
+
+                <!-- Wallet Address -->
+                <ui:VisualElement name="bm-profile-address-section" class="bm-profile-section">
+                    <ui:Label class="bm-profile-section-label" text="WALLET ADDRESS" />
+                    <ui:VisualElement class="bm-profile-address-row">
+                        <ui:Label name="bm-profile-address" class="bm-profile-address" text="Not connected" />
+                        <ui:Button name="btn-profile-copy" class="bm-profile-copy-btn" text="Copy" />
+                    </ui:VisualElement>
+                    <ui:Label name="bm-profile-copy-confirm" class="bm-profile-copy-confirm" text="Copied!" />
+                </ui:VisualElement>
+
+                <ui:VisualElement class="bm-profile-divider" />
+
+                <!-- Username -->
+                <ui:VisualElement name="bm-profile-username-section" class="bm-profile-section">
+                    <ui:Label class="bm-profile-section-label" text="USERNAME" />
+
+                    <!-- Has username -->
+                    <ui:VisualElement name="bm-profile-has-username" class="bm-profile-username-row">
+                        <ui:Label name="bm-profile-username" class="bm-profile-username" text="" />
+                        <ui:Button name="btn-profile-change-username" class="bm-profile-small-btn" text="Change" />
+                    </ui:VisualElement>
+
+                    <!-- No username — nudge -->
+                    <ui:VisualElement name="bm-profile-no-username" class="bm-profile-nudge">
+                        <ui:Label class="bm-profile-nudge-text" text="Claim a username for your on-chain identity" />
+                        <ui:TextField name="input-profile-username" class="bm-profile-input" max-length="20" />
+                        <ui:Label name="bm-profile-username-status" class="bm-profile-username-status" text="" />
+                        <ui:Button name="btn-profile-claim-username" class="bm-profile-nudge-btn" text="Claim Username" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+
+                <ui:VisualElement class="bm-profile-divider" />
+
+                <!-- Profile Picture -->
+                <ui:VisualElement name="bm-profile-picture-section" class="bm-profile-section">
+                    <ui:Label class="bm-profile-section-label" text="PROFILE PICTURE" />
+                    <ui:Button name="btn-profile-change-picture" class="bm-profile-change-pic-btn" text="Change Picture" />
+                </ui:VisualElement>
+
+                <!-- Status -->
+                <ui:Label name="bm-profile-status" class="bm-profile-status" text="" />
+
+            </ui:ScrollView>
+
+            <!-- Sign Out (pinned to bottom) -->
+            <ui:VisualElement class="bm-profile-footer">
+                <ui:VisualElement class="bm-profile-divider" />
+                <ui:Button name="btn-profile-signout" class="bm-profile-signout-btn" text="Sign Out" />
+            </ui:VisualElement>
+
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

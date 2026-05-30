@@ -692,6 +692,22 @@ namespace Blockmaker
             var step = OnboardingStep;
             return step != "complete";
         }
+
+        public static bool ShouldShowUsernameNudge()
+        {
+            var cfg = BlockmakerAuth.Instance?.blockmakerConfig;
+            if (cfg != null && (!cfg.enableOnboardingNudges || !cfg.enableUsernames)) return false;
+            if (BlockmakerAuth.Instance == null || BlockmakerAuth.Instance.Tier == IdentityTier.Guest) return false;
+            return !HasUsername;
+        }
+
+        public static bool ShouldShowProfilePicNudge()
+        {
+            var cfg = BlockmakerAuth.Instance?.blockmakerConfig;
+            if (cfg != null && (!cfg.enableOnboardingNudges || !cfg.enableProfilePictures)) return false;
+            if (BlockmakerAuth.Instance == null || BlockmakerAuth.Instance.Tier == IdentityTier.Guest) return false;
+            return ProfilePicAssetId == 0 && string.IsNullOrEmpty(ProfileImageUrl);
+        }
     }
 
 }
