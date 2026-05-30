@@ -54,26 +54,7 @@ public class WalletDemo : MonoBehaviour
         btnDoc.panelSettings = _panelSettings;
         btnGo.AddComponent<BlockmakerConnectButton>();
 
-        // ── 5. Profile UI ─────────────────────────────────────────────────
-        var profileGo = new GameObject("_ProfileUI");
-        DontDestroyOnLoad(profileGo);
-        var profileDoc = profileGo.AddComponent<UIDocument>();
-        profileDoc.sortingOrder = 150;
-        profileDoc.panelSettings = _panelSettings;
-        var profileUxml = LoadUxml("UI/BlockmakerProfile.uxml");
-        if (profileUxml != null)
-            profileDoc.visualTreeAsset = profileUxml;
-        profileGo.AddComponent<BlockmakerProfileController>();
-
-        // ── 6. Profile button ─────────────────────────────────────────────
-        var profileBtnGo = new GameObject("_ProfileButton");
-        DontDestroyOnLoad(profileBtnGo);
-        var profileBtnDoc = profileBtnGo.AddComponent<UIDocument>();
-        profileBtnDoc.sortingOrder = 210;
-        profileBtnDoc.panelSettings = _panelSettings;
-        profileBtnGo.AddComponent<BlockmakerProfileButton>();
-
-        // ── 7. Demo panel (sign transaction buttons) ───────────────────────
+        // ── 5. Demo panel (sign transaction buttons) ───────────────────────
         var demoGo = new GameObject("_DemoPanel");
         DontDestroyOnLoad(demoGo);
         _demoDoc = demoGo.AddComponent<UIDocument>();

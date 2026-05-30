@@ -52,22 +52,6 @@ namespace Blockmaker
         [Tooltip("Icon URL shown in wallet apps. Leave empty for default.")]
         public string dAppIconUrl = "";
 
-        [Header("Profile")]
-        [Tooltip("Enable the username system. Players can claim on-chain usernames. Game devs receive 50% of naming fees via their API key.")]
-        public bool enableUsernames = true;
-
-        [Tooltip("Enable profile pictures. Players can set an NFT or default avatar as their profile picture.")]
-        public bool enableProfilePictures = true;
-
-        [Tooltip("Enable default avatar selection. When disabled, only NFT profile pictures are available.")]
-        public bool enableDefaultAvatars = true;
-
-        [Tooltip("Show gentle nudges on the profile screen when a player hasn't set their username or profile picture.")]
-        public bool enableOnboardingNudges = true;
-
-        [Tooltip("Default avatars available in the profile picture picker. Create via Assets > Create > Blockmaker > Default Avatar Set.")]
-        public DefaultAvatarSet defaultAvatarSet;
-
         [Header("Timeouts (seconds)")]
         public float defaultTimeoutSeconds  = 10f;
         public float longRequestTimeoutSeconds   = 20f;
