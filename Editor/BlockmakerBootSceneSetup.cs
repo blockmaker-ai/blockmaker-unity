@@ -51,23 +51,19 @@ public static class BlockmakerBootSceneSetup
         if (uiDoc.panelSettings == null && panelSettings != null)
             uiDoc.panelSettings = panelSettings;
 
-        // Assign AuthScreen UXML as the source asset
-        var authScreenUxml = LoadAsset<VisualTreeAsset>("UI/AuthScreen.uxml");
-        if (authScreenUxml != null && uiDoc.visualTreeAsset == null)
-            uiDoc.visualTreeAsset = authScreenUxml;
+        // Assign AuthPrompt UXML as the source asset (the compact modal)
+        var authPromptUxml = LoadAsset<VisualTreeAsset>("UI/AuthPrompt.uxml");
+        if (authPromptUxml != null && uiDoc.visualTreeAsset == null)
+            uiDoc.visualTreeAsset = authPromptUxml;
 
-        // BlockmakerAuthUI component
-        var authUI = authUiGo.GetComponent<BlockmakerAuthUI>();
-        if (authUI == null)
-            authUI = authUiGo.AddComponent<BlockmakerAuthUI>();
+        // AuthPromptController component
+        var authPrompt = authUiGo.GetComponent<AuthPromptController>();
+        if (authPrompt == null)
+            authPrompt = authUiGo.AddComponent<AuthPromptController>();
 
-        // Wire up UXML assets
-        if (authUI.otpScreenAsset == null)
-            authUI.otpScreenAsset = LoadAsset<VisualTreeAsset>("UI/OTPScreen.uxml");
-        if (authUI.walletUpgradeAsset == null)
-            authUI.walletUpgradeAsset = LoadAsset<VisualTreeAsset>("UI/WalletUpgradePrompt.uxml");
-        if (authUI.peraConnectAsset == null)
-            authUI.peraConnectAsset = LoadAsset<VisualTreeAsset>("UI/PeraConnectModal.uxml");
+        // Wire up the Pera/Defly/X-Chain modal UXML
+        if (authPrompt.peraConnectAsset == null)
+            authPrompt.peraConnectAsset = LoadAsset<VisualTreeAsset>("UI/PeraConnectModal.uxml");
 
         // ── 4. EventSystem ─────────────────────────────────────────────────
         var eventSystem = Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>();
