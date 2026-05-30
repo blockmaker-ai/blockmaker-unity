@@ -11,9 +11,35 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 | **X-Chain** | Any EVM wallet (MetaMask, Rainbow, Coinbase + more) via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts) |
 | **Email** | Magic SDK (WebGL) or server-managed OTP (all platforms) |
 
-## Getting Started
+## Installation
 
-### 1. Install the SDK
+### Step 1 — Add the Reown registry
+
+Open `Packages/manifest.json` in your Unity project and add this `scopedRegistries` block at the end, just before the final `}`:
+
+```json
+"scopedRegistries": [
+  {
+    "name": "OpenUPM",
+    "url": "https://package.openupm.com",
+    "scopes": [
+      "com.reown",
+      "com.nethereum",
+      "com.cysharp"
+    ]
+  }
+]
+```
+
+Then add this line inside the `"dependencies"` section:
+
+```json
+"com.reown.sign.unity": "1.6.0",
+```
+
+Save the file.
+
+### Step 2 — Add the Blockmaker SDK
 
 In Unity: **Window > Package Manager > + > Add package from git URL**
 
@@ -21,15 +47,40 @@ In Unity: **Window > Package Manager > + > Add package from git URL**
 https://github.com/blockmaker-ai/blockmaker-unity.git
 ```
 
-> **Note:** You also need the [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/installation) installed in your project.
+Wait for Unity to resolve both packages. Once it compiles with no errors, you're ready.
 
-### 2. Create a config
+### Step 3 — Set up your scene
 
-**Assets > Create > Blockmaker > Config** — assign it to your BlockmakerAuth component.
+1. **Assets > Create > Blockmaker > Config** — creates a config asset (no fields required, defaults work)
+2. Add a **BlockmakerAuth** component to any GameObject
+3. Assign your config asset to it
 
-### 3. Add to your scene
+Done — all wallet types work out of the box.
 
-Add a `BlockmakerAuth` component to any GameObject and assign your config. Done — all wallet types work out of the box.
+### Full manifest.json example
+
+If you prefer, here's what a clean `manifest.json` looks like with both packages:
+
+```json
+{
+  "dependencies": {
+    "com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
+    "com.reown.sign.unity": "1.6.0",
+    ...your other packages...
+  },
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.reown",
+        "com.nethereum",
+        "com.cysharp"
+      ]
+    }
+  ]
+}
+```
 
 ## Usage
 
@@ -148,21 +199,22 @@ BlockmakerLog.OnLog += (level, msg) => MyLogger.Log(msg);
 
 ## Configuration Reference
 
+All fields are optional — the SDK works with defaults out of the box.
+
 | Field | Description |
 |-------|-------------|
-| `serverUrl` | Optional — your own Blockmaker server URL. Leave empty to use the shared default |
-| `apiKey` | Optional — your own API key (`sk_` prefix). **Only used in the Unity Editor, never shipped in player builds** |
-| `walletConnectProjectId` | Optional — your own WalletConnect project ID. Leave empty to use the shared default |
-| `magicPublishableKey` | Optional — Magic SDK key for email login on WebGL |
-| `dAppUrl` | Optional — URL shown in wallet apps when players approve a connection |
-| `dAppIconUrl` | Optional — icon shown in wallet apps |
+| `serverUrl` | Your own Blockmaker server URL. Leave empty to use the shared default |
+| `apiKey` | Your own API key (`sk_` prefix). **Only used in the Unity Editor, never shipped in player builds** |
+| `walletConnectProjectId` | Your own WalletConnect project ID. Leave empty to use the shared default |
+| `magicPublishableKey` | Magic SDK key for email login on WebGL |
+| `dAppUrl` | URL shown in wallet apps when players approve a connection |
+| `dAppIconUrl` | Icon shown in wallet apps |
 | `walletSignTimeoutSeconds` | How long to wait for wallet approval (default: 120 seconds) |
 
 ## Requirements
 
 - Unity 6+ (6000.0)
 - .NET Standard 2.1+
-- [Reown Unity SDK](https://docs.reown.com/appkit/unity/core/installation)
 
 ## License
 
