@@ -30,7 +30,7 @@
                 <ui:Label class="auth-section-label" text="CONNECT WALLET" />
                 <ui:Button name="btn-pera"  class="auth-btn auth-btn-wallet" text="Pera Wallet" />
                 <ui:Button name="btn-defly" class="auth-btn auth-btn-wallet" text="Defly Wallet" />
-                <ui:Button name="btn-metamask" class="auth-btn auth-btn-wallet" text="Ethereum Wallet" />
+                <ui:Button name="btn-metamask" class="auth-btn auth-btn-wallet" text="Other Wallet" />
             </ui:VisualElement>
 
             <!-- Divider -->

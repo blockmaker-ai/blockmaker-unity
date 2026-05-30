@@ -51,7 +51,7 @@
                     <ui:VisualElement class="upgrade-wallet-icon upgrade-wallet-icon--evm">
                         <ui:Label class="upgrade-wallet-icon-glyph" text="X" />
                     </ui:VisualElement>
-                    <ui:Label class="upgrade-wallet-label" text="Ethereum Wallet" />
+                    <ui:Label class="upgrade-wallet-label" text="Other Wallet" />
                     <ui:Label class="upgrade-wallet-arrow" text=">" />
                 </ui:Button>
             </ui:VisualElement>

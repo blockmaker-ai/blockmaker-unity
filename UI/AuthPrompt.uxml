@@ -42,8 +42,8 @@
                         <ui:Label class="auth-btn-icon-glyph" text="X" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
-                        <ui:Label class="auth-btn-label" text="Ethereum Wallet" />
-                        <ui:Label class="auth-btn-sub" text="Use your Ethereum wallet on Algorand" />
+                        <ui:Label class="auth-btn-label" text="Other Wallet" />
+                        <ui:Label class="auth-btn-sub" text="MetaMask, Rainbow, Coinbase &amp; more" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:Label class="auth-btn-chevron-glyph" text=">" />
