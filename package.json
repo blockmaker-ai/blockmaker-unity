@@ -1,6 +1,6 @@
 {
     "name": "com.blockmaker.sdk",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "displayName": "Blockmaker SDK",
     "description": "Open-source wallet, auth, NFT, and transaction SDK for Unity games on Algorand. Supports Pera, Defly, MetaMask, and email login.",
     "unity": "6000.0",
