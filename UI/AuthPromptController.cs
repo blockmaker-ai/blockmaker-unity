@@ -399,7 +399,7 @@ namespace Blockmaker
             }
 
             if (ReownWalletConnector.Instance != null && ReownWalletConnector.Instance.IsInitialized)
-                ShowQrPage("EVM");
+                ShowQrPage("X-Chain");
             else
                 SetStatus("Looking for your wallet app…");
 

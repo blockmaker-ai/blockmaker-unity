@@ -121,7 +121,7 @@ namespace Blockmaker
             if (provider == "MetaMask")
             {
                 if (_connectFooter != null) _connectFooter.style.display = DisplayStyle.Flex;
-                if (_lblFooterHint != null) _lblFooterHint.text = "MetaMask, Rainbow, Coinbase + more";
+                if (_lblFooterHint != null) _lblFooterHint.text = "Any EVM wallet — MetaMask, Rainbow + more";
                 if (_btnShowDownload != null) _btnShowDownload.style.display = DisplayStyle.None;
             }
             else
