@@ -139,10 +139,14 @@ namespace Blockmaker
             switch (b)
             {
                 case 0xc0: return pos; // nil
+                case 0xc1: return -1; // never used
                 case 0xc2: case 0xc3: return pos; // bool
                 case 0xc4: if (pos >= d.Length) return -1; return pos + 1 + d[pos]; // bin8
                 case 0xc5: if (pos + 1 >= d.Length) return -1; return pos + 2 + ((d[pos] << 8) | d[pos+1]); // bin16
-                case 0xc6: if (pos + 3 >= d.Length) return -1; return pos + 4 + ((d[pos] << 24) | (d[pos+1] << 16) | (d[pos+2] << 8) | d[pos+3]); // bin32
+                case 0xc6: if (pos + 3 >= d.Length) return -1; return pos + 4 + (((int)d[pos] << 24) | (d[pos+1] << 16) | (d[pos+2] << 8) | d[pos+3]); // bin32
+                case 0xc7: if (pos >= d.Length) return -1; return pos + 2 + d[pos]; // ext8
+                case 0xc8: if (pos + 1 >= d.Length) return -1; return pos + 3 + ((d[pos] << 8) | d[pos+1]); // ext16
+                case 0xc9: if (pos + 3 >= d.Length) return -1; return pos + 5 + (((int)d[pos] << 24) | (d[pos+1] << 16) | (d[pos+2] << 8) | d[pos+3]); // ext32
                 case 0xca: return pos + 4; // float32
                 case 0xcb: return pos + 8; // float64
                 case 0xcc: return pos + 1; // uint8
@@ -153,14 +157,26 @@ namespace Blockmaker
                 case 0xd1: return pos + 2; // int16
                 case 0xd2: return pos + 4; // int32
                 case 0xd3: return pos + 8; // int64
+                case 0xd4: return pos + 2; // fixext1
+                case 0xd5: return pos + 3; // fixext2
+                case 0xd6: return pos + 5; // fixext4
+                case 0xd7: return pos + 9; // fixext8
+                case 0xd8: return pos + 17; // fixext16
                 case 0xd9: if (pos >= d.Length) return -1; return pos + 1 + d[pos]; // str8
                 case 0xda: if (pos + 1 >= d.Length) return -1; return pos + 2 + ((d[pos] << 8) | d[pos+1]); // str16
+                case 0xdb: if (pos + 3 >= d.Length) return -1; return pos + 4 + (((int)d[pos] << 24) | (d[pos+1] << 16) | (d[pos+2] << 8) | d[pos+3]); // str32
                 case 0xdc: // array16
                     if (pos + 1 >= d.Length) return -1;
                     { int n = (d[pos] << 8) | d[pos+1]; pos += 2; for (int i = 0; i < n; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
+                case 0xdd: // array32
+                    if (pos + 3 >= d.Length) return -1;
+                    { int n = (d[pos] << 16) | (d[pos+1] << 8) | d[pos+2]; pos += 4; for (int i = 0; i < n; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
                 case 0xde: // map16
                     if (pos + 1 >= d.Length) return -1;
                     { int n = (d[pos] << 8) | d[pos+1]; pos += 2; for (int i = 0; i < n * 2; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
+                case 0xdf: // map32
+                    if (pos + 3 >= d.Length) return -1;
+                    { int n = (d[pos] << 16) | (d[pos+1] << 8) | d[pos+2]; pos += 4; for (int i = 0; i < n * 2; i++) { pos = SkipMsgpackValue(d, pos); if (pos < 0) return -1; } return pos; }
                 default: return -1;
             }
         }

@@ -167,8 +167,10 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(respBody);
                         if (!string.IsNullOrEmpty(parsed.error))
+                        {
                             BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                             err = parsed.error;
+                        }
                     }
                 }
                 catch (Exception parseEx) { BlockmakerLog.Warning($"[BlockmakerClient] Error response parse failed: {parseEx.Message}"); }
@@ -257,8 +259,10 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(respBody);
                         if (!string.IsNullOrEmpty(parsed.error))
+                        {
                             BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                             err = parsed.error;
+                        }
                         code = parsed.code ?? "";
                     }
                 }
@@ -314,8 +318,10 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(respBody);
                         if (!string.IsNullOrEmpty(parsed.error))
+                        {
                             BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                             err = parsed.error;
+                        }
                         code = parsed.code ?? "";
                     }
                 }
@@ -1060,8 +1066,10 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(body);
                         if (!string.IsNullOrEmpty(parsed.error))
+                        {
                             BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                             err = parsed.error;
+                        }
                         if (!string.IsNullOrEmpty(parsed.code))
                             code = parsed.code;
                     }
