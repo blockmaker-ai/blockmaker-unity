@@ -13,21 +13,54 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 
 ## Installation
 
-### Step 1 — Install the Blockmaker SDK
+Open your project's `Packages/manifest.json` file and add these lines:
 
-In Unity: **Window > Package Manager > + > Add package from git URL**
+**1.** Add the scoped registry block at the bottom of the file, just before the last `}`:
 
+```json
+,
+"scopedRegistries": [
+  {
+    "name": "OpenUPM",
+    "url": "https://package.openupm.com",
+    "scopes": ["com.reown", "com.nethereum", "com.cysharp"]
+  }
+]
 ```
-https://github.com/blockmaker-ai/blockmaker-unity.git
+
+**2.** Add these two lines at the top of the `"dependencies"` section:
+
+```json
+"com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
+"com.reown.sign.unity": "1.6.0",
 ```
 
-### Step 2 — Install the Reown dependency
+**3.** Save the file and open Unity. Both packages will install automatically.
 
-A dialog will pop up asking to install the Reown SDK. Click **"Install Reown SDK"** and Unity will handle the rest.
+<details>
+<summary><b>Full manifest.json example (click to expand)</b></summary>
 
-If the dialog doesn't appear, go to **Blockmaker > Install Reown SDK** in the menu bar.
+```json
+{
+  "dependencies": {
+    "com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git",
+    "com.reown.sign.unity": "1.6.0",
+    "com.unity.ugui": "2.0.0",
+    ...your other packages...
+  },
+  "scopedRegistries": [
+    {
+      "name": "OpenUPM",
+      "url": "https://package.openupm.com",
+      "scopes": ["com.reown", "com.nethereum", "com.cysharp"]
+    }
+  ]
+}
+```
 
-### Step 3 — Set up your scene
+</details>
+
+## Setup
 
 1. **Assets > Create > Blockmaker > Config**
 2. Add a **BlockmakerAuth** component to any GameObject
