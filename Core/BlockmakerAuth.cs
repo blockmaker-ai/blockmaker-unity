@@ -377,10 +377,16 @@ namespace Blockmaker
 
             _connector = GetComponent<ReownWalletConnector>();
             if (_connector == null) _connector = gameObject.AddComponent<ReownWalletConnector>();
-            if (!string.IsNullOrEmpty(ResolvedWalletConnectProjectId))
+            var wcProjectId = ResolvedWalletConnectProjectId;
+            if (!string.IsNullOrEmpty(wcProjectId))
             {
+                BlockmakerLog.Info($"[BlockmakerAuth] Initializing Reown with project ID: {wcProjectId[..8]}...");
                 _connector.OnInitialized += OnReownInitialized;
-                _connector.Initialize(ResolvedWalletConnectProjectId);
+                _connector.Initialize(wcProjectId);
+            }
+            else
+            {
+                BlockmakerLog.Warning("[BlockmakerAuth] No WalletConnect Project ID — Defly and X-Chain will not be available.");
             }
         }
 
