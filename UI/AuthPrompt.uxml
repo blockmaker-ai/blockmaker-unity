@@ -4,11 +4,6 @@
     <ui:VisualElement name="auth-overlay" class="auth-overlay">
         <ui:VisualElement class="auth-card">
 
-            <ui:Button name="btn-close" class="auth-close-btn" text="">
-                <ui:VisualElement class="auth-close-bar auth-close-bar--a" />
-                <ui:VisualElement class="auth-close-bar auth-close-bar--b" />
-            </ui:Button>
-
             <ui:VisualElement class="auth-header">
                 <ui:Label class="auth-title" text="Sign In" />
             </ui:VisualElement>
@@ -141,6 +136,12 @@
 
             <!-- Status / error -->
             <ui:Label name="lbl-auth-status" class="auth-status" text="" />
+
+            <!-- Close button (last child so it renders above all pages) -->
+            <ui:Button name="btn-close" class="auth-close-btn" text="">
+                <ui:VisualElement class="auth-close-bar auth-close-bar--a" />
+                <ui:VisualElement class="auth-close-bar auth-close-bar--b" />
+            </ui:Button>
 
         </ui:VisualElement>
     </ui:VisualElement>
