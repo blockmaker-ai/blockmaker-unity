@@ -183,9 +183,9 @@ namespace Blockmaker
         }
 
         // ── Pending JS sign callbacks ──────────────────────────────────────────────
-        public string   PendingSignedTxn  { get; private set; }
-        public string[] PendingSignedTxns { get; private set; }
-        public string   PendingSignError  { get; private set; }
+        internal string   PendingSignedTxn  { get; private set; }
+        internal string[] PendingSignedTxns { get; private set; }
+        internal string   PendingSignError  { get; private set; }
         private int _signGeneration;
         private int _pendingSignGeneration;
 

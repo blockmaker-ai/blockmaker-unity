@@ -29,6 +29,13 @@ namespace Blockmaker
         // ── Public API ─────────────────────────────────────────────────────────────
         public static AuthPromptController Instance { get; private set; }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            Instance = null;
+            OnAuthSucceeded = null;
+        }
+
         /// <summary>Fired when the player successfully authenticates (any tier > Guest).</summary>
         public static event Action OnAuthSucceeded;
 

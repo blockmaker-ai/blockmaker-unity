@@ -56,8 +56,6 @@ namespace Blockmaker
                 return;
             }
 
-            if (config.marketplaceTestMode)
-                BlockmakerLog.Warning("[BlockmakerClient] Marketplace test mode is ON — returning mock data.");
         }
 
         private void OnDestroy()
@@ -83,8 +81,6 @@ namespace Blockmaker
             _baseUrl = config.serverUrl.TrimEnd('/');
             BlockmakerLog.Info($"[BlockmakerClient] Initialized from auth — baseUrl: {_baseUrl}");
 
-            if (config.marketplaceTestMode)
-                BlockmakerLog.Warning("[BlockmakerClient] Marketplace test mode is ON — returning mock data.");
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -171,7 +167,7 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(respBody);
                         if (!string.IsNullOrEmpty(parsed.error))
-                            err = parsed.error;
+                            BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                     }
                 }
                 catch (Exception parseEx) { BlockmakerLog.Warning($"[BlockmakerClient] Error response parse failed: {parseEx.Message}"); }
@@ -242,7 +238,7 @@ namespace Blockmaker
             {
                 uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
                 downloadHandler = new DownloadHandlerBuffer(),
-                timeout         = SafeTimeout(config.rewardTimeoutSeconds)
+                timeout         = SafeTimeout(config.longRequestTimeoutSeconds)
             };
             req.SetRequestHeader("Content-Type",  "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
@@ -260,7 +256,7 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(respBody);
                         if (!string.IsNullOrEmpty(parsed.error))
-                            err = parsed.error;
+                            BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                         code = parsed.code ?? "";
                     }
                 }
@@ -298,7 +294,7 @@ namespace Blockmaker
             {
                 uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
                 downloadHandler = new DownloadHandlerBuffer(),
-                timeout         = SafeTimeout(config.rewardTimeoutSeconds)
+                timeout         = SafeTimeout(config.longRequestTimeoutSeconds)
             };
             req.SetRequestHeader("Content-Type",  "application/json");
             req.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
@@ -316,7 +312,7 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(respBody);
                         if (!string.IsNullOrEmpty(parsed.error))
-                            err = parsed.error;
+                            BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                         code = parsed.code ?? "";
                     }
                 }
@@ -372,7 +368,7 @@ namespace Blockmaker
                     amountMicroAlgo = amountMicroAlgo,
                     reason          = reason
                 },
-                config.rewardTimeoutSeconds,
+                config.longRequestTimeoutSeconds,
                 onSuccess, onError
             ));
     #endif
@@ -449,7 +445,7 @@ namespace Blockmaker
             StartCoroutine(PostJsonAuth<SubmitTransactionResult>(
                 $"{_baseUrl}/v1/transactions/submit",
                 new SubmitTransactionRequest { signedTxnBase64 = signedTxnBase64 },
-                config.rewardTimeoutSeconds, onSuccess, onError));
+                config.longRequestTimeoutSeconds, onSuccess, onError));
         }
 
         /// <summary>Submit signed group transactions to the Algorand network via the server.</summary>
@@ -460,7 +456,7 @@ namespace Blockmaker
             StartCoroutine(PostJsonAuth<SubmitTransactionResult>(
                 $"{_baseUrl}/v1/transactions/submit",
                 new SubmitTransactionRequest { signedTxnsBase64 = signedTxnsBase64 },
-                config.rewardTimeoutSeconds, onSuccess, onError));
+                config.longRequestTimeoutSeconds, onSuccess, onError));
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -636,7 +632,7 @@ namespace Blockmaker
             StartCoroutine(PostJsonAuth<UsernamePrepareResult>(
                 ProfileUrl("/v1/profile/username/claim/prepare"),
                 new UsernameClaimPrepareRequest { username = username },
-                config.rewardTimeoutSeconds,
+                config.longRequestTimeoutSeconds,
                 onSuccess, onError
             ));
         }
@@ -658,7 +654,7 @@ namespace Blockmaker
                     reservationId    = reservationId,
                     signedTxnsBase64 = signedTxnsBase64,
                 },
-                config.rewardTimeoutSeconds,
+                config.longRequestTimeoutSeconds,
                 onSuccess, onError
             ));
         }
@@ -675,7 +671,7 @@ namespace Blockmaker
             StartCoroutine(PostJsonAuth<UsernamePrepareResult>(
                 ProfileUrl("/v1/profile/username/change/prepare"),
                 new UsernameChangePrepareRequest { newUsername = newUsername },
-                config.rewardTimeoutSeconds,
+                config.longRequestTimeoutSeconds,
                 onSuccess, onError
             ));
         }
@@ -694,7 +690,7 @@ namespace Blockmaker
                     reservationId    = reservationId,
                     signedTxnsBase64 = signedTxnsBase64,
                 },
-                config.rewardTimeoutSeconds,
+                config.longRequestTimeoutSeconds,
                 onSuccess, onError
             ));
         }
@@ -713,7 +709,7 @@ namespace Blockmaker
             StartCoroutine(PostJsonAuth<SetProfilePicResult>(
                 ProfileUrl("/v1/profile/pfp"),
                 new SetProfilePicRequest { assetId = assetId },
-                config.rewardTimeoutSeconds,
+                config.longRequestTimeoutSeconds,
                 onSuccess, onError
             ));
         }
@@ -786,8 +782,10 @@ namespace Blockmaker
             form.AddBinaryData("image", imageBytes, filename, mimeType);
 
             using var req = UnityWebRequest.Post(url, form);
-            req.timeout = SafeTimeout(config.rewardTimeoutSeconds);
-            req.SetRequestHeader("Authorization", $"Bearer {GetSessionToken()}");
+            req.timeout = SafeTimeout(config.longRequestTimeoutSeconds);
+            var token = GetSessionToken();
+            if (!string.IsNullOrEmpty(token))
+                req.SetRequestHeader("Authorization", $"Bearer {token}");
 
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
@@ -971,7 +969,9 @@ namespace Blockmaker
                 timeout         = SafeTimeout(timeout)
             };
             req.SetRequestHeader("Content-Type",  "application/json");
-            req.SetRequestHeader("Authorization", $"Bearer {GetSessionToken()}");
+            var token = GetSessionToken();
+            if (!string.IsNullOrEmpty(token))
+                req.SetRequestHeader("Authorization", $"Bearer {token}");
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
         }
@@ -994,7 +994,9 @@ namespace Blockmaker
             if (_baseUrl == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
             using var req = BuildGet(url, timeout);
             // Override with session token so JWT-auth players work on profile endpoints
-            req.SetRequestHeader("Authorization", $"Bearer {GetSessionToken()}");
+            var token = GetSessionToken();
+            if (!string.IsNullOrEmpty(token))
+                req.SetRequestHeader("Authorization", $"Bearer {token}");
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
         }
@@ -1055,7 +1057,7 @@ namespace Blockmaker
                     {
                         var parsed = JsonUtility.FromJson<ServerErrorResponse>(body);
                         if (!string.IsNullOrEmpty(parsed.error))
-                            err = parsed.error;
+                            BlockmakerLog.Verbose($"[BlockmakerClient] Server error: {parsed.error}");
                         if (!string.IsNullOrEmpty(parsed.code))
                             code = parsed.code;
                     }

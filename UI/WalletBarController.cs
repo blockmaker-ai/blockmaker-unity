@@ -21,6 +21,12 @@ namespace Blockmaker
         // ── Public event ───────────────────────────────────────────────────────────
         public static event Action OnSetUsernameClicked;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            OnSetUsernameClicked = null;
+        }
+
         // ── UI element refs ────────────────────────────────────────────────────────
         private VisualElement _avatar;
         private Label         _avatarInitial;

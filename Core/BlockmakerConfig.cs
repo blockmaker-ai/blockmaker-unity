@@ -50,18 +50,11 @@ namespace Blockmaker
 
         [Header("Timeouts (seconds)")]
         public float defaultTimeoutSeconds  = 10f;
-        public float rewardTimeoutSeconds   = 20f;
+        public float longRequestTimeoutSeconds   = 20f;
         [Tooltip("Timeout for wallet API queries (e.g. NFT search). Not for signing — see walletSignTimeoutSeconds.")]
         public float walletTimeoutSeconds   = 30f;
         [Tooltip("Timeout for interactive wallet operations (QR scan, transaction approval). Set high because the player must interact with their wallet app.")]
         public float walletSignTimeoutSeconds = 120f;
-
-        [Header("Game-specific (optional)")]
-        [Tooltip("Marketplace fee percentage deducted from each sale (e.g. 3 = 3%)")]
-        public float marketplaceFeePercent = 3f;
-
-        [Tooltip("Return mock marketplace data instead of hitting the server")]
-        public bool marketplaceTestMode = false;
 
         private void OnValidate()
         {

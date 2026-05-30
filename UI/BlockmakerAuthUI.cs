@@ -98,6 +98,13 @@ namespace Blockmaker
 
         public static BlockmakerAuthUI Instance { get; private set; }
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            Instance = null;
+            OnAuthComplete = null;
+        }
+
         // ── Lifecycle ──────────────────────────────────────────────────────────
 
         private void Awake()

@@ -12,6 +12,14 @@ namespace Blockmaker
         public static event Action OnSetUsernameClicked;
         public static event Action OnChangeUsernameClicked;
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        static void ResetStatics()
+        {
+            Instance = null;
+            OnSetUsernameClicked = null;
+            OnChangeUsernameClicked = null;
+        }
+
         private VisualElement _root;
         private VisualElement _panel;
         private VisualElement _backdrop;
