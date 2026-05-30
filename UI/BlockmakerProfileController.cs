@@ -251,12 +251,13 @@ namespace Blockmaker
             SetUsernameStatus("Checking...", false);
             bool done = false;
             bool available = false;
+            string reason = null;
             string error = null;
 
             BlockmakerClient.Instance.Post<UsernameCheckRequest, UsernameCheckResult>(
                 "/v1/profile/username/check",
                 new UsernameCheckRequest { username = username },
-                result => { available = result.available; done = true; },
+                result => { available = result.available; reason = result.reason; done = true; },
                 err => { error = err; done = true; }
             );
 
@@ -275,7 +276,7 @@ namespace Blockmaker
             }
             else
             {
-                SetUsernameStatus("Already taken", true);
+                SetUsernameStatus(!string.IsNullOrEmpty(reason) ? reason : "Already taken", true);
                 if (_claimBtn != null) _claimBtn.SetEnabled(false);
             }
         }
@@ -425,6 +426,7 @@ namespace Blockmaker
     internal class UsernameCheckResult
     {
         public bool available;
+        public string reason;
         public string error;
     }
 }
