@@ -46,20 +46,47 @@ Add a `BlockmakerAuth` component to any GameObject and assign your config. Done.
 ```csharp
 using Blockmaker;
 
-// Callback style
+// Connect Pera (QR code)
 BlockmakerAuth.Instance.ConnectWallet("Pera",
     identity => Debug.Log($"Connected: {identity.Address}"),
     error    => Debug.Log(error)
 );
 
-// Async/await style
-var identity = await BlockmakerAuth.Instance.ConnectWalletAsync("Pera");
-Debug.Log($"Connected: {identity.Address}");
+// Connect Defly (QR code)
+BlockmakerAuth.Instance.ConnectWallet("Defly",
+    identity => Debug.Log($"Connected: {identity.Address}"),
+    error    => Debug.Log(error)
+);
+
+// Connect an EVM wallet (MetaMask, Rainbow, etc.)
+BlockmakerAuth.Instance.ConnectEvm(
+    identity => Debug.Log($"EVM connected: {identity.Address}"),
+    error    => Debug.Log(error)
+);
+
+// Email login (Magic SDK on WebGL, OTP on other platforms)
+BlockmakerAuth.Instance.ConnectMagicEmail("player@example.com",
+    identity => Debug.Log($"Email signed in: {identity.Address}"),
+    error    => Debug.Log(error)
+);
 ```
 
-### Sign a transaction
+### Async/await
+
+All connect and sign methods have async overloads:
 
 ```csharp
+var identity = await BlockmakerAuth.Instance.ConnectWalletAsync("Pera");
+Debug.Log($"Connected: {identity.Address}");
+
+var evmIdentity = await BlockmakerAuth.Instance.ConnectEvmAsync();
+```
+
+### Sign transactions
+
+```csharp
+var identity = BlockmakerAuth.Instance.Identity;
+
 // Single transaction
 yield return identity.SignTransaction(unsignedTxnBase64,
     signed => Debug.Log("Signed!"),
@@ -86,13 +113,27 @@ BlockmakerAuth.Instance.Tier         // Guest, Email, or SelfCustody
 ### Listen for changes
 
 ```csharp
-BlockmakerAuth.OnIdentityChanged += identity =>
+void OnEnable()
 {
-    Debug.Log($"Now signed in as: {identity.Address}");
-};
+    BlockmakerAuth.OnIdentityChanged += HandleIdentityChanged;
+}
 
-// Always unsubscribe in OnDestroy to avoid leaks
-BlockmakerAuth.OnIdentityChanged -= myHandler;
+void OnDisable()
+{
+    BlockmakerAuth.OnIdentityChanged -= HandleIdentityChanged;
+}
+
+void HandleIdentityChanged(IBlockmakerIdentity identity)
+{
+    Debug.Log($"Identity changed: {identity.ProviderName} — {identity.Address}");
+}
+```
+
+### Logout
+
+```csharp
+BlockmakerAuth.Instance.Logout();
+// Identity reverts to Guest, session is cleared, tokens invalidated
 ```
 
 ## Pre-built UI
