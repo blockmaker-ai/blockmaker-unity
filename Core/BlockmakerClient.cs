@@ -381,9 +381,19 @@ namespace Blockmaker
         /// <summary>POST JSON to a server path. Use for game-specific endpoints.</summary>
         public void Post<TReq, TRes>(string path, TReq body, Action<TRes> onSuccess = null, Action<string> onError = null) where TRes : class
         {
+            Post(path, body, config.defaultTimeoutSeconds, onSuccess, onError);
+        }
+
+        /// <summary>
+        /// POST JSON to a server path with an explicit timeout. Use a longer timeout (e.g.
+        /// <c>config.walletTimeoutSeconds</c>) for endpoints that scan a whole wallet — large
+        /// wallets can take well over the 10s default to enumerate on-chain.
+        /// </summary>
+        public void Post<TReq, TRes>(string path, TReq body, float timeoutSeconds, Action<TRes> onSuccess = null, Action<string> onError = null) where TRes : class
+        {
             StartCoroutine(PostJsonAuth<TRes>(
                 $"{_baseUrl}{path}", body,
-                config.defaultTimeoutSeconds,
+                timeoutSeconds,
                 onSuccess, onError
             ));
         }
