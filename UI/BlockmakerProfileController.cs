@@ -416,17 +416,7 @@ namespace Blockmaker
         }
     }
 
-    [Serializable]
-    internal class UsernameCheckRequest
-    {
-        public string username;
-    }
-
-    [Serializable]
-    internal class UsernameCheckResult
-    {
-        public bool available;
-        public string reason;
-        public string error;
-    }
+    // UsernameCheckRequest / UsernameCheckResult live in Core/BlockmakerTypes.cs (public, same
+    // namespace). They were duplicated here as internal classes, which is a duplicate-definition
+    // compile error — removed; this controller uses the canonical types.
 }
