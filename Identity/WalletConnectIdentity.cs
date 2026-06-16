@@ -29,7 +29,11 @@ namespace Blockmaker
     #if UNITY_WEBGL && !UNITY_EDITOR
                 return true;
     #else
-                if (OwnWCv1Client != null && !OwnWCv1Client.IsDisposed) return true;
+                // Require the WCv1 client to be genuinely CONNECTED, not merely present. A restored
+                // session has OwnWCv1Client != null (and !IsDisposed) the instant it's rebuilt, but its
+                // relay isn't live until Reconnect() finishes — so checking existence alone made CanSign
+                // report "signable" while a sign would hang/fail. IsConnected reflects the live relay.
+                if (OwnWCv1Client != null && !OwnWCv1Client.IsDisposed && OwnWCv1Client.IsConnected) return true;
                 var connector = ReownWalletConnector.Instance;
                 return connector != null && connector.IsConnected;
     #endif
