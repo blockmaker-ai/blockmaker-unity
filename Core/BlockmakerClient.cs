@@ -346,11 +346,18 @@ namespace Blockmaker
         /// endpoint directly and drain your treasury.
         /// For production, call the rewards endpoint from your own trusted server.
         /// </summary>
+        /// <param name="contextId">
+        /// Idempotency key. Pass a STABLE id you own for this logical reward (e.g.
+        /// "{raceId}:{wallet}:{reason}") and reuse the SAME value on any retry — the
+        /// server then dedups a retried send and never double-pays. Leave null and the
+        /// SDK mints a fresh key per call (protects only this call, not a caller-level retry).
+        /// </param>
         public void SendReward(
             string               recipientWallet,
             long                 amountMicroAlgo,
-            string               reason   = "reward",
-            long                 assetId  = 0,
+            string               reason    = "reward",
+            long                 assetId   = 0,
+            string               contextId = null,
             Action<RewardResult> onSuccess = null,
             Action<string>       onError   = null)
         {
@@ -366,7 +373,11 @@ namespace Blockmaker
                     recipientWallet = recipientWallet,
                     assetId         = assetId,
                     amountMicroAlgo = amountMicroAlgo,
-                    reason          = reason
+                    reason          = reason,
+                    // Stable key dedups retries; mint one if the caller didn't supply it.
+                    contextId       = string.IsNullOrEmpty(contextId)
+                        ? System.Guid.NewGuid().ToString("N")
+                        : contextId
                 },
                 config.longRequestTimeoutSeconds,
                 onSuccess, onError
