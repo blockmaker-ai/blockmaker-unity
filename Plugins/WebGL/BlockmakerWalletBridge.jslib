@@ -857,6 +857,47 @@ mergeInto(LibraryManager.library, {
   },
 
   /**
+   * EvmSignPersonal — sign an arbitrary UTF-8 message with the EVM wallet via
+   * personal_sign (sign-in proof). The message is hex-encoded; the wallet applies
+   * EIP-191 framing. On success: successCb("0xHexSignature"); on error: errorCb(msg).
+   */
+  EvmSignPersonal__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen'],
+  EvmSignPersonal: function(messagePtr, evmAddressPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var message        = UTF8ToString(messagePtr);
+    var evmAddress     = UTF8ToString(evmAddressPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+
+    if (typeof window.ethereum === 'undefined') {
+      SendMessage(gameObjectName, errorCb, 'No EVM wallet found.');
+      return;
+    }
+
+    // Hex-encode the UTF-8 message bytes for personal_sign.
+    var msgBytes = new TextEncoder().encode(message);
+    var hex = '0x';
+    for (var i = 0; i < msgBytes.length; i++) {
+      hex += ('0' + msgBytes[i].toString(16)).slice(-2);
+    }
+
+    bmExitFullscreen()
+    .then(function() {
+      return window.ethereum.request({ method: 'personal_sign', params: [hex, evmAddress] });
+    })
+    .then(function(signature) {
+      bmRestoreFullscreen();
+      if (!signature) { SendMessage(gameObjectName, errorCb, 'Signature was empty or rejected.'); return; }
+      SendMessage(gameObjectName, successCb, signature);
+    })
+    .catch(function(err) {
+      var msg = (err && err.message) ? err.message : 'EVM wallet signing failed.';
+      bmRestoreFullscreen();
+      SendMessage(gameObjectName, errorCb, msg);
+    });
+  },
+
+  /**
    * EvmTryRestore — reconnects the EVM wallet and loads xChain SDK after page reload.
    * Uses eth_accounts (non-interactive) so no popup appears.
    * On success: successCb("EvmXChain|algorandAddress|evmAddress")

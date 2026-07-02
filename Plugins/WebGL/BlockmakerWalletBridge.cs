@@ -123,6 +123,19 @@ namespace Blockmaker
             string successCallback,
             string errorCallback);
 
+        /// <summary>
+        /// Sign an arbitrary UTF-8 message with an EVM wallet (personal_sign /
+        /// sign-in proof). On success the successCallback receives the 0x-hex
+        /// signature; on error the errorCallback receives a message.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void EvmSignPersonal(
+            string message,
+            string evmAddress,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
         [DllImport("__Internal")]
         public static extern void EvmDisconnect();
 
@@ -184,6 +197,9 @@ namespace Blockmaker
 
         public static void EvmSignTransaction(string txn, string evm, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignTransaction — not in WebGL.");
+
+        public static void EvmSignPersonal(string message, string evm, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignPersonal — not in WebGL.");
 
         public static void EvmDisconnect()
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmDisconnect — not in WebGL.");

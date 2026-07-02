@@ -357,6 +357,38 @@ namespace Blockmaker
         public string error;
     }
 
+    // ── Wallet-signature auth types ─────────────────────────────────────────────────
+
+    /// <summary>Request body for POST /v1/auth/wallet/challenge.</summary>
+    [Serializable] public class WalletChallengeRequest
+    {
+        public string walletAddress;  // Algorand address (derived address for EVM xChain)
+        public string chain;          // "algorand" | "evm"
+        public string evmAddress;     // required when chain == "evm"; null otherwise
+    }
+
+    /// <summary>Returned by POST /v1/auth/wallet/challenge.</summary>
+    [Serializable] public class WalletChallengeResult
+    {
+        public bool   success;
+        public string nonce;       // base64url single-use nonce
+        public string message;     // EXACT bytes to sign (UTF-8); sign byte-for-byte
+        public long   expiresAt;   // epoch ms
+        public string error;
+    }
+
+    /// <summary>Request body for POST /v1/auth/wallet/verify.</summary>
+    [Serializable] public class WalletVerifyRequest
+    {
+        public string walletAddress;  // same value sent to /challenge
+        public string chain;          // "algorand" | "evm"
+        public string signature;      // evm only: 0x… personal_sign hex (null for algorand)
+        public string signedTxn;      // algorand only: base64 of the SIGNED 0-amount self-payment
+                                      // whose note == nonce (null for evm)
+        public string nonce;          // echoes the /challenge nonce
+        public string evmAddress;     // required when chain == "evm"; null otherwise
+    }
+
     // ── Token refresh types ──────────────────────────────────────────────────────
 
     /// <summary>Returned by POST /v1/auth/refresh.</summary>

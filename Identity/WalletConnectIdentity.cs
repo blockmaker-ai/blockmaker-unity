@@ -42,6 +42,28 @@ namespace Blockmaker
 
         internal WalletConnectV1Client OwnWCv1Client { get; set; }
 
+        /// <summary>Player JWT obtained via wallet-signature login (see <see cref="Login"/>).</summary>
+        public string SessionToken { get; private set; }
+        /// <summary>Long-lived refresh token paired with <see cref="SessionToken"/>.</summary>
+        public string RefreshToken { get; private set; }
+
+        internal void UpdateTokens(string sessionToken, string refreshToken)
+        {
+            if (!string.IsNullOrEmpty(sessionToken)) SessionToken = sessionToken;
+            if (!string.IsNullOrEmpty(refreshToken)) RefreshToken = refreshToken;
+        }
+
+        /// <summary>
+        /// Clear only the in-memory JWT/refresh tokens, leaving the wallet identity and the
+        /// live WalletConnect relay/session intact. Used when a token refresh fails but the
+        /// wallet can still re-sign for a fresh JWT (see BlockmakerAuth.VerifyRestoredSession).
+        /// </summary>
+        internal void ClearTokens()
+        {
+            SessionToken = null;
+            RefreshToken = null;
+        }
+
         protected WalletConnectIdentity(string address)
         {
             if (!IsValidAlgorandAddress(address))
@@ -485,7 +507,9 @@ namespace Blockmaker
             var data = new WalletSessionData
             {
                 providerName = ProviderName,
-                address      = Address
+                address      = Address,
+                sessionToken = SessionToken,
+                refreshToken = RefreshToken
             };
             string key = SessionKeyPrefix + ProviderName.ToLower();
             SecurePrefs.SetString(key, JsonUtility.ToJson(data));
@@ -572,6 +596,133 @@ namespace Blockmaker
         {
             public string providerName;
             public string address;
+            public string sessionToken;
+            public string refreshToken;
+        }
+
+        // ── Wallet-signature login (challenge → sign → verify → store JWT) ─────────
+
+        /// <summary>
+        /// Acquire a player session token by proving wallet ownership to the server.
+        /// Runs: challenge → build a 0-amount self-payment whose note == the nonce →
+        /// sign it with the wallet via <c>algo_signTxn</c> (the universal signing method
+        /// both Pera WCv1 and Defly WCv2 support) → verify → store SessionToken/RefreshToken.
+        /// The unsigned txn is built server-side (same path as the shop/reward flows),
+        /// so suggested params come from the server's algod.
+        /// Idempotent-ish: safe to call again to re-acquire a token.
+        /// </summary>
+        public IEnumerator Login(Action onSuccess = null, Action<string> onError = null)
+        {
+            var client = BlockmakerClient.Instance;
+            if (client == null)
+            {
+                onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                yield break;
+            }
+
+            // 1) Challenge
+            WalletChallengeResult challenge = null;
+            string challengeError = null;
+            bool challengeDone = false;
+            client.StartCoroutine(client.RequestWalletChallenge(
+                Address, "algorand", null,
+                r => { challenge = r; challengeDone = true; },
+                e => { challengeError = e; challengeDone = true; }));
+
+            float elapsed = 0f;
+            while (!challengeDone && elapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (!challengeDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+            if (challenge == null || !challenge.success || string.IsNullOrEmpty(challenge.message))
+            {
+                onError?.Invoke(challengeError ?? "Could not start wallet sign-in. Please try again.");
+                yield break;
+            }
+
+            // 2a) Build a 0-amount self-payment whose note == the challenge nonce.
+            //     Built server-side (same path as the shop/reward flows) so suggested
+            //     params come from the server's algod. The server's verify then checks
+            //     pay-type, sender==receiver==this wallet, amount 0, and note==nonce.
+            string unsignedTxnBase64 = null;
+            string buildError = null;
+            bool   buildDone  = false;
+            client.BuildPayment(
+                recipient: Address, amountMicroAlgo: 0, note: challenge.nonce,
+                onSuccess: r =>
+                {
+                    if (r != null && r.success && !string.IsNullOrEmpty(r.unsignedTxnBase64))
+                        unsignedTxnBase64 = r.unsignedTxnBase64;
+                    else
+                        buildError = (r != null ? r.error : null) ?? "Could not start wallet sign-in. Please try again.";
+                    buildDone = true;
+                },
+                onError: e => { buildError = e; buildDone = true; });
+
+            float bElapsed = 0f;
+            while (!buildDone && bElapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+                bElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (!buildDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+            if (!string.IsNullOrEmpty(buildError) || string.IsNullOrEmpty(unsignedTxnBase64))
+            {
+                onError?.Invoke(buildError ?? "Could not start wallet sign-in. Please try again.");
+                yield break;
+            }
+
+            // 2b) Sign it via algo_signTxn (universal — Pera WCv1, Defly WCv2, WebGL bridge).
+            //     Reuses SignTransaction, the exact same signing path the shop/reward flows
+            //     use, so no new wallet-signing code and no arbitrary-bytes (signData) path.
+            string signedTxn = null;
+            string signError = null;
+            bool   signDone  = false;
+            yield return SignTransaction(
+                unsignedTxnBase64,
+                signed => { signedTxn = signed; signDone = true; },
+                err    => { signError = err;   signDone = true; });
+
+            if (!signDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+            if (!string.IsNullOrEmpty(signError)) { onError?.Invoke(signError); yield break; }
+            if (string.IsNullOrEmpty(signedTxn))
+            {
+                onError?.Invoke("The sign-in request was not approved in your wallet. Please try again.");
+                yield break;
+            }
+
+            // 3) Verify → mint JWT
+            EmailVerifyResult verify = null;
+            string verifyError = null;
+            bool verifyDone = false;
+            client.StartCoroutine(client.VerifyWalletSignature(
+                Address, "algorand", null, signedTxn, challenge.nonce, null,
+                r => { verify = r; verifyDone = true; },
+                e => { verifyError = e; verifyDone = true; }));
+
+            float vElapsed = 0f;
+            while (!verifyDone && vElapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+                vElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (!verifyDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+            if (verify == null || !verify.success || string.IsNullOrEmpty(verify.sessionToken))
+            {
+                onError?.Invoke(verifyError ?? "Wallet sign-in failed. Please try again.");
+                yield break;
+            }
+
+            // 4) Store
+            UpdateTokens(verify.sessionToken, verify.refreshToken);
+            SaveSession();
+            BlockmakerLog.Info($"[{ProviderName}Identity] Wallet sign-in complete — session token acquired.");
+            onSuccess?.Invoke();
         }
     }
 

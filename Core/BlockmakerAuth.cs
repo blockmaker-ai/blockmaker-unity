@@ -189,9 +189,9 @@ namespace Blockmaker
         private int _signGeneration;
         private int _pendingSignGeneration;
 
-        internal string   ConsumePendingSignedTxn()  { var v = PendingSignedTxn;  PendingSignedTxn  = null; return v; }
-        internal string[] ConsumePendingSignedTxns() { var v = PendingSignedTxns; PendingSignedTxns = null; return v; }
-        internal string   ConsumePendingSignError()  { var v = PendingSignError;  PendingSignError  = null; return v; }
+        internal string   ConsumePendingSignedTxn()  { var v = PendingSignedTxn;  PendingSignedTxn  = null; _signAwaiting = false; return v; }
+        internal string[] ConsumePendingSignedTxns() { var v = PendingSignedTxns; PendingSignedTxns = null; _signAwaiting = false; return v; }
+        internal string   ConsumePendingSignError()  { var v = PendingSignError;  PendingSignError  = null; _signAwaiting = false; return v; }
 
         /// <summary>
         /// Clear pending sign state and return a generation token.
@@ -204,10 +204,20 @@ namespace Blockmaker
             PendingSignedTxns = null;
             PendingSignError  = null;
             _pendingSignGeneration = ++_signGeneration;
+            _signAwaiting = true;
             return _signGeneration;
         }
 
         internal bool IsSignGenerationCurrent(int gen) => _signGeneration == gen;
+
+        // True from BeginPendingSign() until the result is consumed (ConsumePending*). Covers
+        // both "sign awaiting in JS" and "result landed but not yet read", so deferring on it
+        // can't clobber an unconsumed result. Used to defer an auto wallet-login sign so it
+        // doesn't bump the sign generation out from under a user-initiated sign (which would
+        // otherwise make the loser die "interrupted").
+        internal bool IsWebGLSignInFlight => _signAwaiting;
+
+        private bool _signAwaiting;
 
         // ── Inspector ──────────────────────────────────────────────────────────────
         [Header("Blockmaker")]
@@ -243,6 +253,12 @@ namespace Blockmaker
         private Coroutine _peraConnectCoroutine;
         private Coroutine _webglTimeoutCoroutine;
         private bool      _isWalletConnecting;
+
+        // Guards against concurrent wallet-signature Login() coroutines. The existing
+        // SessionToken check is a no-op during the async login window because the token
+        // isn't set until the coroutine's last line, so connect+restore+reconnect events
+        // could each start a Login() (duplicate signature prompts / torn SaveSession).
+        private bool      _walletLoginInFlight;
 
         // ── Native WC v1 client for Pera ──────────────────────────────────────────
         private Texture2D _peraQRTexture;
@@ -342,8 +358,10 @@ namespace Blockmaker
         private void TryImmediateRefresh()
         {
             string refreshToken = null;
-            if (Identity is EmailIdentity e) refreshToken = e.RefreshToken;
+            if (Identity is ServerSignedIdentity e) refreshToken = e.RefreshToken;
             else if (Identity is MagicIdentity m) refreshToken = m.RefreshToken;
+            else if (Identity is WalletConnectIdentity wc) refreshToken = wc.RefreshToken;
+            else if (Identity is EvmXChainIdentity evm) refreshToken = evm.RefreshToken;
 
             if (string.IsNullOrEmpty(refreshToken) || BlockmakerClient.Instance == null || _isRefreshing) return;
 
@@ -356,8 +374,10 @@ namespace Blockmaker
                 if (this == null || Identity != capturedIdentity) return;
                 if (result == null || string.IsNullOrEmpty(result.sessionToken)) return;
 
-                if (capturedIdentity is EmailIdentity ce) ce.UpdateTokens(result.sessionToken, result.refreshToken);
+                if (capturedIdentity is ServerSignedIdentity ce) ce.UpdateTokens(result.sessionToken, result.refreshToken);
                 else if (capturedIdentity is MagicIdentity cm) cm.UpdateTokens(result.sessionToken, result.refreshToken);
+                else if (capturedIdentity is WalletConnectIdentity cwc) cwc.UpdateTokens(result.sessionToken, result.refreshToken);
+                else if (capturedIdentity is EvmXChainIdentity cevm) cevm.UpdateTokens(result.sessionToken, result.refreshToken);
                 capturedIdentity.SaveSession();
                 BlockmakerLog.Info("[BlockmakerAuth] Token refreshed after app resume.");
             }, err =>
@@ -404,8 +424,14 @@ namespace Blockmaker
             var evmData = EvmXChainIdentity.TryLoadSessionData();
             if (evmData != null)
             {
-                SetIdentity(new EvmXChainIdentity(evmData.algorandAddress, evmData.evmAddress));
+                var evmIdentity = new EvmXChainIdentity(evmData.algorandAddress, evmData.evmAddress);
+                evmIdentity.UpdateTokens(evmData.sessionToken, evmData.refreshToken);
+                SetIdentity(evmIdentity);
                 BlockmakerLog.Info($"[BlockmakerAuth] EVM xChain session restored: {evmData.evmAddress}");
+                // Do NOT TriggerWalletLogin inline here — the relay/connection isn't live yet.
+                // VerifyRestoredSession() refreshes/verifies any existing token; a fresh sign-in
+                // login (no-token case) is triggered later from TryReconnectWalletSessions once
+                // the connection is ready.
                 return true;
             }
 
@@ -415,6 +441,8 @@ namespace Blockmaker
                 if (data != null)
                 {
                     var restoredIdentity = CreateWalletIdentity(provider, data.address);
+                    if (restoredIdentity is WalletConnectIdentity restoredWc)
+                        restoredWc.UpdateTokens(data.sessionToken, data.refreshToken);
                     SetIdentity(restoredIdentity);
                     BlockmakerLog.Info($"[BlockmakerAuth] {provider} session restored: {data.address}");
 
@@ -432,6 +460,10 @@ namespace Blockmaker
                         BlockmakerLog.Info($"[BlockmakerAuth] WCv1 client restored and reconnecting for {provider}");
                     }
 
+                    // Do NOT TriggerWalletLogin inline here — the WCv1 relay is still reconnecting
+                    // and Reown may not be initialized. VerifyRestoredSession() handles an existing
+                    // token; a fresh sign-in login (no-token case) is triggered later from
+                    // TryReconnectWalletSessions once the connection is confirmed ready.
                     return true;
                 }
             }
@@ -457,19 +489,30 @@ namespace Blockmaker
 
         private void VerifyRestoredSession()
         {
-            if (Identity is WalletConnectIdentity || Identity is EvmXChainIdentity)
-                return;
-
             string token = null;
             string refreshToken = null;
+            bool   isWallet = false;
 
             if (Identity is EmailIdentity email)
             { token = email.SessionToken; refreshToken = email.RefreshToken; }
             else if (Identity is MagicIdentity magic)
             { token = magic.SessionToken; refreshToken = magic.RefreshToken; }
+            else if (Identity is WalletConnectIdentity wc)
+            { token = wc.SessionToken; refreshToken = wc.RefreshToken; isWallet = true; }
+            else if (Identity is EvmXChainIdentity evm)
+            { token = evm.SessionToken; refreshToken = evm.RefreshToken; isWallet = true; }
 
             if (string.IsNullOrEmpty(token) && string.IsNullOrEmpty(refreshToken))
             {
+                // For wallet identities, "no tokens" is a normal restore state: the JWT is
+                // acquired by a fresh wallet-signature Login once the connection is confirmed
+                // ready (TryReconnectWalletSessions / OnWalletReconnectedFromJS). Leave the
+                // identity in place rather than downgrading to Guest.
+                if (isWallet)
+                {
+                    BlockmakerLog.Info("[BlockmakerAuth] Restored wallet session has no JWT yet — will sign in once the connection is ready.");
+                    return;
+                }
                 BlockmakerLog.Info("[BlockmakerAuth] Restored session has no tokens — clearing.");
                 SetIdentity(new GuestIdentity());
                 return;
@@ -488,6 +531,8 @@ namespace Blockmaker
                     {
                         if (capturedIdentity is ServerSignedIdentity ss) ss.UpdateTokens(result.sessionToken, result.refreshToken);
                         else if (capturedIdentity is MagicIdentity m) m.UpdateTokens(result.sessionToken, result.refreshToken);
+                        else if (capturedIdentity is WalletConnectIdentity cwc) cwc.UpdateTokens(result.sessionToken, result.refreshToken);
+                        else if (capturedIdentity is EvmXChainIdentity cevm) cevm.UpdateTokens(result.sessionToken, result.refreshToken);
                         capturedIdentity.SaveSession();
                         BlockmakerLog.Info("[BlockmakerAuth] Session token refreshed on restore.");
                     }
@@ -495,8 +540,37 @@ namespace Blockmaker
                 {
                     if (this == null) return;
                     if (Identity != capturedIdentity) return;
-                    BlockmakerLog.Info($"[BlockmakerAuth] Refresh failed — clearing session: {err}");
-                    SetIdentity(new GuestIdentity());
+                    // For wallet identities (WalletConnect/EVM xChain) a refresh failure does NOT
+                    // mean the player must drop to Guest: the live wallet relay can re-sign for a
+                    // fresh JWT. Clear only the stale tokens and leave the identity in place so the
+                    // gated TriggerWalletLogin path (TryReconnectWalletSessions / reconnect / restore
+                    // callbacks) re-acquires a JWT once the connection is ready.
+                    // Email/Magic keep the original behavior: a failed refresh means re-login.
+                    if (capturedIdentity is WalletConnectIdentity cwc)
+                    {
+                        BlockmakerLog.Info($"[BlockmakerAuth] Wallet token refresh failed — keeping identity, will re-sign when relay is ready: {err}");
+                        cwc.ClearTokens();
+                        cwc.SaveSession();
+                        // Re-sign immediately now that the stale token is cleared, rather than
+                        // waiting on a later connection event (an adverse async ordering could
+                        // otherwise leave the wallet connected-but-tokenless until reconnect).
+                        // The F1 in-flight guard + the empty-token check inside TriggerWalletLogin
+                        // prevent a duplicate prompt; tokens are now empty so it won't early-return.
+                        TriggerWalletLogin(cwc);
+                    }
+                    else if (capturedIdentity is EvmXChainIdentity cevm)
+                    {
+                        BlockmakerLog.Info($"[BlockmakerAuth] Wallet token refresh failed — keeping identity, will re-sign when relay is ready: {err}");
+                        cevm.ClearTokens();
+                        cevm.SaveSession();
+                        // Re-sign immediately now that the stale token is cleared (see WC branch).
+                        TriggerWalletLogin(cevm);
+                    }
+                    else
+                    {
+                        BlockmakerLog.Info($"[BlockmakerAuth] Refresh failed — clearing session: {err}");
+                        SetIdentity(new GuestIdentity());
+                    }
                 });
                 return;
             }
@@ -544,8 +618,10 @@ namespace Blockmaker
                 yield return new WaitForSecondsRealtime(TOKEN_REFRESH_INTERVAL);
 
                 string refreshToken = null;
-                if (Identity is EmailIdentity e) refreshToken = e.RefreshToken;
+                if (Identity is ServerSignedIdentity e) refreshToken = e.RefreshToken;
                 else if (Identity is MagicIdentity m) refreshToken = m.RefreshToken;
+                else if (Identity is WalletConnectIdentity wc) refreshToken = wc.RefreshToken;
+                else if (Identity is EvmXChainIdentity evm) refreshToken = evm.RefreshToken;
 
                 if (_isRefreshing && BlockmakerClient.Instance == null)
                     _isRefreshing = false;
@@ -562,8 +638,10 @@ namespace Blockmaker
                     if (this == null || Identity != capturedIdentity) return;
                     if (result == null || string.IsNullOrEmpty(result.sessionToken)) return;
 
-                    if (capturedIdentity is EmailIdentity ce) ce.UpdateTokens(result.sessionToken, result.refreshToken);
+                    if (capturedIdentity is ServerSignedIdentity ce) ce.UpdateTokens(result.sessionToken, result.refreshToken);
                     else if (capturedIdentity is MagicIdentity cm) cm.UpdateTokens(result.sessionToken, result.refreshToken);
+                    else if (capturedIdentity is WalletConnectIdentity cwc) cwc.UpdateTokens(result.sessionToken, result.refreshToken);
+                    else if (capturedIdentity is EvmXChainIdentity cevm) cevm.UpdateTokens(result.sessionToken, result.refreshToken);
                     capturedIdentity.SaveSession();
                     BlockmakerLog.Info("[BlockmakerAuth] Token proactively refreshed.");
                 }, err =>
@@ -583,6 +661,11 @@ namespace Blockmaker
                 if (address != null)
                 {
                     BlockmakerLog.Info($"[BlockmakerAuth] Native WC v2 session restored: {address}");
+                    // Connection is now ready. If the restored wallet identity has no JWT yet,
+                    // run a fresh wallet-signature login now (gated behind connection-ready, not
+                    // fired inline during TryRestoreSession). VerifyRestoredSession already
+                    // refreshed/verified any existing token, so this no-ops when one is present.
+                    TriggerWalletLogin(Identity);
                     return;
                 }
             }
@@ -619,6 +702,13 @@ namespace Blockmaker
                     nameof(OnEvmRestoreError)
                 );
             }
+    #else
+            // Native (non-WebGL): the WCv1 Pera path doesn't go through _connector.TryRestoreSession
+            // above. If a wallet identity restored without a JWT, run a fresh wallet-signature login
+            // now that we're past Reown init. Login() itself waits for the WCv1 relay to reconnect,
+            // and RunWalletLogin defers while any sign is in flight. No-ops if a token already exists.
+            if (Identity is WalletConnectIdentity || Identity is EvmXChainIdentity)
+                TriggerWalletLogin(Identity);
     #endif
         }
 
@@ -751,6 +841,11 @@ namespace Blockmaker
             if (Identity is WalletConnectIdentity existing && existing.Address == address)
             {
                 BlockmakerLog.Info($"[BlockmakerAuth] WebGL wallet reconnected: {provider} {address}");
+                // The relay is now confirmed live. If this restored identity still has no JWT,
+                // this is the correct gated moment to run a fresh wallet-signature login.
+                // TriggerWalletLogin no-ops when a token already exists.
+                if (string.IsNullOrEmpty(existing.SessionToken))
+                    TriggerWalletLogin(existing);
                 return;
             }
 
@@ -763,6 +858,7 @@ namespace Blockmaker
             var identity = CreateWalletIdentity(provider, address);
             SetIdentity(identity);
             identity.SaveSession();
+            TriggerWalletLogin(identity);
             BlockmakerLog.Info($"[BlockmakerAuth] WebGL wallet session restored via reconnect: {provider} {address}");
         }
 
@@ -899,6 +995,7 @@ namespace Blockmaker
 
                 SetIdentity(identity);
                 identity.SaveSession();
+                TriggerWalletLogin(identity);
 
                 if (prevTier < IdentityTier.SelfCustody)
                     SafeInvoke(OnIdentityUpgraded, identity, prevTier);
@@ -1184,6 +1281,11 @@ namespace Blockmaker
             var parts = payload.Split('|');
             if (parts.Length < 3) return;
             BlockmakerLog.Info($"[BlockmakerAuth] xChain SDK loaded, EVM wallet reconnected: {parts[2]}");
+            // Relay confirmed live. If the restored EVM identity still has no JWT, run a fresh
+            // wallet-signature login now (the gated, connection-ready moment). No-ops if a token
+            // already exists (VerifyRestoredSession refreshes/verifies any existing one).
+            if (Identity is EvmXChainIdentity evm && string.IsNullOrEmpty(evm.SessionToken))
+                TriggerWalletLogin(evm);
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -1293,6 +1395,7 @@ namespace Blockmaker
                 var identity = new EvmXChainIdentity(algoAddr, evmAddress);
                 SetIdentity(identity);
                 identity.SaveSession();
+                TriggerWalletLogin(identity);
 
                 if (prevTier < IdentityTier.SelfCustody)
                     SafeInvoke(OnIdentityUpgraded, identity, prevTier);
@@ -1478,6 +1581,7 @@ namespace Blockmaker
             _isRefreshing = false;
             CancelWebGLTimeout();
             BeginPendingSign();
+            _signAwaiting = false; // logout invalidates any in-flight sign rather than awaiting it
 
             IsAuthenticating       = false;
             _pendingConnectSuccess = null;
@@ -1487,6 +1591,7 @@ namespace Blockmaker
             _pendingMagicSuccess   = null;
             _pendingMagicError     = null;
             _isWalletConnecting    = false;
+            _walletLoginInFlight   = false;
 
             if (_magicLoginCoroutine != null)
             {
@@ -1517,8 +1622,10 @@ namespace Blockmaker
     #endif
 
             string refreshToken = null;
-            if (Identity is EmailIdentity e) refreshToken = e.RefreshToken;
+            if (Identity is ServerSignedIdentity e) refreshToken = e.RefreshToken;
             else if (Identity is MagicIdentity m) refreshToken = m.RefreshToken;
+            else if (Identity is WalletConnectIdentity wc) refreshToken = wc.RefreshToken;
+            else if (Identity is EvmXChainIdentity evm) refreshToken = evm.RefreshToken;
             BlockmakerClient.Instance?.ServerLogout(refreshToken);
 
             Identity?.ClearSession();
@@ -1566,7 +1673,8 @@ namespace Blockmaker
             IsAuthenticating = false;
             BlockmakerLog.Info($"[BlockmakerAuth] Identity set: {identity.ProviderName} | {identity.Address} | Tier: {identity.Tier}");
 
-            if (identity is EmailIdentity || identity is MagicIdentity)
+            if (identity is EmailIdentity || identity is MagicIdentity ||
+                identity is WalletConnectIdentity || identity is EvmXChainIdentity)
                 StartTokenRefreshTimer();
             else
                 StopTokenRefreshTimer();
@@ -1585,6 +1693,116 @@ namespace Blockmaker
 
         internal static void NotifyIdentityChanged(IBlockmakerIdentity identity)
             => SafeInvoke(OnIdentityChanged, identity);
+
+        /// <summary>
+        /// Acquire a player session token (JWT) for a self-custody wallet identity by
+        /// running its wallet-signature login (challenge → sign → verify → store).
+        /// No-op if the identity already holds a non-empty SessionToken. The login is
+        /// fire-and-forget — game code can act on the wallet immediately; the token
+        /// lands asynchronously and is then sent on player-authed requests.
+        /// </summary>
+        private void TriggerWalletLogin(IBlockmakerIdentity identity)
+        {
+            if (identity == null) return;
+
+            // In-flight guard: the SessionToken check below is a no-op during the async login
+            // window (token isn't set until Login()'s last line), so concurrent connect +
+            // restore + reconnect events could each start a Login() — duplicate signature
+            // prompts and torn SaveSession. _walletLoginInFlight closes that window.
+            //
+            // CRITICAL: set the flag SYNCHRONOUSLY here, before StartCoroutine. The flag used to
+            // be set deep inside RunWalletLogin (after a possible frame of deferral), so two
+            // TriggerWalletLogin calls in the SAME frame both passed this guard and both started
+            // a full Login() → the wallet was prompted to sign twice. Setting it here makes the
+            // second same-frame call early-return. RunWalletLogin now only OWNS/CLEARS the flag
+            // (cleared on every exit), never sets it. Logout() also resets it.
+            if (_walletLoginInFlight) return;
+
+            if (identity is WalletConnectIdentity wc)
+            {
+                if (!string.IsNullOrEmpty(wc.SessionToken)) return;
+                _walletLoginInFlight = true;
+                StartCoroutine(RunWalletLogin(wc));
+            }
+            else if (identity is EvmXChainIdentity evm)
+            {
+                if (!string.IsNullOrEmpty(evm.SessionToken)) return;
+                _walletLoginInFlight = true;
+                StartCoroutine(RunWalletLogin(evm));
+            }
+        }
+
+        /// <summary>
+        /// Runs a wallet-signature login, deferring it while a user-initiated WebGL sign is
+        /// in flight so the two signs (which share OnTxnSignedFromJS / the pending-sign slots)
+        /// don't race — the generation guard would otherwise make one die "interrupted".
+        /// The auto-login is the deferrer, so the user's sign always wins and the login simply
+        /// runs afterwards (and is retryable on the next trigger if it never gets a clear slot).
+        /// </summary>
+        private IEnumerator RunWalletLogin(IBlockmakerIdentity identity)
+        {
+            // _walletLoginInFlight was set SYNCHRONOUSLY by TriggerWalletLogin before this
+            // coroutine started. This coroutine OWNS the flag from here on: it never sets it,
+            // and it must CLEAR it on EVERY exit path (early yield breaks below, plus the
+            // success/error callbacks). Otherwise a future TriggerWalletLogin would be stuck.
+
+            // Defer briefly if a sign is already in flight (connect or a user txn sign).
+            // Bounded so a stuck sign can't pin the auto-login forever; if it never clears,
+            // we abort and rely on the next TriggerWalletLogin / proactive refresh.
+            float waited = 0f;
+            while ((_isWalletConnecting || IsWebGLSignInFlight) && waited < WalletSignTimeout)
+            {
+                waited += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (_isWalletConnecting || IsWebGLSignInFlight)
+            {
+                BlockmakerLog.Info("[BlockmakerAuth] Auto wallet sign-in deferred — a sign is still in flight; will retry on next trigger.");
+                _walletLoginInFlight = false;
+                yield break;
+            }
+
+            // Re-check guards after the wait (identity may have changed or the token may have
+            // arrived while we yielded). We still own the flag, so clear it before bailing.
+            if (Identity != identity) { _walletLoginInFlight = false; yield break; }
+
+            string existingToken = null;
+            if (identity is WalletConnectIdentity wcCheck) existingToken = wcCheck.SessionToken;
+            else if (identity is EvmXChainIdentity evmCheck) existingToken = evmCheck.SessionToken;
+            if (!string.IsNullOrEmpty(existingToken)) { _walletLoginInFlight = false; yield break; }
+
+            // try/finally (no catch — legal around `yield` in an iterator) so the flag is
+            // ALWAYS cleared, even if Login() throws mid-yield. The per-callback clears stay as
+            // the fast path; the finally is the backstop. Idempotent bool write, so a double
+            // clear is harmless. Without this, an unhandled exception in the yield region would
+            // skip the defensive clear and pin _walletLoginInFlight until Logout().
+            try
+            {
+                if (identity is WalletConnectIdentity wc)
+                {
+                    yield return wc.Login(
+                        onSuccess: () => { _walletLoginInFlight = false; if (Identity == wc) SafeInvoke(OnIdentityChanged, wc); },
+                        onError:   err => { _walletLoginInFlight = false; BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for {wc.ProviderName}: {err}"); });
+                }
+                else if (identity is EvmXChainIdentity evm)
+                {
+                    yield return evm.Login(
+                        onSuccess: () => { _walletLoginInFlight = false; if (Identity == evm) SafeInvoke(OnIdentityChanged, evm); },
+                        onError:   err => { _walletLoginInFlight = false; BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for EVM xChain: {err}"); });
+                }
+                else
+                {
+                    _walletLoginInFlight = false;
+                }
+            }
+            finally
+            {
+                // Defensive backstop: every Login() exit path invokes a callback that clears the
+                // flag, but guarantee it's cleared even on an exception or a future Login refactor
+                // that returns without one.
+                _walletLoginInFlight = false;
+            }
+        }
 
         private static IBlockmakerIdentity CreateWalletIdentity(string provider, string address)
         {

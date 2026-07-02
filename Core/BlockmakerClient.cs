@@ -210,6 +210,51 @@ namespace Blockmaker
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
+        // WALLET-SIGNATURE AUTH (self-custody tier)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Ask the server for a single-use challenge to sign with a self-custody wallet.
+        /// chain is "algorand" (Pera/Defly) or "evm" (xChain); pass the EVM signer
+        /// address for the "evm" path (null for "algorand").
+        /// </summary>
+        public IEnumerator RequestWalletChallenge(
+            string walletAddress, string chain, string evmAddress,
+            Action<WalletChallengeResult> onSuccess,
+            Action<string>                onError)
+        {
+            string url  = $"{_baseUrl}/v1/auth/wallet/challenge";
+            string body = JsonUtility.ToJson(new WalletChallengeRequest
+                { walletAddress = walletAddress, chain = chain, evmAddress = evmAddress });
+
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            yield return req.SendWebRequest();
+            HandleResponse(req, onSuccess, onError);
+        }
+
+        /// <summary>
+        /// Submit a wallet proof-of-ownership and receive a player session token +
+        /// refresh token (same shape as email/magic verify).
+        /// <para>algorand (Pera/Defly): pass <paramref name="signedTxn"/> (base64 of the
+        /// signed 0-amount self-payment whose note == nonce) and null for
+        /// <paramref name="signature"/>. evm (xChain): pass the personal_sign
+        /// <paramref name="signature"/> hex and null for <paramref name="signedTxn"/>.</para>
+        /// </summary>
+        public IEnumerator VerifyWalletSignature(
+            string walletAddress, string chain, string signature, string signedTxn, string nonce, string evmAddress,
+            Action<EmailVerifyResult> onSuccess,
+            Action<string>            onError)
+        {
+            string url  = $"{_baseUrl}/v1/auth/wallet/verify";
+            string body = JsonUtility.ToJson(new WalletVerifyRequest
+                { walletAddress = walletAddress, chain = chain, signature = signature, signedTxn = signedTxn, nonce = nonce, evmAddress = evmAddress });
+
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            yield return req.SendWebRequest();
+            HandleResponse(req, onSuccess, onError);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
         // SERVER-SIDE SIGNING (Email tier)
         // ═══════════════════════════════════════════════════════════════════════════
 
@@ -954,6 +999,10 @@ namespace Blockmaker
                 return ss.SessionToken;
             if (identity is MagicIdentity magic && !string.IsNullOrEmpty(magic.SessionToken))
                 return magic.SessionToken;
+            if (identity is WalletConnectIdentity wc && !string.IsNullOrEmpty(wc.SessionToken))
+                return wc.SessionToken;
+            if (identity is EvmXChainIdentity evm && !string.IsNullOrEmpty(evm.SessionToken))
+                return evm.SessionToken;
     #if UNITY_EDITOR
             return config?.apiKey ?? "";
     #else
