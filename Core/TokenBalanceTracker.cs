@@ -102,13 +102,17 @@ namespace Blockmaker
         /// <summary>
         /// Call when an instant token reward has been sent. Updates the display
         /// balance immediately without waiting for the chain to confirm.
+        /// Negative amounts are CORRECTIONS (e.g. the backend paid a smaller
+        /// server-rolled crate tier, or refused the payout entirely) — they reduce
+        /// the pending total, clamped so display never drops below chain truth.
         /// </summary>
         public void AddPendingReward(long amount)
         {
-            if (amount <= 0) return;
+            if (amount == 0) return;
             _pendingRewards += amount;
+            if (_pendingRewards < 0) _pendingRewards = 0;
             _lastRewardTime = Time.realtimeSinceStartup;
-            OnRewardAdded?.Invoke(amount);
+            if (amount > 0) OnRewardAdded?.Invoke(amount);
             OnBalanceChanged?.Invoke(DisplayBalance);
         }
 
