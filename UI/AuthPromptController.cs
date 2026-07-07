@@ -207,6 +207,7 @@ namespace Blockmaker
             BlockmakerAuth.OnIdentityChanged      += HandleIdentityChanged;
             BlockmakerAuth.OnAuthError             += HandleAuthError;
             BlockmakerAuth.OnWalletQRReady         += HandleQRReady;
+            BlockmakerAuth.OnAuthStatus            += HandleAuthStatus;
             BlockmakerAuth.OnWalletAddressChanged  += HandleWalletAddressChanged;
             ReownWalletConnector.OnQRReady         += HandleNativeQRReady;
         }
@@ -216,6 +217,7 @@ namespace Blockmaker
             BlockmakerAuth.OnIdentityChanged      -= HandleIdentityChanged;
             BlockmakerAuth.OnAuthError             -= HandleAuthError;
             BlockmakerAuth.OnWalletQRReady         -= HandleQRReady;
+            BlockmakerAuth.OnAuthStatus            -= HandleAuthStatus;
             BlockmakerAuth.OnWalletAddressChanged  -= HandleWalletAddressChanged;
             ReownWalletConnector.OnQRReady         -= HandleNativeQRReady;
 
@@ -444,6 +446,13 @@ namespace Blockmaker
         }
 
         // Called via BlockmakerAuth.OnWalletQRReady
+        private void HandleAuthStatus(string msg)
+        {
+            // Progress info, not an error — show it wherever the user currently is.
+            if (_peraCtrl != null && _peraCtrl.IsOpen) _peraCtrl.SetStatus(msg);
+            else SetStatus(msg);
+        }
+
         private void HandleQRReady(WalletQREventArgs e)
         {
             _pendingWcUri    = e.WalletConnectUri;

@@ -73,6 +73,11 @@ namespace Blockmaker
         /// </summary>
         public static event Action<string>                           OnAuthError;
 
+        /// Non-error progress messages for the auth UI (e.g. "approve the sign-in
+        /// request in your wallet") — fired at moments where the user must act
+        /// somewhere OTHER than the game and would otherwise see nothing happen.
+        public static event Action<string>                           OnAuthStatus;
+
         /// <summary>
         /// Fired when the QR code is ready to display.
         /// <para><b>Warning:</b> This is a static event. Subscribers must unsubscribe in
@@ -1794,6 +1799,12 @@ namespace Blockmaker
             {
                 if (!string.IsNullOrEmpty(wc.SessionToken)) return;
                 _walletLoginInFlight = true;
+
+                // The connect approval is done; a SECOND approval (the login signature)
+                // is about to arrive in the wallet app. Without this message users think
+                // sign-in stalled — the request is easy to miss on a phone.
+                SafeInvoke(OnAuthStatus,
+                    $"Connected! Now approve the sign-in request in your {wc.ProviderName} app…");
                 StartCoroutine(RunWalletLogin(wc));
             }
             else if (identity is EvmXChainIdentity evm)

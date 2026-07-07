@@ -38,6 +38,10 @@ namespace Blockmaker
         private Texture2D _downloadQrTexture;
         private bool      _isOpen;
 
+        /// Whether the modal is currently showing (used by the auth prompt to route
+        /// progress messages to whichever surface the user is looking at).
+        public bool IsOpen => _isOpen;
+
         private string _downloadUrl;
         private string _iosUrl;
         private string _androidUrl;
