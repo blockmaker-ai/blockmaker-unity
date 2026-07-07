@@ -122,7 +122,7 @@ mergeInto(LibraryManager.library, {
     if (window._bmSignClientPromise && !window._bmSignClientFailed) return window._bmSignClientPromise;
     window._bmSignClientFailed = false;
     window._bmSignClientPromise =
-      import('https://cdn.jsdelivr.net/npm/@walletconnect/sign-client@2.17.3/+esm')
+      (new Function('return import(\"https://cdn.jsdelivr.net/npm/@walletconnect/sign-client@2.17.3/+esm\")'))()
         .then(function(mod) {
           var SC = mod.SignClient || (mod.default && mod.default.SignClient);
           if (!SC) throw new Error('SignClient not found in module');
@@ -506,8 +506,8 @@ mergeInto(LibraryManager.library, {
     if (window._bmMagicPromise && !window._bmMagicFailed) return window._bmMagicPromise;
     window._bmMagicFailed = false;
     window._bmMagicPromise = Promise.all([
-      import('https://cdn.jsdelivr.net/npm/magic-sdk@33.7.1/+esm'),
-      import('https://cdn.jsdelivr.net/npm/@magic-ext/algorand@26.2.0/+esm')
+      (new Function('return import(\"https://cdn.jsdelivr.net/npm/magic-sdk@33.7.1/+esm\")'))(),
+      (new Function('return import(\"https://cdn.jsdelivr.net/npm/@magic-ext/algorand@26.2.0/+esm\")'))()
     ]).then(function(mods) {
       var Magic = mods[0].Magic || (mods[0].default && mods[0].default.Magic) || mods[0].default;
       var AlgorandExtension = mods[1].AlgorandExtension || (mods[1].default && mods[1].default.AlgorandExtension) || mods[1].default;
@@ -743,13 +743,13 @@ mergeInto(LibraryManager.library, {
     if (window._bmXChainPromise && !window._bmXChainFailed) return window._bmXChainPromise;
     window._bmXChainFailed = false;
     window._bmXChainPromise =
-      import('https://cdn.jsdelivr.net/npm/@algorandfoundation/xchain-js/+esm')
+      (new Function('return import(\"https://cdn.jsdelivr.net/npm/@algorandfoundation/xchain-js/+esm\")'))()
         .then(function(mod) {
           window._bmXChain = mod;
           return mod;
         })
         .catch(function() {
-          return import('https://cdn.jsdelivr.net/npm/algo-models/+esm')
+          return (new Function('return import(\"https://cdn.jsdelivr.net/npm/algo-models/+esm\")'))()
             .then(function(mod) {
               window._bmXChain = mod;
               return mod;
@@ -790,7 +790,7 @@ mergeInto(LibraryManager.library, {
       return loadXChainSDK();
     })
     .then(function(xchain) {
-      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || xchain.default?.deriveAddress;
+      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || (xchain.default && xchain.default.deriveAddress);
       if (!deriveAddress) throw new Error('xChain SDK: address derivation function not found.');
       var algoAddr = deriveAddress(evmAddress);
       window._bmEvmAddress  = evmAddress;
@@ -833,7 +833,7 @@ mergeInto(LibraryManager.library, {
     }
 
     var xchain = window._bmXChain;
-    var signTransaction = xchain.signTransaction || xchain.default?.signTransaction;
+    var signTransaction = xchain.signTransaction || (xchain.default && xchain.default.signTransaction);
     if (!signTransaction) {
       SendMessage(gameObjectName, errorCb, 'xChain SDK: signTransaction function not found.');
       return;
@@ -928,7 +928,7 @@ mergeInto(LibraryManager.library, {
       return loadXChainSDK();
     })
     .then(function(xchain) {
-      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || xchain.default?.deriveAddress;
+      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || (xchain.default && xchain.default.deriveAddress);
       if (!deriveAddress) throw new Error('xChain SDK: address derivation function not found.');
       var algoAddr = deriveAddress(window._bmEvmAddress);
       window._bmXChainAlgoAddr = algoAddr;
