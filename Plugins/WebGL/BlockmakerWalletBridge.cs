@@ -78,7 +78,7 @@ namespace Blockmaker
         public static extern void PeraJsConnect(
             string gameObjectName,
             string successCallback,
-            string errorCallback);
+            string errorCallback, string qrCb);
 
         /// <summary>
         /// Silently restore Pera's localStorage session on load.
@@ -224,7 +224,7 @@ namespace Blockmaker
 
         // ── Pera official JS SDK stubs ─────────────────────────────────────────────
 
-        public static void PeraJsConnect(string go, string s, string e)
+        public static void PeraJsConnect(string go, string s, string e, string qr)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsConnect — not in WebGL. Pera uses the native WCv1 flow on this platform.");
 
         public static void PeraJsReconnect(string go, string s, string e)

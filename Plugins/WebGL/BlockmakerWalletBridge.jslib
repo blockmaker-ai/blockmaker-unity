@@ -144,8 +144,23 @@ mergeInto(LibraryManager.library, {
     return 0;
   },
 
-  // ── Lazy-load WalletConnect Sign Client (ESM via jsDelivr) ─────────────────
+  // ── Lazy-load WalletConnect Sign Client ────────────────────────────────────
+  // Prefers a page-vendored bundle over the CDN: when the hosting page ships
+  // window.BmWCVendor ({ SignClient, QRCode } — a self-contained IIFE bundle
+  // of @walletconnect/sign-client@2.17.3 + qrcode@1.5.4 loaded via a script
+  // tag before the Unity loader), it is used directly with no network fetch —
+  // immune to ad-blockers, DNS filters and CDN outages. NFTurbo ships it as
+  // TemplateData/bm-wc-vendor.js in its WebGL template. Falls back to the
+  // pinned jsDelivr +esm dynamic import otherwise, so consumers without the
+  // vendor file keep working unchanged. (The vendor bundle also assigns the
+  // global QRCode, which $loadQRCode below already resolves first.)
   $loadSignClient: function() {
+    if (window.BmWCVendor && window.BmWCVendor.SignClient) {
+      window._bmSignClientClass = window.BmWCVendor.SignClient;
+      window._bmSignClientFailed = false;
+      window._bmSignClientPromise = Promise.resolve(window.BmWCVendor.SignClient);
+      return window._bmSignClientPromise;
+    }
     if (window._bmSignClientPromise && !window._bmSignClientFailed) return window._bmSignClientPromise;
     window._bmSignClientFailed = false;
     window._bmSignClientPromise =
@@ -546,6 +561,12 @@ mergeInto(LibraryManager.library, {
   //                               the Transaction type Pera's signer expects.
 
   $loadPeraConnect: function() {
+    // Vendored bundle shipped with the build (TemplateData/bm-pera-vendor.js) —
+    // zero-network path; the pinned jsDelivr import below is only a fallback.
+    if (window.BmPeraVendor && window.BmPeraVendor.PeraWalletConnect) {
+      window._bmPeraWalletClass = window.BmPeraVendor.PeraWalletConnect;
+      return Promise.resolve(window.BmPeraVendor.PeraWalletConnect);
+    }
     if (window._bmPeraConnectPromise && !window._bmPeraConnectFailed) return window._bmPeraConnectPromise;
     window._bmPeraConnectFailed = false;
     window._bmPeraConnectPromise =
@@ -564,6 +585,10 @@ mergeInto(LibraryManager.library, {
   },
 
   $loadAlgosdk: function() {
+    if (window.BmPeraVendor && window.BmPeraVendor.algosdk) {
+      window._bmAlgosdk = window.BmPeraVendor.algosdk;
+      return Promise.resolve(window.BmPeraVendor.algosdk);
+    }
     if (window._bmAlgosdkPromise && !window._bmAlgosdkFailed) return window._bmAlgosdkPromise;
     window._bmAlgosdkFailed = false;
     window._bmAlgosdkPromise =
@@ -638,40 +663,91 @@ mergeInto(LibraryManager.library, {
   },
 
   /**
-   * PeraJsConnect — connect via Pera's official browser SDK.
-   * Pera shows its own modal (QR / deep links); nothing is sent to Unity until
-   * the user approves. On success: successCb("<AlgorandAddress>").
-   * On error: errorCb(message) — "PERA_CONNECT_CANCELLED" when the user simply
-   * closed Pera's modal (recognizable code, mapped to a friendly message in C#).
+   * PeraJsConnect — connect via Pera's official browser SDK, HEADLESS.
+   * Pera's own DOM modal is suppressed (browser element-fullscreen hides DOM
+   * overlays, and sign-in must never leave fullscreen). Instead the WC v1 URI
+   * is read off the connector and sent to Unity ("Pera|<uri>|<qrB64>") for the
+   * usual in-canvas QR + mobile deep-link button. The lib still runs the whole
+   * v1 protocol, bridges and session storage (Pera-founder-recommended path).
+   * On success: successCb("<AlgorandAddress>"). On error: errorCb(message) —
+   * "PERA_CONNECT_CANCELLED" when the pairing was abandoned.
    */
-  PeraJsConnect__deps: ['$getPeraWallet', '$bmPeraWireDisconnect', '$bmExitFullscreen', '$bmRestoreFullscreen'],
-  PeraJsConnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr) {
+  PeraJsConnect__deps: ['$getPeraWallet', '$bmPeraWireDisconnect', '$loadQRCode'],
+  PeraJsConnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr, qrCbPtr) {
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
     var successCb      = UTF8ToString(successCbPtr);
     var errorCb        = UTF8ToString(errorCbPtr);
+    var qrCb           = qrCbPtr ? UTF8ToString(qrCbPtr) : '';
 
-    bmExitFullscreen()
-    .then(function() { return getPeraWallet(); })
+    // Kill Pera's modal before it can ever render (idempotent).
+    if (!window._bmPeraModalKiller) {
+      var killer = document.createElement('style');
+      killer.textContent = '#pera-wallet-connect-modal-wrapper{display:none !important;}';
+      document.head.appendChild(killer);
+      window._bmPeraModalKiller = killer;
+    }
+
+    var qrPoll = null;
+    function stopQrPoll() { if (qrPoll) { clearInterval(qrPoll); qrPoll = null; } }
+
+    getPeraWallet()
     .then(function(wallet) {
-      // A live session makes connect() reject ("Session currently connected"),
-      // so try a silent restore first and fall back to the connect modal.
+      // Silent restore first — but only trust it when the underlying WC v1
+      // connector is actually live; stale localStorage otherwise fakes a
+      // connect with a dead transport and no QR is ever shown.
       return wallet.reconnectSession()
         .catch(function() { return []; })
         .then(function(accounts) {
-          if (accounts && accounts.length > 0) return accounts;
-          return wallet.connect();
+          if (accounts && accounts.length > 0 &&
+              wallet.connector && wallet.connector.connected) return accounts;
+
+          var connectPromise = wallet.connect();
+
+          // The v1 pairing URI appears on the connector right after connect()
+          // starts. Poll briefly, then hand it to Unity for the in-canvas QR.
+          if (qrCb) {
+            var tries = 0;
+            qrPoll = setInterval(function() {
+              tries++;
+              var uri = wallet.connector && wallet.connector.uri;
+              if (uri) {
+                stopQrPoll();
+                loadQRCode().then(function(QR) {
+                  return QR.toDataURL(uri, {
+                    width:                256,
+                    margin:               2,
+                    errorCorrectionLevel: 'M',
+                    color: { dark: '#0f0f1c', light: '#ffffff' }
+                  });
+                }).then(function(dataUrl) {
+                  var b64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+                  SendMessage(gameObjectName, qrCb, 'Pera|' + uri + '|' + b64);
+                }).catch(function(qErr) {
+                  console.warn('[BlockmakerWalletBridge] Pera QR render failed, sending URI only:', qErr);
+                  SendMessage(gameObjectName, qrCb, 'Pera|' + uri + '|');
+                });
+              } else if (tries > 100) {
+                stopQrPoll();
+                console.warn('[BlockmakerWalletBridge] Pera WC v1 URI never appeared on the connector.');
+              }
+            }, 100);
+          }
+
+          return connectPromise.then(
+            function(accounts2) { stopQrPoll(); return accounts2; },
+            function(err)       { stopQrPoll(); throw err; }
+          );
         })
         .then(function(accounts) {
           if (!accounts || accounts.length === 0) throw new Error('No Algorand accounts returned by Pera.');
           window._bmPeraConnected = true;
           bmPeraWireDisconnect(wallet);
           console.log('[BlockmakerWalletBridge] Pera JS session established:', accounts[0]);
-          bmRestoreFullscreen();
           SendMessage(gameObjectName, successCb, accounts[0]);
         });
     })
     .catch(function(err) {
-      bmRestoreFullscreen();
+      stopQrPoll();
       var type = (err && err.data && err.data.type) ? err.data.type : '';
       var msg  = (err && err.message) ? err.message : 'Pera connection failed.';
       if (type === 'CONNECT_MODAL_CLOSED' || /closed by user/i.test(msg)) msg = 'PERA_CONNECT_CANCELLED';
@@ -695,7 +771,8 @@ mergeInto(LibraryManager.library, {
     getPeraWallet()
     .then(function(wallet) {
       return wallet.reconnectSession().then(function(accounts) {
-        if (!accounts || accounts.length === 0) {
+        if (!accounts || accounts.length === 0 ||
+            !(wallet.connector && wallet.connector.connected)) {
           SendMessage(gameObjectName, errorCb, 'No previous Pera session found.');
           return;
         }

@@ -146,16 +146,12 @@ namespace Blockmaker
             if (_lblDlTitle  != null) _lblDlTitle.text  = $"Get {provider}";
             if (_lblDlStatus != null) _lblDlStatus.text = $"Scan to visit {_downloadUrl.Replace("https://", "")}";
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-            // Pera on WebGL: the official Pera browser modal opens over the canvas with its own
-            // QR / deep links — Unity never receives a QR for this provider on this platform.
-            SetStatus(provider == "Pera" ? "Continue in the Pera window…" : "Loading QR code…");
-#else
             SetStatus("Loading QR code…");
-#endif
 
             ReownWalletConnector.OnQRReady -= HandleQRReady;
             ReownWalletConnector.OnQRReady += HandleQRReady;
+            BlockmakerAuth.OnWalletQRReady -= HandleBridgeQRReady;
+            BlockmakerAuth.OnWalletQRReady += HandleBridgeQRReady;
         }
 
         public void Close()
@@ -164,6 +160,7 @@ namespace Blockmaker
             _isOpen = false;
 
             ReownWalletConnector.OnQRReady -= HandleQRReady;
+            BlockmakerAuth.OnWalletQRReady -= HandleBridgeQRReady;
             _root.style.display = DisplayStyle.None;
             _pendingWcUri = null;
             if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
@@ -186,6 +183,12 @@ namespace Blockmaker
             Close();
             OnCloseClicked?.Invoke();
         }
+
+        /// The in-house jslib bridge path fires BlockmakerAuth.OnWalletQRReady (with a
+        /// base64 QR we don't need — the modal renders its own from the URI). Adapt it to
+        /// the same handler the Reown path uses so the QR shows on either transport.
+        private void HandleBridgeQRReady(WalletQREventArgs e) =>
+            HandleQRReady(e.Provider, e.WalletConnectUri, null);
 
         private void HandleQRReady(string provider, string uri, Texture2D _)
         {

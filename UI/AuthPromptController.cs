@@ -306,13 +306,6 @@ namespace Blockmaker
             if (_lblQrProvider != null)
                 _lblQrProvider.text = $"Scan with {provider} Wallet";
 
-#if UNITY_WEBGL && !UNITY_EDITOR
-            // Pera on WebGL connects through Pera's OWN browser modal (official
-            // @perawallet/connect renders its QR / deep-link UI in the DOM, on top of the
-            // canvas) — no QR ever reaches Unity on that path, so don't promise one.
-            if (provider == "Pera" && _lblQrProvider != null)
-                _lblQrProvider.text = "Continue in the Pera window…";
-#endif
 
             // Show loading state; hide QR image until received
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.Flex;

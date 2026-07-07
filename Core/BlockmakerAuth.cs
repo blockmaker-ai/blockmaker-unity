@@ -681,13 +681,9 @@ namespace Blockmaker
                 );
             }
 
-            // Pera on WebGL connects via the official @perawallet/connect JS SDK, which
-            // persists its own session in localStorage. Restore it here so signing works
-            // after a page reload. The jslib sends "Pera:<address>" — the same payload
-            // shape as TryReconnect — so the existing reconnect receivers are reused
-            // (they re-trigger the wallet-signature login when no JWT is stored).
-            if (Identity is WalletConnectIdentity peraIdentity &&
-                peraIdentity.ProviderName == ProviderPera)
+            // Pera on WebGL sessions live in Pera's own JS library (localStorage). The jslib
+            // emits "Pera:<address>" — the same payload the generic reconnect receivers expect.
+            if (Identity is WalletConnectIdentity peraId && peraId.ProviderName == ProviderPera)
             {
                 BlockmakerWalletBridge.PeraJsReconnect(
                     gameObject.name,
@@ -695,6 +691,7 @@ namespace Blockmaker
                     nameof(OnWalletReconnectFailed)
                 );
             }
+
 
             var cfg = BlockmakerClient.Instance?.config;
             if (Identity is MagicIdentity && cfg != null && cfg.enableMagicEmail && !string.IsNullOrEmpty(cfg.magicPublishableKey))
@@ -767,15 +764,17 @@ namespace Blockmaker
             if (provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase))
             {
     #if UNITY_WEBGL && !UNITY_EDITOR
-                // Pera speaks WalletConnect v1 only, and the native WCv1 client cannot
-                // run on WebGL (System.Net.WebSockets). Use Pera's official browser SDK
-                // (@perawallet/connect) via the jslib bridge instead. Pera renders its
-                // OWN connect modal (QR on desktop, deep links on mobile), so no
-                // OnWalletQRReady event fires on this path.
+                // Pera speaks WalletConnect v1 ONLY (Pera-founder-confirmed) — never route
+                // it through the WC v2 paths (Reown / the in-house jslib client): the app
+                // cannot pair their QR codes. On WebGL we use Pera's official JS library
+                // HEADLESS: its DOM modal is suppressed (browser fullscreen would hide it —
+                // sign-in must never leave fullscreen) and the v1 URI is sent to Unity for
+                // the usual in-canvas QR.
                 BlockmakerWalletBridge.PeraJsConnect(
                     gameObject.name,
                     nameof(OnPeraJsConnected),
-                    nameof(OnPeraJsError)
+                    nameof(OnPeraJsError),
+                    nameof(OnWalletQRFromJS)   // v1 URI → the usual in-canvas QR pipeline
                 );
                 StartWebGLTimeout(WalletSignTimeout, () =>
                 {
