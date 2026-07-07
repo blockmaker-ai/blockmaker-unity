@@ -23,7 +23,7 @@
 
 .auth-card {
     width:                      92%;
-    max-width:                  560px;
+    max-width:                  440px;   /* single-column sign-in — 560 read as too wide */
     flex-direction:             column;
     align-items:                stretch;
     background-color:           rgb(13, 13, 20);
@@ -68,7 +68,7 @@
     align-items:                center;
     justify-content:            center;
     cursor:                     link;
-    color:                      rgba(255, 255, 255, 0.25);
+    color:                      rgba(255, 255, 255, 0.65);   /* 0.25 was invisible on the dark card */
     font-size:                  18px;
     -unity-font-style:          normal;
     transition-property:        background-color, color;
@@ -77,8 +77,8 @@
 }
 
 .auth-close-btn:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-    color:            rgba(255, 255, 255, 0.60);
+    background-color: rgba(255, 255, 255, 0.10);
+    color:            rgba(255, 255, 255, 1);
 }
 
 .auth-close-btn:active {
