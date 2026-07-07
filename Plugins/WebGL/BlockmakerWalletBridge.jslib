@@ -1116,7 +1116,7 @@ mergeInto(LibraryManager.library, {
       return loadXChainSDK();
     })
     .then(function(xchain) {
-      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || xchain.default?.deriveAddress;
+      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || (xchain.default && xchain.default.deriveAddress);
       if (!deriveAddress) throw new Error('xChain SDK: address derivation function not found.');
       var algoAddr = deriveAddress(evmAddress);
       window._bmEvmAddress  = evmAddress;
@@ -1159,7 +1159,7 @@ mergeInto(LibraryManager.library, {
     }
 
     var xchain = window._bmXChain;
-    var signTransaction = xchain.signTransaction || xchain.default?.signTransaction;
+    var signTransaction = xchain.signTransaction || (xchain.default && xchain.default.signTransaction);
     if (!signTransaction) {
       SendMessage(gameObjectName, errorCb, 'xChain SDK: signTransaction function not found.');
       return;
@@ -1254,7 +1254,7 @@ mergeInto(LibraryManager.library, {
       return loadXChainSDK();
     })
     .then(function(xchain) {
-      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || xchain.default?.deriveAddress;
+      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || (xchain.default && xchain.default.deriveAddress);
       if (!deriveAddress) throw new Error('xChain SDK: address derivation function not found.');
       var algoAddr = deriveAddress(window._bmEvmAddress);
       window._bmXChainAlgoAddr = algoAddr;
