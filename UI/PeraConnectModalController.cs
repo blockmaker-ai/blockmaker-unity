@@ -45,6 +45,17 @@ namespace Blockmaker
         private int  _step2DotIndex;
         private bool _isStepTwo;
 
+        // Step 2 recovery controls (resend the sign request / cancel the login)
+        private readonly Button _btnStep2Resend;
+        private readonly Button _btnStep2Cancel;
+        private readonly Label  _lblStep2ResendHint;
+        private IVisualElementScheduledItem _resendCooldown;
+        private bool _resendCoolingDown;
+
+        private const string ResendLabel      = "RESEND REQUEST";
+        private const string ResendSentLabel  = "SENT - CHECK YOUR WALLET";
+        private const long   ResendCooldownMs = 5000;
+
         private Texture2D _connectQrTexture;
         private Texture2D _downloadQrTexture;
         private bool      _isOpen;
@@ -66,6 +77,12 @@ namespace Blockmaker
 
         public Action OnBackClicked { get; set; }
         public Action OnCloseClicked { get; set; }
+
+        /// Fired after the player cancels the pending sign-in (step-2 CANCEL button).
+        /// The wallet login is already aborted by then — the host should route back
+        /// to its sign-in options and may show a neutral "cancelled" note.
+        /// When unset, OnBackClicked is invoked as a fallback.
+        public Action OnSignInCancelled { get; set; }
 
         public PeraConnectModalController(VisualElement root)
         {
@@ -96,6 +113,12 @@ namespace Blockmaker
             };
             _btnShowDownload = root.Q<Button>("btn-show-download");
             _btnOpenWallet   = root.Q<Button>("btn-open-wallet");
+
+            _btnStep2Resend     = root.Q<Button>("btn-step2-resend");
+            _btnStep2Cancel     = root.Q<Button>("btn-step2-cancel");
+            _lblStep2ResendHint = root.Q<Label>("lbl-step2-resend-hint");
+            if (_btnStep2Resend != null) _btnStep2Resend.clicked += HandleResendSignIn;
+            if (_btnStep2Cancel != null) _btnStep2Cancel.clicked += HandleCancelSignIn;
 
             var btnBack         = root.Q<Button>("btn-back");
             var btnDownloadBack = root.Q<Button>("btn-download-back");
@@ -243,10 +266,78 @@ namespace Blockmaker
             if (_lblStep2Body != null)
                 _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
 
+            RefreshStepTwoActions();
+
             _panelStep2.RemoveFromClassList("pera-hidden");
             _panelStep2.style.display = DisplayStyle.Flex;
             StartStepTwoDots();
             return true;
+        }
+
+        /// Show/hide the resend controls based on whether the auth layer can
+        /// actually re-send the sign request. Re-entrant safe: a retry fires
+        /// OnAuthStatus → ShowStepTwo again, and this must not wipe the
+        /// "SENT - CHECK YOUR WALLET" cooldown state mid-count.
+        private void RefreshStepTwoActions()
+        {
+            bool canRetry = BlockmakerAuth.CanRetryWalletLogin;
+
+            if (_btnStep2Resend != null)
+            {
+                _btnStep2Resend.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
+                if (!_resendCoolingDown)
+                {
+                    _btnStep2Resend.text = ResendLabel;
+                    _btnStep2Resend.SetEnabled(canRetry);
+                }
+            }
+
+            if (_lblStep2ResendHint != null)
+                _lblStep2ResendHint.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void HandleResendSignIn()
+        {
+            var auth = BlockmakerAuth.Instance;
+            if (auth == null || !BlockmakerAuth.CanRetryWalletLogin) return;
+
+            auth.RetryWalletLogin();
+
+            if (_btnStep2Resend == null) return;
+            _resendCoolingDown   = true;
+            _btnStep2Resend.text = ResendSentLabel;
+            _btnStep2Resend.SetEnabled(false);
+
+            if (_resendCooldown == null)
+                _resendCooldown = _btnStep2Resend.schedule.Execute(RestoreResendButton);
+            _resendCooldown.ExecuteLater(ResendCooldownMs);
+        }
+
+        private void RestoreResendButton()
+        {
+            _resendCoolingDown = false;
+            if (_btnStep2Resend == null) return;
+            _btnStep2Resend.text = ResendLabel;
+            _btnStep2Resend.SetEnabled(BlockmakerAuth.CanRetryWalletLogin);
+        }
+
+        private void CancelResendCooldown()
+        {
+            _resendCooldown?.Pause();
+            _resendCoolingDown = false;
+            if (_btnStep2Resend != null)
+            {
+                _btnStep2Resend.text = ResendLabel;
+                _btnStep2Resend.SetEnabled(true);
+            }
+        }
+
+        private void HandleCancelSignIn()
+        {
+            BlockmakerAuth.Instance?.CancelWalletLogin();
+            Close();
+            if (OnSignInCancelled != null) OnSignInCancelled.Invoke();
+            else                           OnBackClicked?.Invoke();
         }
 
         /// Restore the normal connect-panel visuals. Divider/footer/open-wallet
@@ -255,6 +346,7 @@ namespace Blockmaker
         {
             _isStepTwo = false;
             StopStepTwoDots();
+            CancelResendCooldown();
             if (_panelStep2 != null)
             {
                 _panelStep2.AddToClassList("pera-hidden");
@@ -294,12 +386,19 @@ namespace Blockmaker
 
         private void HandleBack()
         {
+            // Leaving mid step-2 must abort the pending login signature — otherwise
+            // the session lingers half-authenticated behind a dismissed modal.
+            if (IsShowingStepTwo)
+                BlockmakerAuth.Instance?.CancelWalletLogin();
             Close();
             OnBackClicked?.Invoke();
         }
 
         private void HandleClose()
         {
+            // Same as back: x during step-2 also cancels the pending wallet login.
+            if (IsShowingStepTwo)
+                BlockmakerAuth.Instance?.CancelWalletLogin();
             Close();
             OnCloseClicked?.Invoke();
         }

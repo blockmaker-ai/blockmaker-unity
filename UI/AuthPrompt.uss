@@ -747,6 +747,64 @@
     -unity-text-align: middle-center;
 }
 
+/* ── Step 2 recovery controls (resend / cancel) ───────────────────────── */
+
+.auth-step2-resend-hint {
+    font-size:         12px;
+    color:             rgba(238, 238, 246, 0.30);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    margin-top:        20px;
+    margin-bottom:     12px;
+}
+
+.auth-step2-resend-btn {
+    height:                     48px;
+    min-width:                  260px;
+    background-color:           rgba(124, 58, 237, 0.10);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.35);
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    color:                      rgb(167, 139, 250);
+    font-size:                  14px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    padding-left:               24px;
+    padding-right:              24px;
+    padding-top:                0;
+    padding-bottom:             0;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-step2-resend-btn:hover {
+    background-color: rgba(124, 58, 237, 0.18);
+    border-color:     rgba(167, 139, 250, 0.55);
+    color:            rgb(196, 181, 253);
+}
+
+.auth-step2-resend-btn:active {
+    background-color: rgba(124, 58, 237, 0.06);
+}
+
+.auth-step2-resend-btn:disabled {
+    opacity: 0.5;
+}
+
+.auth-step2-cancel-btn {
+    margin-top: 6px;
+    min-width:  260px;
+    height:     36px;
+}
+
 /* ── Copy-link text button ────────────────────────────────────────────── */
 
 .auth-pill-btn {

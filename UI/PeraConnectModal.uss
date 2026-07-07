@@ -295,6 +295,60 @@
     -unity-text-align: middle-center;
 }
 
+/* ── Step 2 recovery controls (resend / cancel) ──────────────────────── */
+
+.pera-step2-resend-hint {
+    font-size:         12px;
+    color:             rgba(240, 240, 248, 0.30);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    margin-top:        18px;
+    margin-bottom:     10px;
+}
+
+/* Chained selector: must out-rank .pera-store-btn (defined later in this file,
+   and later rules win specificity ties in UITK). */
+.pera-store-btn.pera-step2-resend-btn {
+    align-self:    center;
+    min-width:     260px;
+    margin-left:   0;
+    margin-right:  0;
+    margin-bottom: 4px;
+}
+
+.pera-store-btn.pera-step2-resend-btn:disabled {
+    opacity: 0.5;
+}
+
+.pera-step2-cancel-btn {
+    background-color:    rgba(0, 0, 0, 0);
+    border-top-width:    0;
+    border-left-width:   0;
+    border-right-width:  0;
+    border-bottom-width: 0;
+    color:               rgba(240, 240, 248, 0.35);
+    font-size:           13px;
+    -unity-text-align:   middle-center;
+    height:              34px;
+    min-width:           260px;
+    margin-top:          4px;
+    padding-top:         0;
+    padding-bottom:      0;
+    padding-left:        0;
+    padding-right:       0;
+    cursor:              link;
+    transition-property: color;
+    transition-duration: 120ms;
+}
+
+.pera-step2-cancel-btn:hover {
+    color: rgba(240, 240, 248, 0.70);
+}
+
+.pera-step2-cancel-btn:active {
+    color: rgba(240, 240, 248, 0.25);
+}
+
 
 /* ── Divider ─────────────────────────────────────────────────────────── */
 

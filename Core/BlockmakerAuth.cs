@@ -300,6 +300,17 @@ namespace Blockmaker
         // could each start a Login() (duplicate signature prompts / torn SaveSession).
         private bool      _walletLoginInFlight;
 
+        // Monotonically-increasing id of the CURRENT wallet-login attempt. Every attempt
+        // captures the value at start; RetryWalletLogin / CancelWalletLogin / Logout bump it,
+        // which invalidates the old attempt's callbacks (a late success/error whose captured
+        // seq no longer matches is logged and ignored — it must not clear the new attempt's
+        // in-flight flag or double-fire OnIdentityChanged).
+        private int       _walletLoginSeq;
+        // Live RunWalletLogin coroutine, so retry/cancel can hard-stop the old attempt
+        // (kills the nested Login() wait too — StopCoroutine disposes the iterator chain,
+        // running RunWalletLogin's finally, which is seq-guarded).
+        private Coroutine _walletLoginCoroutine;
+
         // ── Native WC v1 client for Pera ──────────────────────────────────────────
         private Texture2D _peraQRTexture;
         private WalletConnectV1Client _wcv1Client;
@@ -1740,6 +1751,15 @@ namespace Blockmaker
             _pendingMagicError     = null;
             _isWalletConnecting    = false;
             _walletLoginInFlight   = false;
+            // Invalidate + hard-stop any in-flight wallet-signature login: without this a
+            // still-polling Login() could complete AFTER logout and write a fresh session
+            // (UpdateTokens/SaveSession) for an identity the user just discarded.
+            _walletLoginSeq++;
+            if (_walletLoginCoroutine != null)
+            {
+                StopCoroutine(_walletLoginCoroutine);
+                _walletLoginCoroutine = null;
+            }
 
             if (_magicLoginCoroutine != null)
             {
@@ -1879,13 +1899,13 @@ namespace Blockmaker
                 // sign-in stalled — the request is easy to miss on a phone.
                 SafeInvoke(OnAuthStatus,
                     $"Connected! Now approve the sign-in request in your {wc.ProviderName} app…");
-                StartCoroutine(RunWalletLogin(wc));
+                _walletLoginCoroutine = StartCoroutine(RunWalletLogin(wc, ++_walletLoginSeq));
             }
             else if (identity is EvmXChainIdentity evm)
             {
                 if (!string.IsNullOrEmpty(evm.SessionToken)) return;
                 _walletLoginInFlight = true;
-                StartCoroutine(RunWalletLogin(evm));
+                _walletLoginCoroutine = StartCoroutine(RunWalletLogin(evm, ++_walletLoginSeq));
             }
         }
 
@@ -1896,12 +1916,17 @@ namespace Blockmaker
         /// The auto-login is the deferrer, so the user's sign always wins and the login simply
         /// runs afterwards (and is retryable on the next trigger if it never gets a clear slot).
         /// </summary>
-        private IEnumerator RunWalletLogin(IBlockmakerIdentity identity)
+        private IEnumerator RunWalletLogin(IBlockmakerIdentity identity, int seq)
         {
             // _walletLoginInFlight was set SYNCHRONOUSLY by TriggerWalletLogin before this
             // coroutine started. This coroutine OWNS the flag from here on: it never sets it,
             // and it must CLEAR it on EVERY exit path (early yield breaks below, plus the
             // success/error callbacks). Otherwise a future TriggerWalletLogin would be stuck.
+            //
+            // `seq` is this attempt's id (captured from _walletLoginSeq at start). If it stops
+            // matching, RetryWalletLogin/CancelWalletLogin/Logout superseded this attempt: the
+            // flag now belongs to a NEWER attempt (or was deliberately cleared), so a stale
+            // attempt must exit without touching the flag and its late callbacks are ignored.
 
             // Defer briefly if a sign is already in flight (connect or a user txn sign).
             // Bounded so a stuck sign can't pin the auto-login forever; if it never clears,
@@ -1909,9 +1934,11 @@ namespace Blockmaker
             float waited = 0f;
             while ((_isWalletConnecting || IsWebGLSignInFlight) && waited < WalletSignTimeout)
             {
+                if (_walletLoginSeq != seq) yield break; // superseded by retry/cancel/logout
                 waited += Time.unscaledDeltaTime;
                 yield return null;
             }
+            if (_walletLoginSeq != seq) yield break;     // superseded by retry/cancel/logout
             if (_isWalletConnecting || IsWebGLSignInFlight)
             {
                 BlockmakerLog.Info("[BlockmakerAuth] Auto wallet sign-in deferred — a sign is still in flight; will retry on next trigger.");
@@ -1938,14 +1965,34 @@ namespace Blockmaker
                 if (identity is WalletConnectIdentity wc)
                 {
                     yield return wc.Login(
-                        onSuccess: () => { _walletLoginInFlight = false; if (Identity == wc) SafeInvoke(OnIdentityChanged, wc); },
-                        onError:   err => { _walletLoginInFlight = false; BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for {wc.ProviderName}: {err}"); });
+                        onSuccess: () =>
+                        {
+                            if (_walletLoginSeq != seq) { BlockmakerLog.Info($"[BlockmakerAuth] Ignoring stale wallet sign-in success for {wc.ProviderName} (superseded by retry/cancel)."); return; }
+                            _walletLoginInFlight = false;
+                            if (Identity == wc) SafeInvoke(OnIdentityChanged, wc);
+                        },
+                        onError: err =>
+                        {
+                            if (_walletLoginSeq != seq) { BlockmakerLog.Info($"[BlockmakerAuth] Ignoring stale wallet sign-in error for {wc.ProviderName} (superseded by retry/cancel): {err}"); return; }
+                            _walletLoginInFlight = false;
+                            BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for {wc.ProviderName}: {err}");
+                        });
                 }
                 else if (identity is EvmXChainIdentity evm)
                 {
                     yield return evm.Login(
-                        onSuccess: () => { _walletLoginInFlight = false; if (Identity == evm) SafeInvoke(OnIdentityChanged, evm); },
-                        onError:   err => { _walletLoginInFlight = false; BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for EVM xChain: {err}"); });
+                        onSuccess: () =>
+                        {
+                            if (_walletLoginSeq != seq) { BlockmakerLog.Info("[BlockmakerAuth] Ignoring stale wallet sign-in success for EVM xChain (superseded by retry/cancel)."); return; }
+                            _walletLoginInFlight = false;
+                            if (Identity == evm) SafeInvoke(OnIdentityChanged, evm);
+                        },
+                        onError: err =>
+                        {
+                            if (_walletLoginSeq != seq) { BlockmakerLog.Info($"[BlockmakerAuth] Ignoring stale wallet sign-in error for EVM xChain (superseded by retry/cancel): {err}"); return; }
+                            _walletLoginInFlight = false;
+                            BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for EVM xChain: {err}");
+                        });
                 }
                 else
                 {
@@ -1956,9 +2003,98 @@ namespace Blockmaker
             {
                 // Defensive backstop: every Login() exit path invokes a callback that clears the
                 // flag, but guarantee it's cleared even on an exception or a future Login refactor
-                // that returns without one.
-                _walletLoginInFlight = false;
+                // that returns without one. Seq-guarded: this finally also runs when retry/cancel
+                // StopCoroutine()s this attempt (Unity disposes the iterator), and a superseded
+                // attempt must NOT clear the flag the newer attempt now owns.
+                if (_walletLoginSeq == seq)
+                {
+                    _walletLoginInFlight  = false;
+                    _walletLoginCoroutine = null;
+                }
             }
+        }
+
+        // ── Wallet-login retry / cancel (the "stuck on approval 2 of 2" escape hatch) ──
+
+        /// <summary>
+        /// True when the current identity is a self-custody wallet that has connected
+        /// (approval 1) but not yet completed the login signature (approval 2) — i.e. it
+        /// holds no session token. This is the state where the step-2 panel is shown and
+        /// <see cref="RetryWalletLogin"/> / <see cref="CancelWalletLogin"/> are meaningful.
+        /// Intentionally true even while a login attempt is in flight: the whole point of
+        /// retry is to replace an attempt whose wallet request expired or was missed.
+        /// </summary>
+        public static bool CanRetryWalletLogin
+        {
+            get
+            {
+                var id = Instance?.Identity;
+                if (id is WalletConnectIdentity wc)  return string.IsNullOrEmpty(wc.SessionToken);
+                if (id is EvmXChainIdentity     evm) return string.IsNullOrEmpty(evm.SessionToken);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Abandon any in-flight wallet-signature login attempt and start a fresh one for
+        /// the current identity: a new challenge is requested and a NEW sign request is
+        /// pushed to the wallet app (the old one may have expired or been dismissed).
+        /// Re-fires <see cref="OnAuthStatus"/> so the UI can show "approve the request…"
+        /// feedback again. Safe no-op (log only) when <see cref="CanRetryWalletLogin"/> is false.
+        /// </summary>
+        public void RetryWalletLogin()
+        {
+            if (!CanRetryWalletLogin)
+            {
+                BlockmakerLog.Info("[BlockmakerAuth] RetryWalletLogin ignored — no tokenless wallet identity to retry.");
+                return;
+            }
+
+            BlockmakerLog.Info("[BlockmakerAuth] Retrying wallet sign-in — abandoning the previous attempt and sending a fresh request.");
+            AbandonWalletLoginAttempt();
+
+            // Fresh attempt. For WalletConnect identities TriggerWalletLogin itself fires the
+            // "Connected! Now approve the sign-in request…" OnAuthStatus message; EVM xChain
+            // has no message in the trigger path, so give the UI equivalent feedback here.
+            if (Identity is EvmXChainIdentity)
+                SafeInvoke(OnAuthStatus, "Approve the sign-in request in your wallet…");
+            TriggerWalletLogin(Identity);
+        }
+
+        /// <summary>
+        /// Abort the wallet login-signature phase entirely: invalidate any in-flight attempt's
+        /// callbacks, clear the guards, and <see cref="Logout"/> back to a clean guest state.
+        /// A tokenless wallet identity can't call player-authed endpoints, so keeping it
+        /// half-connected only causes confusion — OnIdentityChanged fires via Logout as usual.
+        /// </summary>
+        public void CancelWalletLogin()
+        {
+            BlockmakerLog.Info("[BlockmakerAuth] Wallet sign-in cancelled — aborting the login attempt and logging out.");
+            AbandonWalletLoginAttempt();
+            Logout();
+        }
+
+        /// <summary>
+        /// Invalidate the in-flight wallet-login attempt (if any) so it can neither complete
+        /// nor clear the guards out from under a successor: bumps the attempt seq (late
+        /// callbacks become stale no-ops), hard-stops the RunWalletLogin coroutine (which also
+        /// tears down the nested Login() wait), clears the in-flight flag, and frees the shared
+        /// WebGL pending-sign slots (same idiom as Logout) — bumping the sign generation makes
+        /// a zombie JS sign wait exit, and clearing the awaiting bit stops the next attempt
+        /// from deferring behind the dead sign for a full WalletSignTimeout.
+        /// </summary>
+        private void AbandonWalletLoginAttempt()
+        {
+            _walletLoginSeq++;
+            if (_walletLoginCoroutine != null)
+            {
+                StopCoroutine(_walletLoginCoroutine);
+                _walletLoginCoroutine = null;
+            }
+            _walletLoginInFlight = false;
+
+            BeginPendingSign();
+            _signAwaiting = false; // invalidate, don't await, the abandoned sign
         }
 
         private static IBlockmakerIdentity CreateWalletIdentity(string provider, string address)

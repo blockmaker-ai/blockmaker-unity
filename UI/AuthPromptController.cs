@@ -91,6 +91,17 @@ namespace Blockmaker
         private int  _step2DotIndex;
         private bool _authAnnounced;   // OnAuthSucceeded already fired this prompt session
 
+        // Step 2 recovery controls (resend the sign request / cancel the login)
+        private Button _btnStep2Resend;
+        private Button _btnStep2Cancel;
+        private Label  _lblStep2ResendHint;
+        private IVisualElementScheduledItem _step2ResendCooldown;
+        private bool _step2ResendCoolingDown;
+
+        private const string ResendRequestLabel = "RESEND REQUEST";
+        private const string ResendSentLabel    = "SENT - CHECK YOUR WALLET";
+        private const long   ResendCooldownMs   = 5000;
+
         // Wallet warning
         private VisualElement _walletWarningBanner;
         private Label         _lblWalletWarning;
@@ -149,6 +160,11 @@ namespace Blockmaker
                 root.Q("step2-dot-2"),
                 root.Q("step2-dot-3"),
             };
+            _btnStep2Resend     = root.Q<Button>("btn-step2-resend");
+            _btnStep2Cancel     = root.Q<Button>("btn-step2-cancel");
+            _lblStep2ResendHint = root.Q<Label>("lbl-step2-resend-hint");
+            _btnStep2Resend?.RegisterCallback<ClickEvent>(_ => OnStep2ResendClicked());
+            _btnStep2Cancel?.RegisterCallback<ClickEvent>(_ => OnStep2CancelClicked());
 
             // OTP
             _otpStep1    = root.Q("otp-step1");
@@ -177,7 +193,7 @@ namespace Blockmaker
             if (_inputOtp   != null) _inputOtp.textEdition.placeholder   = "6-digit code";
 
             // Button wiring
-            root.Q<Button>("btn-close")?.RegisterCallback<ClickEvent>(_        => Hide());
+            root.Q<Button>("btn-close")?.RegisterCallback<ClickEvent>(_        => OnCloseClicked());
             root.Q<Button>("btn-email")?.RegisterCallback<ClickEvent>(_        => ShowOtpPage());
             root.Q<Button>("btn-algorand")?.RegisterCallback<ClickEvent>(_       => SetPage(_pageAlgoWallets));
             root.Q<Button>("btn-back-from-wallets")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
@@ -217,6 +233,14 @@ namespace Blockmaker
                     ShowOptionsPage();
                 };
                 _peraCtrl.OnCloseClicked = () => Hide();
+                // Step-2 CANCEL inside the modal: the wallet login is already aborted
+                // by the modal controller — land back on the sign-in options with a
+                // neutral (non-error) note instead of a dead end.
+                _peraCtrl.OnSignInCancelled = () =>
+                {
+                    ShowOptionsPage();
+                    SetStatus("Sign-in cancelled.");
+                };
                 _peraRoot.style.display = DisplayStyle.None;
             }
 
@@ -275,6 +299,23 @@ namespace Blockmaker
                 _overlay.style.display = DisplayStyle.Flex;
             else
                 BlockmakerLog.Error("[AuthPromptController] auth-overlay not found in AuthPrompt.uxml");
+        }
+
+        /// The x button. During the step-2 wait it must also abort the pending wallet
+        /// login — otherwise the session lingers half-authenticated behind a closed
+        /// prompt. Guarded by NeedsLoginSignature because Hide() also runs on SUCCESS
+        /// while the step-2 page is still visible (must not cancel a completed login).
+        private void OnCloseClicked()
+        {
+            bool stepTwoActive =
+                (_pageStep2 != null && _pageStep2.style.display == DisplayStyle.Flex) ||
+                (_peraCtrl != null && _peraCtrl.IsShowingStepTwo);
+
+            var auth = BlockmakerAuth.Instance;
+            if (stepTwoActive && auth != null && NeedsLoginSignature(auth.Identity))
+                auth.CancelWalletLogin();
+
+            Hide();
         }
 
         public void Hide()
@@ -345,7 +386,11 @@ namespace Blockmaker
             if (_pageQr          != null) _pageQr.style.display          = DisplayStyle.None;
             if (_pageStep2       != null) _pageStep2.style.display       = DisplayStyle.None;
 
-            if (activePage != _pageStep2) StopStepTwoDots();
+            if (activePage != _pageStep2)
+            {
+                StopStepTwoDots();
+                ResetStepTwoResend();
+            }
 
             if (activePage != null) activePage.style.display = DisplayStyle.Flex;
         }
@@ -378,8 +423,77 @@ namespace Blockmaker
                 string appName = string.IsNullOrEmpty(provider) ? "wallet" : provider;
                 _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
             }
+            RefreshStepTwoActions();
             StartStepTwoDots();
             return true;
+        }
+
+        /// Show/hide the resend controls based on whether the auth layer can actually
+        /// re-send the sign request. Re-entrant safe: a retry fires OnAuthStatus →
+        /// EnterStepTwoState again, and this must not wipe the "SENT" cooldown state.
+        private void RefreshStepTwoActions()
+        {
+            bool canRetry = BlockmakerAuth.CanRetryWalletLogin;
+
+            if (_btnStep2Resend != null)
+            {
+                _btnStep2Resend.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
+                if (!_step2ResendCoolingDown)
+                {
+                    _btnStep2Resend.text = ResendRequestLabel;
+                    _btnStep2Resend.SetEnabled(canRetry);
+                }
+            }
+
+            if (_lblStep2ResendHint != null)
+                _lblStep2ResendHint.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void OnStep2ResendClicked()
+        {
+            var auth = BlockmakerAuth.Instance;
+            if (auth == null || !BlockmakerAuth.CanRetryWalletLogin) return;
+
+            auth.RetryWalletLogin();
+
+            if (_btnStep2Resend == null) return;
+            _step2ResendCoolingDown = true;
+            _btnStep2Resend.text = ResendSentLabel;
+            _btnStep2Resend.SetEnabled(false);
+
+            if (_step2ResendCooldown == null)
+                _step2ResendCooldown = _btnStep2Resend.schedule.Execute(RestoreStepTwoResendButton);
+            _step2ResendCooldown.ExecuteLater(ResendCooldownMs);
+        }
+
+        private void RestoreStepTwoResendButton()
+        {
+            _step2ResendCoolingDown = false;
+            if (_btnStep2Resend == null) return;
+            _btnStep2Resend.text = ResendRequestLabel;
+            _btnStep2Resend.SetEnabled(BlockmakerAuth.CanRetryWalletLogin);
+        }
+
+        private void ResetStepTwoResend()
+        {
+            _step2ResendCooldown?.Pause();
+            _step2ResendCoolingDown = false;
+            if (_btnStep2Resend != null)
+            {
+                _btnStep2Resend.text = ResendRequestLabel;
+                _btnStep2Resend.SetEnabled(true);
+            }
+        }
+
+        private void OnStep2CancelClicked()
+        {
+            // Abort the pending wallet login (logs out the half-authenticated wallet
+            // identity). HandleIdentityChanged ignores the resulting Guest identity,
+            // so route back to the sign-in options explicitly — with a neutral note,
+            // not an error.
+            BlockmakerAuth.Instance?.CancelWalletLogin();
+            ShowOptionsPage();
+            SetStatus("Sign-in cancelled.");
         }
 
         private void StartStepTwoDots()
@@ -868,6 +982,7 @@ namespace Blockmaker
             _pendingProvider = null;
             _authAnnounced   = false;
             StopStepTwoDots();
+            ResetStepTwoResend();
             if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
             StopResendCountdown();
             StopConnectTimeout();
