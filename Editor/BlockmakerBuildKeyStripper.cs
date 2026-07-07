@@ -20,9 +20,13 @@ namespace Blockmaker
     {
         public int callbackOrder => 0;
 
-        // Distinct from any game-local stripper so the two can coexist safely
-        // (each captures/restores only its own SessionState).
-        private const string StateKey = "blockmaker.sdk.strippedApiKeys";
+        // Stash lives in Library/ (gitignored, survives editor restarts) rather
+        // than SessionState: a failed or cancelled batchmode build exits the
+        // editor session, and a SessionState stash would be lost — permanently
+        // blanking every config's key. Distinct file from any game-local
+        // stripper so the two coexist safely.
+        private static string StashPath => System.IO.Path.Combine(
+            System.IO.Path.GetDirectoryName(Application.dataPath), "Library", "blockmaker-stripped-keys.json");
 
         [System.Serializable] private class Entry   { public string path; public string key; }
         [System.Serializable] private class Entries { public List<Entry> items = new List<Entry>(); }
@@ -43,13 +47,10 @@ namespace Blockmaker
             if (saved.items.Count > 0)
             {
                 AssetDatabase.SaveAssets();
-                SessionState.SetString(StateKey, JsonUtility.ToJson(saved));
+                System.IO.File.WriteAllText(StashPath, JsonUtility.ToJson(saved));
                 Debug.LogWarning($"[Blockmaker] Stripped the dev apiKey from {saved.items.Count} BlockmakerConfig(s) for this build — it will not ship. Restored automatically after the build.");
             }
-            else
-            {
-                SessionState.EraseString(StateKey);
-            }
+
         }
 
         public void OnPostprocessBuild(BuildReport report) => RestoreKeys();
@@ -64,7 +65,8 @@ namespace Blockmaker
 
         private static void RestoreKeys()
         {
-            var json = SessionState.GetString(StateKey, "");
+            if (!System.IO.File.Exists(StashPath)) return;
+            var json = System.IO.File.ReadAllText(StashPath);
             if (string.IsNullOrEmpty(json)) return;
 
             var saved = JsonUtility.FromJson<Entries>(json);
@@ -81,7 +83,7 @@ namespace Blockmaker
                 }
                 AssetDatabase.SaveAssets();
             }
-            SessionState.EraseString(StateKey);
+            System.IO.File.Delete(StashPath);
         }
     }
 }
