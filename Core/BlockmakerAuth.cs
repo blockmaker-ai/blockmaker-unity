@@ -43,6 +43,8 @@ namespace Blockmaker
             OnAuthError = null;
             OnWalletQRReady = null;
             OnWalletAddressChanged = null;
+            SessionRestoreSettled = false;
+            OnSessionRestoreSettled = null;
             BlockmakerPrefs.InvalidatePrefix();
         }
 
@@ -93,6 +95,39 @@ namespace Blockmaker
         /// OnDestroy() to avoid leaks across scene loads.</para>
         /// </summary>
         public static event Action<WalletAddressChangedEventArgs> OnWalletAddressChanged;
+
+        // ── Boot-time session-restore resolution (additive; nothing in the SDK gates on it) ──
+
+        /// <summary>
+        /// True once the boot-time session-restore attempt has RESOLVED: the stored session's
+        /// token was refreshed/verified (signed in), or a fresh user sign-in is required, or
+        /// there was no stored session at all. Until this flips, the restored identity is a
+        /// GUESS — UI should render a neutral "resolving" state rather than a stale identity
+        /// (which may be logged out a moment later) or a premature SIGN IN button.
+        /// A late-arriving success after this settles still fires OnIdentityChanged as usual.
+        /// </summary>
+        public static bool SessionRestoreSettled { get; private set; }
+
+        /// <summary>
+        /// Fired ONCE, when <see cref="SessionRestoreSettled"/> flips true. Subscribers that
+        /// attach late should read the flag first — it may already be settled.
+        /// <para><b>Warning:</b> This is a static event. Subscribers must unsubscribe in
+        /// OnDestroy() to avoid leaks across scene loads.</para>
+        /// </summary>
+        public static event Action OnSessionRestoreSettled;
+
+        private static void SettleSessionRestore()
+        {
+            if (SessionRestoreSettled) return;
+            SessionRestoreSettled = true;
+            var handler = OnSessionRestoreSettled;
+            if (handler == null) return;
+            foreach (var d in handler.GetInvocationList())
+            {
+                try { ((Action)d).Invoke(); }
+                catch (Exception ex) { BlockmakerLog.Exception(ex); }
+            }
+        }
 
         /// <summary>
         /// True when Magic email login is available on this platform and configured.
@@ -396,9 +431,14 @@ namespace Blockmaker
         private void Start()
         {
             if (!TryRestoreSession())
+            {
                 SetIdentity(new GuestIdentity());
+                SettleSessionRestore();   // no stored session — the auth state is KNOWN immediately
+            }
             else
+            {
                 VerifyRestoredSession();
+            }
 
             _connector = GetComponent<ReownWalletConnector>();
             if (_connector == null) _connector = gameObject.AddComponent<ReownWalletConnector>();
@@ -516,10 +556,14 @@ namespace Blockmaker
                 if (isWallet)
                 {
                     BlockmakerLog.Info("[BlockmakerAuth] Restored wallet session has no JWT yet — will sign in once the connection is ready.");
+                    // Settled as "no valid token right now" — a later relay-gated wallet login
+                    // that lands a JWT announces itself via OnIdentityChanged (allowed upgrade).
+                    SettleSessionRestore();
                     return;
                 }
                 BlockmakerLog.Info("[BlockmakerAuth] Restored session has no tokens — clearing.");
                 SetIdentity(new GuestIdentity());
+                SettleSessionRestore();
                 return;
             }
 
@@ -530,8 +574,11 @@ namespace Blockmaker
             {
                 BlockmakerClient.Instance.RefreshToken(refreshToken, result =>
                 {
-                    if (this == null) return;
-                    if (Identity != capturedIdentity) return;
+                    // Every path below settles the restore. On the success path the settle must
+                    // come AFTER UpdateTokens/SaveSession: settle subscribers may immediately fire
+                    // token-authed requests (profile fetch), which would 401 on the stale token.
+                    if (this == null) { SettleSessionRestore(); return; }
+                    if (Identity != capturedIdentity) { SettleSessionRestore(); return; }
                     if (result != null && !string.IsNullOrEmpty(result.sessionToken))
                     {
                         if (capturedIdentity is ServerSignedIdentity ss) ss.UpdateTokens(result.sessionToken, result.refreshToken);
@@ -540,6 +587,9 @@ namespace Blockmaker
                         else if (capturedIdentity is EvmXChainIdentity cevm) cevm.UpdateTokens(result.sessionToken, result.refreshToken);
                         capturedIdentity.SaveSession();
                         BlockmakerLog.Info("[BlockmakerAuth] Session token refreshed on restore.");
+                        // Settle FIRST (fresh token is stored now), so OnIdentityChanged
+                        // subscribers already read SessionRestoreSettled == true.
+                        SettleSessionRestore();
                         // The restore-time OnIdentityChanged fired BEFORE this fresh JWT existed,
                         // so session-gated consumers (balance tracker, profile manager) skipped
                         // their loads and are waiting for a re-fire that would otherwise never
@@ -547,10 +597,19 @@ namespace Blockmaker
                         // completed wallet-signature login does (see RunWalletLogin).
                         SafeInvoke(OnIdentityChanged, capturedIdentity);
                     }
+                    else
+                    {
+                        // Refresh "succeeded" but returned no usable token — resolved either way.
+                        SettleSessionRestore();
+                    }
                 }, err =>
                 {
-                    if (this == null) return;
-                    if (Identity != capturedIdentity) return;
+                    // Restore attempt resolved: the stored token could not be refreshed. Either a
+                    // wallet re-sign (below) or a fresh user sign-in is required from here.
+                    // Settled at the END of each path (after the identity is in its final state)
+                    // so settle subscribers never act on the not-yet-downgraded identity.
+                    if (this == null) { SettleSessionRestore(); return; }
+                    if (Identity != capturedIdentity) { SettleSessionRestore(); return; }
                     // For wallet identities (WalletConnect/EVM xChain) a refresh failure does NOT
                     // mean the player must drop to Guest: the live wallet relay can re-sign for a
                     // fresh JWT. Clear only the stale tokens and leave the identity in place so the
@@ -582,6 +641,7 @@ namespace Blockmaker
                         BlockmakerLog.Info($"[BlockmakerAuth] Refresh failed — clearing session: {err}");
                         SetIdentity(new GuestIdentity());
                     }
+                    SettleSessionRestore();
                 });
                 return;
             }
@@ -591,17 +651,22 @@ namespace Blockmaker
             {
                 BlockmakerLog.Warning("[BlockmakerAuth] Cannot verify session — no server connection. Clearing session.");
                 SetIdentity(new GuestIdentity());
+                SettleSessionRestore();
                 return;
             }
             BlockmakerClient.Instance.VerifySessionToken(token, ok =>
             {
-                if (this == null) return;
-                if (Identity != capturedIdentity) return;
+                // Verified either way — the restore attempt is resolved. Settle AFTER the identity
+                // reaches its final state (the !ok downgrade), so settle subscribers never read a
+                // signed-in identity that is about to drop to Guest.
+                if (this == null) { SettleSessionRestore(); return; }
+                if (Identity != capturedIdentity) { SettleSessionRestore(); return; }
                 if (!ok)
                 {
                     BlockmakerLog.Info($"[BlockmakerAuth] {capturedIdentity.ProviderName} session expired — please sign in again.");
                     SetIdentity(new GuestIdentity());
                 }
+                SettleSessionRestore();
             });
         }
 
@@ -1713,6 +1778,9 @@ namespace Blockmaker
 
             Identity?.ClearSession();
             SetIdentity(new GuestIdentity());
+            // Any in-flight boot restore is moot now — the auth state is KNOWN (guest).
+            // Idempotent; prevents UI from waiting on a settle that will never come.
+            SettleSessionRestore();
             BlockmakerLog.Info("[BlockmakerAuth] Logged out — reverted to guest.");
         }
 
