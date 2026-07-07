@@ -540,6 +540,12 @@ namespace Blockmaker
                         else if (capturedIdentity is EvmXChainIdentity cevm) cevm.UpdateTokens(result.sessionToken, result.refreshToken);
                         capturedIdentity.SaveSession();
                         BlockmakerLog.Info("[BlockmakerAuth] Session token refreshed on restore.");
+                        // The restore-time OnIdentityChanged fired BEFORE this fresh JWT existed,
+                        // so session-gated consumers (balance tracker, profile manager) skipped
+                        // their loads and are waiting for a re-fire that would otherwise never
+                        // come on this path. Announce the now-valid session the same way a
+                        // completed wallet-signature login does (see RunWalletLogin).
+                        SafeInvoke(OnIdentityChanged, capturedIdentity);
                     }
                 }, err =>
                 {

@@ -210,6 +210,93 @@
 }
 
 
+.pera-steps-hint {
+    font-size:         13px;
+    color:             rgba(254, 215, 0, 0.65);
+    white-space:       normal;
+    -unity-text-align: upper-center;
+    margin-top:        -8px;
+    margin-bottom:     18px;
+}
+
+
+/* ── Step 2 of 2 — waiting for the wallet sign-in approval ───────────── */
+
+.pera-step2 {
+    width:          100%;
+    align-items:    center;
+    padding-top:    4px;
+    padding-bottom: 10px;
+}
+
+.pera-step2-badge {
+    font-size:                  12px;
+    letter-spacing:             3px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    color:                      #FED700;
+    background-color:           rgba(254, 215, 0, 0.10);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(254, 215, 0, 0.35);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    padding-top:                6px;
+    padding-bottom:             6px;
+    padding-left:               16px;
+    padding-right:              16px;
+    margin-bottom:              20px;
+}
+
+.pera-step2-body {
+    font-size:         16px;
+    color:             rgba(240, 240, 248, 0.88);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    max-width:         380px;
+    margin-bottom:     24px;
+}
+
+.pera-step2-dots {
+    flex-direction:  row;
+    justify-content: center;
+    align-items:     center;
+    height:          24px;
+    margin-bottom:   18px;
+}
+
+.pera-step2-dot {
+    width:                      12px;
+    height:                     12px;
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    margin-left:                6px;
+    margin-right:               6px;
+    background-color:           rgba(254, 215, 0, 0.18);
+    transition-property:        background-color, scale;
+    transition-duration:        0.25s;
+    transition-timing-function: ease-in-out;
+}
+
+.pera-step2-dot--on {
+    background-color: #FED700;
+    scale:            1.4;
+}
+
+.pera-step2-hint {
+    font-size:         13px;
+    color:             rgba(240, 240, 248, 0.40);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+}
+
+
 /* ── Divider ─────────────────────────────────────────────────────────── */
 
 .pera-divider {

@@ -17,11 +17,14 @@ namespace Blockmaker
     ///   4. Subscribe to react after a successful login:
     ///        AuthPromptController.OnAuthSucceeded += () => SceneManager.LoadScene("Profile");
     ///
-    /// The prompt manages four pages:
+    /// The prompt manages five pages:
     ///   page-options       — Email / Algorand / xChain buttons
     ///   page-algo-wallets  — Pera / Defly wallet picker
     ///   page-otp           — step1 (email entry) → step2 (6-digit code)
     ///   page-qr            — WalletConnect QR code display
+    ///   page-step2         — "STEP 2 OF 2" wait state: the wallet is connected and
+    ///                        the free login-signature approval is pending in the
+    ///                        wallet app (players kept missing that second request)
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public class AuthPromptController : MonoBehaviour
@@ -80,6 +83,14 @@ namespace Blockmaker
 
         private Label _lblStatus;
 
+        // Step 2 of 2 (wallet sign-in approval) page
+        private VisualElement   _pageStep2;
+        private Label           _lblStep2Body;
+        private VisualElement[] _step2Dots;
+        private IVisualElementScheduledItem _step2DotAnim;
+        private int  _step2DotIndex;
+        private bool _authAnnounced;   // OnAuthSucceeded already fired this prompt session
+
         // Wallet warning
         private VisualElement _walletWarningBanner;
         private Label         _lblWalletWarning;
@@ -128,6 +139,16 @@ namespace Blockmaker
             _pageAlgoWallets = root.Q("page-algo-wallets");
             _pageOtp         = root.Q("page-otp");
             _pageQr          = root.Q("page-qr");
+            _pageStep2       = root.Q("page-step2");
+
+            // Step 2 of 2 (all null-safe — older UXML simply falls back to the status line)
+            _lblStep2Body = root.Q<Label>("lbl-step2-body");
+            _step2Dots    = new[]
+            {
+                root.Q("step2-dot-1"),
+                root.Q("step2-dot-2"),
+                root.Q("step2-dot-3"),
+            };
 
             // OTP
             _otpStep1    = root.Q("otp-step1");
@@ -322,8 +343,93 @@ namespace Blockmaker
             if (_pageAlgoWallets != null) _pageAlgoWallets.style.display = DisplayStyle.None;
             if (_pageOtp         != null) _pageOtp.style.display         = DisplayStyle.None;
             if (_pageQr          != null) _pageQr.style.display          = DisplayStyle.None;
+            if (_pageStep2       != null) _pageStep2.style.display       = DisplayStyle.None;
+
+            if (activePage != _pageStep2) StopStepTwoDots();
 
             if (activePage != null) activePage.style.display = DisplayStyle.Flex;
+        }
+
+        // ── Step 2 of 2 (wallet sign-in approval) ─────────────────────────────────
+
+        /// <summary>
+        /// Wallet sign-in needs TWO approvals: (1) connect, (2) a free login signature
+        /// that mints the backend session. Players kept approving #1 and missing #2,
+        /// so when the signature phase begins we switch whichever skin is on screen
+        /// (Pera/Defly connect modal, or this prompt's pages) to a bold "STEP 2 OF 2"
+        /// wait state instead of a one-line status. Returns false when neither skin
+        /// can show it (older UXML) so callers can fall back to the status label.
+        /// </summary>
+        private bool EnterStepTwoState(string provider)
+        {
+            if (_peraCtrl != null && _peraCtrl.IsOpen)
+            {
+                // The modal covers the prompt, so don't fall through to the page skin;
+                // a false return (older modal UXML) means callers keep old behavior.
+                return _peraCtrl.ShowStepTwo(provider);
+            }
+
+            if (_pageStep2 == null) return false;
+
+            SetPage(_pageStep2);
+            ClearStatus();
+            if (_lblStep2Body != null)
+            {
+                string appName = string.IsNullOrEmpty(provider) ? "wallet" : provider;
+                _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
+            }
+            StartStepTwoDots();
+            return true;
+        }
+
+        private void StartStepTwoDots()
+        {
+            if (_pageStep2 == null || _step2Dots == null || _step2Dots.Length == 0) return;
+            _step2DotIndex = 0;
+            if (_step2DotAnim == null)
+                _step2DotAnim = _pageStep2.schedule.Execute(AdvanceStepTwoDot).Every(360);
+            else
+                _step2DotAnim.Resume();
+        }
+
+        private void StopStepTwoDots()
+        {
+            _step2DotAnim?.Pause();
+            if (_step2Dots == null) return;
+            foreach (var dot in _step2Dots)
+                dot?.RemoveFromClassList("auth-step2-dot--on");
+        }
+
+        private void AdvanceStepTwoDot()
+        {
+            if (_step2Dots == null || _step2Dots.Length == 0) return;
+            for (int i = 0; i < _step2Dots.Length; i++)
+                _step2Dots[i]?.EnableInClassList("auth-step2-dot--on", i == _step2DotIndex);
+            _step2DotIndex = (_step2DotIndex + 1) % _step2Dots.Length;
+        }
+
+        /// <summary>True for a self-custody wallet identity that has connected but not
+        /// yet completed the login signature (no backend session token yet).</summary>
+        private static bool NeedsLoginSignature(IBlockmakerIdentity identity)
+        {
+            if (identity is WalletConnectIdentity wc)  return string.IsNullOrEmpty(wc.SessionToken);
+            if (identity is EvmXChainIdentity   evm)   return string.IsNullOrEmpty(evm.SessionToken);
+            return false;
+        }
+
+        private static string CurrentWalletProviderName()
+        {
+            var id = BlockmakerAuth.Instance != null ? BlockmakerAuth.Instance.Identity : null;
+            if (id == null || id is GuestIdentity) return null;
+            return FriendlyWalletName(id.ProviderName);
+        }
+
+        /// "Pera"/"Defly" read well in player copy; internal names like "EvmXChain"
+        /// fall back to the generic "wallet" wording (null -> "wallet" downstream).
+        private static string FriendlyWalletName(string provider)
+        {
+            if (string.IsNullOrEmpty(provider) || provider == "EvmXChain") return null;
+            return provider;
         }
 
         // ── Wallet connect ─────────────────────────────────────────────────────────
@@ -368,6 +474,9 @@ namespace Blockmaker
                 {
                     if (this == null) return;
                     StopConnectTimeout();
+                    // Connected, but the modal may now be guiding approval 2 of 2
+                    // (the login signature) — keep it open until the token lands.
+                    if (_peraCtrl.IsShowingStepTwo) return;
                     _peraCtrl.Close();
                 },
                 onError: err =>
@@ -394,6 +503,8 @@ namespace Blockmaker
                     {
                         if (this == null) return;
                         StopConnectTimeout();
+                        // Keep the modal open while it shows approval 2 of 2.
+                        if (_peraCtrl.IsShowingStepTwo) return;
                         _peraCtrl.Close();
                     },
                     onError: err =>
@@ -445,10 +556,25 @@ namespace Blockmaker
             onTimeout?.Invoke("Still waiting for your wallet. Make sure the wallet app is open.");
         }
 
-        // Called via BlockmakerAuth.OnWalletQRReady
+        // Called via BlockmakerAuth.OnAuthStatus — today this fires exactly once, when
+        // the wallet connect approval is done and the SECOND approval (the free login
+        // signature) is about to arrive in the wallet app. See BlockmakerAuth.TriggerWalletLogin.
         private void HandleAuthStatus(string msg)
         {
-            // Progress info, not an error — show it wherever the user currently is.
+            // Session restores also trigger wallet logins — only react while visible.
+            if (_overlay == null || _overlay.style.display == DisplayStyle.None) return;
+
+            // Only take over the screen when the user is actually in a wallet-connect
+            // flow (a background reconnect must not hijack the email page).
+            bool inWalletFlow =
+                (_peraCtrl != null && _peraCtrl.IsOpen) ||
+                (_pageQr    != null && _pageQr.style.display    == DisplayStyle.Flex) ||
+                (_pageStep2 != null && _pageStep2.style.display == DisplayStyle.Flex);
+
+            // Preferred: the unmissable "STEP 2 OF 2" state in whichever skin is showing.
+            if (inWalletFlow && EnterStepTwoState(CurrentWalletProviderName())) return;
+
+            // Fallback (older UXML without the step-2 panel): plain status routing.
             if (_peraCtrl != null && _peraCtrl.IsOpen) _peraCtrl.SetStatus(msg);
             else SetStatus(msg);
         }
@@ -656,12 +782,34 @@ namespace Blockmaker
             if (identity == null || identity.Tier == IdentityTier.Guest) return;
             // Only react if the overlay is currently visible — ignore session restores on scene load
             if (_overlay == null || _overlay.style.display == DisplayStyle.None) return;
+
+            // A wallet just connected but still owes the login signature (approval 2 of 2,
+            // fired via TriggerWalletLogin right after this event). Keep the prompt open in
+            // the "STEP 2 OF 2" state instead of closing — closing here is exactly how
+            // players ended up missing the second request. OnAuthSucceeded still fires now,
+            // at the same moment it always has.
+            if (NeedsLoginSignature(identity) && EnterStepTwoState(FriendlyWalletName(identity.ProviderName)))
+            {
+                if (!_authAnnounced)
+                {
+                    _authAnnounced = true;
+                    OnAuthSucceeded?.Invoke();
+                }
+                return;
+            }
+
+            // Fully signed in (or a skin without the step-2 UI) — close as before.
+            // Capture before Hide(): ResetState clears the flag.
+            bool alreadyAnnounced = _authAnnounced;
             Hide();
-            OnAuthSucceeded?.Invoke();
+            if (!alreadyAnnounced) OnAuthSucceeded?.Invoke();
         }
 
         private void HandleAuthError(string error)
         {
+            // If the connect modal is up (including its step-2 state), drop it so the
+            // error is visible on the options page.
+            _peraCtrl?.Close();
             ShowOptionsPage();
             SetStatus(error, isError: true);
         }
@@ -718,6 +866,8 @@ namespace Blockmaker
             _pendingEmail    = null;
             _pendingWcUri    = null;
             _pendingProvider = null;
+            _authAnnounced   = false;
+            StopStepTwoDots();
             if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
             StopResendCountdown();
             StopConnectTimeout();

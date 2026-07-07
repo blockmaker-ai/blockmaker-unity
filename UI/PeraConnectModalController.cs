@@ -34,6 +34,17 @@ namespace Blockmaker
         private readonly Button        _btnShowDownload;
         private readonly Button        _btnOpenWallet;
 
+        // Step 2 of 2 — wallet sign-in approval state
+        private readonly VisualElement   _qrFrame;
+        private readonly Label           _lblTitle;
+        private readonly Label           _lblStepsHint;
+        private readonly VisualElement   _panelStep2;
+        private readonly Label           _lblStep2Body;
+        private readonly VisualElement[] _step2Dots;
+        private IVisualElementScheduledItem _step2DotAnim;
+        private int  _step2DotIndex;
+        private bool _isStepTwo;
+
         private Texture2D _connectQrTexture;
         private Texture2D _downloadQrTexture;
         private bool      _isOpen;
@@ -41,6 +52,11 @@ namespace Blockmaker
         /// Whether the modal is currently showing (used by the auth prompt to route
         /// progress messages to whichever surface the user is looking at).
         public bool IsOpen => _isOpen;
+
+        /// Whether the modal is showing the "STEP 2 OF 2 — approve the sign-in request"
+        /// state. The auth prompt keeps the modal open (instead of closing on connect
+        /// success) while this is true, so players can't miss the second approval.
+        public bool IsShowingStepTwo => _isOpen && _isStepTwo;
 
         private string _downloadUrl;
         private string _iosUrl;
@@ -67,6 +83,17 @@ namespace Blockmaker
 
             _connectDivider  = _panelConnect?.Q(className: "pera-divider");
             _connectFooter   = _panelConnect?.Q(className: "pera-footer");
+            _qrFrame         = _panelConnect?.Q(className: "pera-qr-frame");
+            _lblTitle        = _panelConnect?.Q<Label>(className: "pera-title");
+            _lblStepsHint    = root.Q<Label>("lbl-steps-hint");
+            _panelStep2      = root.Q("panel-step2");
+            _lblStep2Body    = root.Q<Label>("lbl-step2-body");
+            _step2Dots       = new[]
+            {
+                root.Q("pera-step2-dot-1"),
+                root.Q("pera-step2-dot-2"),
+                root.Q("pera-step2-dot-3"),
+            };
             _btnShowDownload = root.Q<Button>("btn-show-download");
             _btnOpenWallet   = root.Q<Button>("btn-open-wallet");
 
@@ -96,6 +123,7 @@ namespace Blockmaker
             _isOpen = true;
             DestroyTexture(ref _downloadQrTexture);
             _root.style.display = DisplayStyle.Flex;
+            ExitStepTwo();
             ShowConnectPanel();
 
             // Reset the deep-link state until a fresh WC URI arrives via HandleQRReady.
@@ -168,12 +196,100 @@ namespace Blockmaker
             _root.style.display = DisplayStyle.None;
             _pendingWcUri = null;
             if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
+            ExitStepTwo();
             CleanupTextures();
         }
 
         public void SetStatus(string text)
         {
             if (_lblStatus != null) _lblStatus.text = text;
+        }
+
+        // ── Step 2 of 2 (sign-in approval) state ─────────────────────────────────
+
+        /// <summary>
+        /// Switch the connect panel into the bold "STEP 2 OF 2" state: the wallet is
+        /// connected and a second, free login-signature approval is waiting in the
+        /// wallet app. Hides the QR and shows a pulsing "waiting on you" panel.
+        /// Back and close stay available. Exited by Open()/Close().
+        /// Returns false when the panel can't be shown (closed, or older UXML) so the
+        /// caller can fall back to its previous behavior.
+        /// </summary>
+        public bool ShowStepTwo(string provider)
+        {
+            if (!_isOpen) return false;
+
+            string appName = string.IsNullOrEmpty(provider) ? "wallet" : provider;
+
+            if (_panelStep2 == null)
+            {
+                // Older UXML without the step-2 panel — fall back to a status line.
+                SetStatus($"Connected! Now approve the SIGN-IN REQUEST in your {appName} app.");
+                return false;
+            }
+
+            _isStepTwo = true;
+            ShowConnectPanel();
+
+            // Hide the connect-phase furniture; keep back (<) and close (x) buttons.
+            if (_qrFrame        != null) _qrFrame.style.display        = DisplayStyle.None;
+            if (_lblStatus      != null) _lblStatus.style.display      = DisplayStyle.None;
+            if (_lblStepsHint   != null) _lblStepsHint.style.display   = DisplayStyle.None;
+            if (_btnOpenWallet  != null) _btnOpenWallet.style.display  = DisplayStyle.None;
+            if (_connectDivider != null) _connectDivider.style.display = DisplayStyle.None;
+            if (_connectFooter  != null) _connectFooter.style.display  = DisplayStyle.None;
+
+            if (_lblTitle != null) _lblTitle.text = "One more step!";
+            if (_lblStep2Body != null)
+                _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
+
+            _panelStep2.RemoveFromClassList("pera-hidden");
+            _panelStep2.style.display = DisplayStyle.Flex;
+            StartStepTwoDots();
+            return true;
+        }
+
+        /// Restore the normal connect-panel visuals. Divider/footer/open-wallet
+        /// visibility is re-derived by the next Open()/HandleQRReady.
+        private void ExitStepTwo()
+        {
+            _isStepTwo = false;
+            StopStepTwoDots();
+            if (_panelStep2 != null)
+            {
+                _panelStep2.AddToClassList("pera-hidden");
+                _panelStep2.style.display = DisplayStyle.None;
+            }
+            if (_qrFrame      != null) _qrFrame.style.display      = DisplayStyle.Flex;
+            if (_lblStatus    != null) _lblStatus.style.display    = DisplayStyle.Flex;
+            if (_lblStepsHint != null) _lblStepsHint.style.display = DisplayStyle.Flex;
+            if (_lblTitle     != null) _lblTitle.text = "Connect Wallet";
+        }
+
+        private void StartStepTwoDots()
+        {
+            if (_panelStep2 == null || _step2Dots == null || _step2Dots.Length == 0) return;
+            _step2DotIndex = 0;
+            if (_step2DotAnim == null)
+                _step2DotAnim = _panelStep2.schedule.Execute(AdvanceStepTwoDot).Every(360);
+            else
+                _step2DotAnim.Resume();
+        }
+
+        private void StopStepTwoDots()
+        {
+            _step2DotAnim?.Pause();
+            if (_step2Dots == null) return;
+            foreach (var dot in _step2Dots)
+                dot?.RemoveFromClassList("pera-step2-dot--on");
+        }
+
+        private void AdvanceStepTwoDot()
+        {
+            if (_step2Dots == null || _step2Dots.Length == 0) return;
+            for (int i = 0; i < _step2Dots.Length; i++)
+                _step2Dots[i]?.EnableInClassList("pera-step2-dot--on", i == _step2DotIndex);
+            _step2DotIndex = (_step2DotIndex + 1) % _step2Dots.Length;
         }
 
         private void HandleBack()
@@ -198,6 +314,10 @@ namespace Blockmaker
         {
             _pendingProvider = provider;
             _pendingWcUri    = uri;
+
+            // Already waiting on the sign-in approval — don't let a late QR event
+            // pull the panel back to the scan state.
+            if (_isStepTwo) return;
 
             DestroyTexture(ref _connectQrTexture);
             _connectQrTexture = QRTextureGenerator.Generate(uri, 512);

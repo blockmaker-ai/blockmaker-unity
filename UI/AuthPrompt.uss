@@ -657,6 +657,99 @@
     padding-right:     16px;
 }
 
+.auth-qr-steps-hint {
+    font-size:         13px;
+    color:             rgba(167, 139, 250, 0.80);
+    -unity-text-align: middle-center;
+    white-space:       normal;
+    margin-top:        -6px;
+    margin-bottom:     18px;
+    padding-left:      16px;
+    padding-right:     16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STEP 2 OF 2 — waiting for the wallet sign-in approval
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-step2-badge {
+    align-self:                 center;
+    font-size:                  12px;
+    letter-spacing:             3px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    color:                      rgb(167, 139, 250);
+    background-color:           rgba(124, 58, 237, 0.14);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.35);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    padding-top:                6px;
+    padding-bottom:             6px;
+    padding-left:               16px;
+    padding-right:              16px;
+    margin-top:                 6px;
+    margin-bottom:              22px;
+}
+
+.auth-step2-title {
+    font-size:         30px;
+    -unity-font-style: bold;
+    color:             rgb(238, 238, 246);
+    -unity-text-align: middle-center;
+    letter-spacing:    -0.5px;
+    margin-bottom:     14px;
+}
+
+.auth-step2-body {
+    font-size:         16px;
+    color:             rgba(238, 238, 246, 0.85);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    max-width:         340px;
+    margin-bottom:     26px;
+}
+
+.auth-step2-dots {
+    flex-direction:  row;
+    justify-content: center;
+    align-items:     center;
+    height:          24px;
+    margin-bottom:   20px;
+}
+
+.auth-step2-dot {
+    width:                      12px;
+    height:                     12px;
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    margin-left:                6px;
+    margin-right:               6px;
+    background-color:           rgba(167, 139, 250, 0.18);
+    transition-property:        background-color, scale;
+    transition-duration:        0.25s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-step2-dot--on {
+    background-color: rgb(167, 139, 250);
+    scale:            1.4;
+}
+
+.auth-step2-hint {
+    font-size:         13px;
+    color:             rgba(238, 238, 246, 0.40);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+}
+
 /* ── Copy-link text button ────────────────────────────────────────────── */
 
 .auth-pill-btn {
