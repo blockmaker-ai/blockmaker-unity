@@ -49,7 +49,6 @@
     position:                   absolute;
     top:                        16px;
     right:                      16px;
-    z-index:                    100;
     width:                      32px;
     height:                     32px;
     border-top-left-radius:     8px;
@@ -485,14 +484,12 @@
     padding-bottom:             4px;
     font-size:                  16px;
     --unity-cursor-color:       rgb(167, 139, 250);
-    box-shadow:                 0 0 0 0 rgba(0, 0, 0, 0);
     transition-property:        border-color, background-color;
     transition-duration:        0.2s;
 }
 
 .auth-input > .unity-base-text-field__input:focus {
     background-color:    rgb(16, 16, 26);
-    box-shadow:          0 0 0 0 rgba(0, 0, 0, 0);
 }
 
 .auth-input--code > .unity-base-text-field__input {
