@@ -75,13 +75,27 @@ namespace Blockmaker
             DontDestroyOnLoad(gameObject);
         }
 
+
+        /// The balance endpoint needs a PLAYER session (JWT) — a wallet identity that
+        /// hasn't completed backend login (or an editor with only the dev API key)
+        /// would just 401 every poll. Gate all polling on a real session token.
+        private static bool HasPlayerSession()
+        {
+            var id = BlockmakerAuth.Instance?.Identity;
+            if (id is ServerSignedIdentity ss)  return !string.IsNullOrEmpty(ss.SessionToken);
+            if (id is MagicIdentity magic)      return !string.IsNullOrEmpty(magic.SessionToken);
+            if (id is WalletConnectIdentity wc) return !string.IsNullOrEmpty(wc.SessionToken);
+            if (id is EvmXChainIdentity evm)    return !string.IsNullOrEmpty(evm.SessionToken);
+            return false;
+        }
+
         private void OnEnable()
         {
             if (Instance != this) return;
 
             BlockmakerAuth.OnIdentityChanged += HandleIdentityChanged;
 
-            if (BlockmakerAuth.Instance?.HasWallet == true)
+            if (BlockmakerAuth.Instance?.HasWallet == true && HasPlayerSession())
                 StartPolling();
         }
 
@@ -119,7 +133,7 @@ namespace Blockmaker
         /// <summary>Force an immediate balance poll.</summary>
         public void RefreshNow()
         {
-            if (BlockmakerAuth.Instance?.HasWallet != true) return;
+            if (BlockmakerAuth.Instance?.HasWallet != true || !HasPlayerSession()) return;
             PollBalance();
         }
 
@@ -132,7 +146,7 @@ namespace Blockmaker
             _tokenDecimals    = DefaultTokenDecimals;
             OnBalanceChanged?.Invoke(0);
 
-            if (identity != null && identity.HasWallet)
+            if (identity != null && identity.HasWallet && HasPlayerSession())
                 StartPolling();
             else
                 StopPolling();
