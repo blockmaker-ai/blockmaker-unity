@@ -9,7 +9,7 @@
             <!-- Header -->
             <ui:VisualElement class="bm-profile-header">
                 <ui:Label class="bm-profile-title" text="Profile" />
-                <ui:Button name="btn-profile-close" class="bm-profile-close" text="&#x2715;" />
+                <ui:Button name="btn-profile-close" class="bm-profile-close" text="&#215;" />
             </ui:VisualElement>
 
             <ui:ScrollView class="bm-profile-scroll">
