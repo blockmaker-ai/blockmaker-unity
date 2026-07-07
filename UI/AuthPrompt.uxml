@@ -139,7 +139,7 @@
             <ui:Label name="lbl-auth-status" class="auth-status" text="" />
 
             <!-- Close button (last child so it renders above all pages) -->
-            <ui:Button name="btn-close" class="auth-close-btn" text="&#x2715;" />
+            <ui:Button name="btn-close" class="auth-close-btn" text="&#215;" />
 
         </ui:VisualElement>
     </ui:VisualElement>

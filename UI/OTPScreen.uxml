@@ -15,7 +15,7 @@
         <ui:VisualElement name="otp-panel" class="auth-panel otp-panel">
 
             <!-- Back button -->
-            <ui:Button name="btn-back" class="otp-back-btn" text="← Back" />
+            <ui:Button name="btn-back" class="otp-back-btn" text="‹ Back" />
 
             <ui:VisualElement class="auth-header">
                 <ui:Label class="auth-title" text="Email Login" />
