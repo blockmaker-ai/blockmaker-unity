@@ -92,7 +92,7 @@
                         <ui:Label class="auth-page-heading" text="Enter your email" />
                     </ui:VisualElement>
                     <ui:Label class="auth-field-label" text="EMAIL ADDRESS" />
-                    <ui:TextField name="input-email" class="auth-input" />
+                    <ui:TextField name="input-email" class="auth-input" keyboard-type="EmailAddress" />
                     <ui:Button name="btn-send-code" class="auth-cta-btn" text="Send Sign-In Code" />
                 </ui:VisualElement>
 
@@ -100,7 +100,7 @@
                     <ui:Label class="auth-page-heading auth-page-heading--standalone" text="Check your inbox" />
                     <ui:Label name="lbl-sent-to" class="auth-sent-hint" text="" />
                     <ui:Label class="auth-field-label" text="SIGN-IN CODE" />
-                    <ui:TextField name="input-otp" class="auth-input auth-input--code" max-length="6" />
+                    <ui:TextField name="input-otp" class="auth-input auth-input--code" max-length="6" keyboard-type="NumberPad" />
                     <ui:Button name="btn-verify" class="auth-cta-btn" text="Verify and Continue" />
                     <ui:Button name="btn-resend-code" class="auth-link-btn" text="Resend code (60s)" />
                 </ui:VisualElement>
@@ -126,6 +126,7 @@
                 </ui:VisualElement>
 
                 <ui:Label class="auth-qr-hint" text="Open your wallet app and scan the code to connect" />
+                <ui:Button name="btn-open-wallet" class="auth-pill-btn" text="OPEN IN WALLET APP" style="display: none;" />
                 <ui:Button name="btn-copy-wc-link" class="auth-pill-btn" text="Copy Link" />
             </ui:VisualElement>
 

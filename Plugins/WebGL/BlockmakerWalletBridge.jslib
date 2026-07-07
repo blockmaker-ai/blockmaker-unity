@@ -31,6 +31,17 @@
  * BlockmakerWalletBridge.SignTransaction(provider, txnBase64, goName, successCb, errorCb)
  * BlockmakerWalletBridge.Disconnect(provider)
  *
+ * ── Pera (official @perawallet/connect — WebGL Pera path) ──────────────────
+ * PeraJsConnect      — Connects via Pera's own browser SDK. Pera renders its
+ *                      OWN connect modal (QR on desktop, deep links on mobile),
+ *                      so no QR is sent back to Unity on this path.
+ * PeraJsReconnect    — Silently restores Pera's localStorage session on load.
+ * PeraJsHasSession   — 1 when a live Pera JS session exists, 0 otherwise.
+ * PeraJsSignTransaction / PeraJsSignGroupTransaction
+ *                    — Sign via the Pera JS session (decodes unsigned txns
+ *                      with algosdk, as Pera's signTransaction API requires).
+ * PeraJsDisconnect   — Ends the Pera JS session.
+ *
  * ── Magic SDK (Email Wallet) ────────────────────────────────────────────────
  * MagicLoginWithEmail — Loads Magic SDK, starts email OTP login, returns
  *                       "Magic|address|email|didToken" on success.
@@ -115,6 +126,22 @@ mergeInto(LibraryManager.library, {
     if (!canvas) return;
     if (canvas.requestFullscreen) canvas.requestFullscreen().catch(function() {});
     else if (canvas.webkitRequestFullscreen) canvas.webkitRequestFullscreen();
+  },
+
+  /**
+   * BmIsMobileBrowser — returns 1 when the WebGL build is running in a mobile
+   * browser (phone/tablet), 0 otherwise. Used to decide whether "Open in wallet
+   * app" deep-link buttons should be shown next to the WalletConnect QR code.
+   * Covers standard mobile UAs plus iPadOS 13+, which masquerades as desktop
+   * Safari ("MacIntel") but exposes multi-touch.
+   */
+  BmIsMobileBrowser: function() {
+    try {
+      var ua = navigator.userAgent || navigator.vendor || '';
+      if (/android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|silk|kindle/i.test(ua)) return 1;
+      if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return 1;
+    } catch (e) {}
+    return 0;
   },
 
   // ── Lazy-load WalletConnect Sign Client (ESM via jsDelivr) ─────────────────
@@ -285,10 +312,12 @@ mergeInto(LibraryManager.library, {
    * Disconnect — ends the active session.
    * provider is accepted for API consistency but WC v2 has one session at a time.
    */
-  Disconnect__deps: ['CancelWalletQR'],
+  Disconnect__deps: ['CancelWalletQR', 'PeraJsDisconnect'],
   Disconnect: function(providerPtr) {
     var provider = UTF8ToString(providerPtr);
     _CancelWalletQR();
+    // Also end the official Pera JS SDK session if one exists (WebGL Pera path)
+    _PeraJsDisconnect();
     if (window._bmWCClient && window._bmWCSessionTopic) {
       try {
         window._bmWCClient.disconnect({
@@ -496,6 +525,303 @@ mergeInto(LibraryManager.library, {
         var msg = (err && err.message) ? err.message : provider + ' signing failed.';
         SendMessage(gameObjectName, errorCb, msg);
       });
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ══  Pera official JS SDK (@perawallet/connect) — WebGL Pera path  ════════
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Pera Wallet speaks WalletConnect v1 only, and the SDK's native WCv1 client
+  // (System.Net.WebSockets) cannot run on WebGL. @perawallet/connect is Pera's
+  // own browser SDK: it talks Pera's v1 bridges, renders Pera's own connect
+  // modal (QR on desktop, built-in deep links on mobile) and persists its
+  // session in localStorage (PeraJsReconnect restores it after a page reload).
+  //
+  // Pinned CDN builds (jsDelivr +esm dynamic imports, same pattern as the
+  // loaders above — the package ships no UMD build):
+  //   @perawallet/connect@1.5.2 — named export PeraWalletConnect
+  //   algosdk@3.5.2             — the EXACT version the Pera +esm bundle itself
+  //                               imports, so both resolve to one shared module
+  //                               instance and decodeUnsignedTransaction yields
+  //                               the Transaction type Pera's signer expects.
+
+  $loadPeraConnect: function() {
+    if (window._bmPeraConnectPromise && !window._bmPeraConnectFailed) return window._bmPeraConnectPromise;
+    window._bmPeraConnectFailed = false;
+    window._bmPeraConnectPromise =
+      import('https://cdn.jsdelivr.net/npm/@perawallet/connect@1.5.2/+esm')
+        .then(function(mod) {
+          var PWC = mod.PeraWalletConnect || (mod.default && mod.default.PeraWalletConnect);
+          if (!PWC) throw new Error('PeraWalletConnect not found in module');
+          window._bmPeraWalletClass = PWC;
+          return PWC;
+        })
+        .catch(function(err) {
+          window._bmPeraConnectFailed = true;
+          throw err;
+        });
+    return window._bmPeraConnectPromise;
+  },
+
+  $loadAlgosdk: function() {
+    if (window._bmAlgosdkPromise && !window._bmAlgosdkFailed) return window._bmAlgosdkPromise;
+    window._bmAlgosdkFailed = false;
+    window._bmAlgosdkPromise =
+      import('https://cdn.jsdelivr.net/npm/algosdk@3.5.2/+esm')
+        .then(function(mod) {
+          var sdk = (mod && mod.decodeUnsignedTransaction) ? mod
+                  : (mod.default && mod.default.decodeUnsignedTransaction) ? mod.default
+                  : null;
+          if (!sdk) throw new Error('algosdk.decodeUnsignedTransaction not found in module');
+          window._bmAlgosdk = sdk;
+          return sdk;
+        })
+        .catch(function(err) {
+          window._bmAlgosdkFailed = true;
+          throw err;
+        });
+    return window._bmAlgosdkPromise;
+  },
+
+  $getPeraWallet__deps: ['$loadPeraConnect'],
+  $getPeraWallet: function() {
+    return loadPeraConnect().then(function(PeraWalletConnect) {
+      if (!window._bmPeraWallet) {
+        window._bmPeraWallet = new PeraWalletConnect({ shouldShowSignTxnToast: false });
+      }
+      return window._bmPeraWallet;
+    });
+  },
+
+  // Wire Pera's WC v1 connector 'disconnect' event once per connector instance
+  // so a wallet-side disconnect clears our live-session flag.
+  $bmPeraWireDisconnect: function(wallet) {
+    try {
+      var connector = wallet.connector;
+      if (connector && connector.on && !connector._bmDisconnectWired) {
+        connector._bmDisconnectWired = true;
+        connector.on('disconnect', function() {
+          window._bmPeraConnected = false;
+          console.log('[BlockmakerWalletBridge] Pera JS session disconnected by wallet.');
+        });
+      }
+    } catch(e) {}
+  },
+
+  // Resolve a wallet with a live session: use the current one, otherwise try a
+  // silent localStorage restore. Rejects with 'PERA_NOT_CONNECTED' when neither
+  // exists (mapped to a friendly message by bmPeraSignError).
+  $bmPeraEnsureSession__deps: ['$getPeraWallet', '$bmPeraWireDisconnect'],
+  $bmPeraEnsureSession: function() {
+    return getPeraWallet().then(function(wallet) {
+      if (window._bmPeraConnected) return wallet;
+      return wallet.reconnectSession()
+        .then(function(accounts) {
+          if (!accounts || accounts.length === 0) throw new Error('PERA_NOT_CONNECTED');
+          window._bmPeraConnected = true;
+          bmPeraWireDisconnect(wallet);
+          return wallet;
+        })
+        .catch(function() { throw new Error('PERA_NOT_CONNECTED'); });
+    });
+  },
+
+  // Map Pera SDK errors to the same user-facing tone the other signers use.
+  $bmPeraSignError: function(err) {
+    var msg  = (err && err.message) ? err.message : 'Pera signing failed.';
+    var type = (err && err.data && err.data.type) ? err.data.type : '';
+    if (msg === 'PERA_NOT_CONNECTED')
+      return 'Your Pera wallet is not connected. Please connect your wallet again to continue.';
+    if (type === 'SIGN_TXN_CANCELLED' || /reject|cancel|denied|declined|closed by user/i.test(msg))
+      return 'The transaction was not approved in your wallet. Please try again.';
+    return msg;
+  },
+
+  /**
+   * PeraJsConnect — connect via Pera's official browser SDK.
+   * Pera shows its own modal (QR / deep links); nothing is sent to Unity until
+   * the user approves. On success: successCb("<AlgorandAddress>").
+   * On error: errorCb(message) — "PERA_CONNECT_CANCELLED" when the user simply
+   * closed Pera's modal (recognizable code, mapped to a friendly message in C#).
+   */
+  PeraJsConnect__deps: ['$getPeraWallet', '$bmPeraWireDisconnect', '$bmExitFullscreen', '$bmRestoreFullscreen'],
+  PeraJsConnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+
+    bmExitFullscreen()
+    .then(function() { return getPeraWallet(); })
+    .then(function(wallet) {
+      // A live session makes connect() reject ("Session currently connected"),
+      // so try a silent restore first and fall back to the connect modal.
+      return wallet.reconnectSession()
+        .catch(function() { return []; })
+        .then(function(accounts) {
+          if (accounts && accounts.length > 0) return accounts;
+          return wallet.connect();
+        })
+        .then(function(accounts) {
+          if (!accounts || accounts.length === 0) throw new Error('No Algorand accounts returned by Pera.');
+          window._bmPeraConnected = true;
+          bmPeraWireDisconnect(wallet);
+          console.log('[BlockmakerWalletBridge] Pera JS session established:', accounts[0]);
+          bmRestoreFullscreen();
+          SendMessage(gameObjectName, successCb, accounts[0]);
+        });
+    })
+    .catch(function(err) {
+      bmRestoreFullscreen();
+      var type = (err && err.data && err.data.type) ? err.data.type : '';
+      var msg  = (err && err.message) ? err.message : 'Pera connection failed.';
+      if (type === 'CONNECT_MODAL_CLOSED' || /closed by user/i.test(msg)) msg = 'PERA_CONNECT_CANCELLED';
+      console.error('[BlockmakerWalletBridge] PeraJsConnect error:', msg);
+      SendMessage(gameObjectName, errorCb, msg);
+    });
+  },
+
+  /**
+   * PeraJsReconnect — silently restore Pera's localStorage session on load.
+   * On success: successCb("Pera:<address>") — same payload shape as
+   * TryReconnect, so the existing C# reconnect receivers are reused.
+   * On error: errorCb("No previous Pera session found.").
+   */
+  PeraJsReconnect__deps: ['$getPeraWallet', '$bmPeraWireDisconnect'],
+  PeraJsReconnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+
+    getPeraWallet()
+    .then(function(wallet) {
+      return wallet.reconnectSession().then(function(accounts) {
+        if (!accounts || accounts.length === 0) {
+          SendMessage(gameObjectName, errorCb, 'No previous Pera session found.');
+          return;
+        }
+        window._bmPeraConnected = true;
+        bmPeraWireDisconnect(wallet);
+        console.log('[BlockmakerWalletBridge] Pera JS session restored:', accounts[0]);
+        SendMessage(gameObjectName, successCb, 'Pera:' + accounts[0]);
+      });
+    })
+    .catch(function(err) {
+      var msg = (err && err.message) ? err.message : 'No previous Pera session found.';
+      SendMessage(gameObjectName, errorCb, msg);
+    });
+  },
+
+  /**
+   * PeraJsHasSession — 1 when a live Pera JS session exists, 0 otherwise.
+   * Used by the C# signing path to route Pera signs to the Pera JS signer.
+   */
+  PeraJsHasSession: function() {
+    return (window._bmPeraWallet && window._bmPeraConnected) ? 1 : 0;
+  },
+
+  /**
+   * PeraJsSignTransaction — sign one unsigned msgpack txn via the Pera JS
+   * session. txnBase64: base64-encoded unsigned transaction bytes.
+   * On success: successCb("base64SignedTxn"). On error: errorCb(message).
+   */
+  PeraJsSignTransaction__deps: ['$bmPeraEnsureSession', '$loadAlgosdk', '$bmPeraSignError', '$bmUint8ToBase64', '$bmBase64ToUint8'],
+  PeraJsSignTransaction: function(txnBase64Ptr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnBase64      = UTF8ToString(txnBase64Ptr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+
+    Promise.all([bmPeraEnsureSession(), loadAlgosdk()])
+    .then(function(results) {
+      var wallet  = results[0];
+      var algosdk = results[1];
+      var group = [{ txn: algosdk.decodeUnsignedTransaction(bmBase64ToUint8(txnBase64)) }];
+      return wallet.signTransaction([group]);
+    })
+    .then(function(signed) {
+      if (!signed || signed.length !== 1 || !signed[0]) {
+        SendMessage(gameObjectName, errorCb, 'The transaction was not approved in your wallet. Please try again.');
+        return;
+      }
+      var raw = signed[0] instanceof Uint8Array ? signed[0] : new Uint8Array(signed[0]);
+      SendMessage(gameObjectName, successCb, bmUint8ToBase64(raw));
+    })
+    .catch(function(err) {
+      var msg = bmPeraSignError(err);
+      console.error('[BlockmakerWalletBridge] PeraJsSignTransaction error:', msg);
+      SendMessage(gameObjectName, errorCb, msg);
+    });
+  },
+
+  /**
+   * PeraJsSignGroupTransaction — sign a group of unsigned msgpack txns
+   * atomically via the Pera JS session, preserving order.
+   * txnsJsonPtr: JSON string — array of base64-encoded unsigned txn bytes
+   * (same wire format as SignGroupTransaction above).
+   * On success: successCb(JSON array of base64 signed txns).
+   * On error:   errorCb(message).
+   */
+  PeraJsSignGroupTransaction__deps: ['$bmPeraEnsureSession', '$loadAlgosdk', '$bmPeraSignError', '$bmUint8ToBase64', '$bmBase64ToUint8'],
+  PeraJsSignGroupTransaction: function(txnsJsonPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnsJson       = UTF8ToString(txnsJsonPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+
+    var b64Array;
+    try { b64Array = JSON.parse(txnsJson); }
+    catch(e) { SendMessage(gameObjectName, errorCb, 'Invalid transaction data.'); return; }
+
+    if (!Array.isArray(b64Array) || b64Array.length === 0) {
+      SendMessage(gameObjectName, errorCb, 'No transactions provided.');
+      return;
+    }
+
+    var expected = b64Array.length;
+
+    Promise.all([bmPeraEnsureSession(), loadAlgosdk()])
+    .then(function(results) {
+      var wallet  = results[0];
+      var algosdk = results[1];
+      // One SignerTransaction group, in original order. Every txn is presented
+      // for signing (no {signers: []} entries) — same all-or-nothing contract
+      // as the WCv1 / WC v2 / bridge group-signing paths above.
+      var group = b64Array.map(function(b64) {
+        return { txn: algosdk.decodeUnsignedTransaction(bmBase64ToUint8(b64)) };
+      });
+      return wallet.signTransaction([group]);
+    })
+    .then(function(signed) {
+      if (!Array.isArray(signed) || signed.length !== expected) {
+        SendMessage(gameObjectName, errorCb, 'Wallet returned ' + (signed ? signed.length : 0) + ' signed transactions, expected ' + expected + '.');
+        return;
+      }
+      var out = [];
+      for (var i = 0; i < signed.length; i++) {
+        if (!signed[i]) {
+          SendMessage(gameObjectName, errorCb, 'Wallet declined to sign transaction ' + (i + 1) + ' of ' + expected + '.');
+          return;
+        }
+        out.push(bmUint8ToBase64(signed[i] instanceof Uint8Array ? signed[i] : new Uint8Array(signed[i])));
+      }
+      SendMessage(gameObjectName, successCb, JSON.stringify(out));
+    })
+    .catch(function(err) {
+      var msg = bmPeraSignError(err);
+      console.error('[BlockmakerWalletBridge] PeraJsSignGroupTransaction error:', msg);
+      SendMessage(gameObjectName, errorCb, msg);
+    });
+  },
+
+  /**
+   * PeraJsDisconnect — ends the Pera JS session and clears state.
+   */
+  PeraJsDisconnect: function() {
+    window._bmPeraConnected = false;
+    if (window._bmPeraWallet) {
+      try { window._bmPeraWallet.disconnect().catch(function() {}); } catch(e) {}
+      console.log('[BlockmakerWalletBridge] Pera JS session disconnected.');
+    }
   },
 
   // ══════════════════════════════════════════════════════════════════════════

@@ -76,6 +76,7 @@ namespace Blockmaker
         private VisualElement _qrLoadingWrap;
         private Label         _lblQrProvider;
         private Button        _btnCopyLink;
+        private Button        _btnOpenWallet;
 
         private Label _lblStatus;
 
@@ -87,6 +88,7 @@ namespace Blockmaker
 
         private string    _pendingEmail;
         private string    _pendingWcUri;
+        private string    _pendingProvider;
         private Coroutine _resendCoroutine;
         private Coroutine _connectTimeoutCoroutine;
         private Texture2D _qrTexture;
@@ -142,6 +144,7 @@ namespace Blockmaker
             _qrLoadingWrap = root.Q("qr-loading");
             _lblQrProvider = root.Q<Label>("lbl-qr-provider");
             _btnCopyLink   = root.Q<Button>("btn-copy-wc-link");
+            _btnOpenWallet = root.Q<Button>("btn-open-wallet");
 
             _lblStatus = root.Q<Label>("lbl-auth-status");
 
@@ -167,6 +170,9 @@ namespace Blockmaker
             if (_btnMetamask != null) _btnMetamask.style.display = DisplayStyle.None;
             root.Q<Button>("btn-cancel-connect")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
             _btnCopyLink?.RegisterCallback<ClickEvent>(_ => CopyWcLink());
+            // Must run synchronously inside the click handler: on WebGL the deep link is a
+            // browser navigation, and iOS Safari only allows it from a user gesture.
+            _btnOpenWallet?.RegisterCallback<ClickEvent>(_ => OpenWalletApp());
             _btnSendCode?.RegisterCallback<ClickEvent>(_ => OnSendCodeClicked());
             _btnVerify?.RegisterCallback<ClickEvent>(_   => OnVerifyClicked());
             _btnResend?.RegisterCallback<ClickEvent>(_   => OnResendClicked());
@@ -300,10 +306,19 @@ namespace Blockmaker
             if (_lblQrProvider != null)
                 _lblQrProvider.text = $"Scan with {provider} Wallet";
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Pera on WebGL connects through Pera's OWN browser modal (official
+            // @perawallet/connect renders its QR / deep-link UI in the DOM, on top of the
+            // canvas) — no QR ever reaches Unity on that path, so don't promise one.
+            if (provider == "Pera" && _lblQrProvider != null)
+                _lblQrProvider.text = "Continue in the Pera window…";
+#endif
+
             // Show loading state; hide QR image until received
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.Flex;
             if (_qrImage        != null) _qrImage.style.display       = DisplayStyle.None;
             if (_btnCopyLink    != null) _btnCopyLink.style.display    = DisplayStyle.None;
+            if (_btnOpenWallet  != null) _btnOpenWallet.style.display  = DisplayStyle.None;
         }
 
         private void SetPage(VisualElement activePage)
@@ -438,7 +453,8 @@ namespace Blockmaker
         // Called via BlockmakerAuth.OnWalletQRReady
         private void HandleQRReady(WalletQREventArgs e)
         {
-            _pendingWcUri = e.WalletConnectUri;
+            _pendingWcUri    = e.WalletConnectUri;
+            _pendingProvider = e.Provider;
 
             // Decode base64 PNG → Texture2D
             byte[] pngBytes;
@@ -456,11 +472,13 @@ namespace Blockmaker
 
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.None;
             if (_btnCopyLink   != null) _btnCopyLink.style.display   = DisplayStyle.Flex;
+            UpdateOpenWalletButton();
         }
 
         private void HandleNativeQRReady(string provider, string wcUri, Texture2D qrTexture)
         {
-            _pendingWcUri = wcUri;
+            _pendingWcUri    = wcUri;
+            _pendingProvider = provider;
 
             if (_qrTexture != null) { Destroy(_qrTexture); _qrTexture = null; }
             _qrTexture = new Texture2D(qrTexture.width, qrTexture.height, qrTexture.format, false);
@@ -474,6 +492,28 @@ namespace Blockmaker
 
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.None;
             if (_btnCopyLink   != null) _btnCopyLink.style.display   = DisplayStyle.Flex;
+            UpdateOpenWalletButton();
+        }
+
+        /// <summary>
+        /// Show the "Open in wallet app" button only on mobile (native or mobile
+        /// browser) and only while a WalletConnect URI is pending. The QR code
+        /// stays visible as a fallback.
+        /// </summary>
+        private void UpdateOpenWalletButton()
+        {
+            if (_btnOpenWallet == null) return;
+            bool show = !string.IsNullOrEmpty(_pendingWcUri) && WalletDeepLink.IsMobilePlatform;
+            _btnOpenWallet.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void OpenWalletApp()
+        {
+            if (string.IsNullOrEmpty(_pendingWcUri)) return;
+            // Synchronous within the button's click event — see WalletDeepLink's note on
+            // iOS Safari requiring the WebGL navigation to happen inside a user gesture.
+            WalletDeepLink.OpenWallet(_pendingProvider, _pendingWcUri);
+            SetStatus("Opening your wallet app… approve the connection there, then return here.");
         }
 
         private void CopyWcLink()
@@ -673,8 +713,10 @@ namespace Blockmaker
 
         private void ResetState()
         {
-            _pendingEmail = null;
-            _pendingWcUri = null;
+            _pendingEmail    = null;
+            _pendingWcUri    = null;
+            _pendingProvider = null;
+            if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
             StopResendCountdown();
             StopConnectTimeout();
             SetLoading(false);

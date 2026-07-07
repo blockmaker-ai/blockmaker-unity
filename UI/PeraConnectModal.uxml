@@ -20,6 +20,8 @@
 
             <ui:Label name="lbl-connect-status" class="pera-status" text="Scan with your Pera Wallet" />
 
+            <ui:Button name="btn-open-wallet" class="pera-store-btn" text="OPEN IN WALLET APP" style="display: none; margin-bottom: 15px;" />
+
             <ui:VisualElement class="pera-divider" />
 
             <ui:VisualElement class="pera-footer">

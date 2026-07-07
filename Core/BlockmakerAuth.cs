@@ -681,6 +681,21 @@ namespace Blockmaker
                 );
             }
 
+            // Pera on WebGL connects via the official @perawallet/connect JS SDK, which
+            // persists its own session in localStorage. Restore it here so signing works
+            // after a page reload. The jslib sends "Pera:<address>" — the same payload
+            // shape as TryReconnect — so the existing reconnect receivers are reused
+            // (they re-trigger the wallet-signature login when no JWT is stored).
+            if (Identity is WalletConnectIdentity peraIdentity &&
+                peraIdentity.ProviderName == ProviderPera)
+            {
+                BlockmakerWalletBridge.PeraJsReconnect(
+                    gameObject.name,
+                    nameof(OnWalletReconnectedFromJS),
+                    nameof(OnWalletReconnectFailed)
+                );
+            }
+
             var cfg = BlockmakerClient.Instance?.config;
             if (Identity is MagicIdentity && cfg != null && cfg.enableMagicEmail && !string.IsNullOrEmpty(cfg.magicPublishableKey))
             {
@@ -751,7 +766,24 @@ namespace Blockmaker
 
             if (provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase))
             {
+    #if UNITY_WEBGL && !UNITY_EDITOR
+                // Pera speaks WalletConnect v1 only, and the native WCv1 client cannot
+                // run on WebGL (System.Net.WebSockets). Use Pera's official browser SDK
+                // (@perawallet/connect) via the jslib bridge instead. Pera renders its
+                // OWN connect modal (QR on desktop, deep links on mobile), so no
+                // OnWalletQRReady event fires on this path.
+                BlockmakerWalletBridge.PeraJsConnect(
+                    gameObject.name,
+                    nameof(OnPeraJsConnected),
+                    nameof(OnPeraJsError)
+                );
+                StartWebGLTimeout(WalletSignTimeout, () =>
+                {
+                    if (_isWalletConnecting) FailWalletConnection("Connection timed out. Please try again.");
+                });
+    #else
                 _peraConnectCoroutine = StartCoroutine(PeraNativeWCv1Flow());
+    #endif
                 return;
             }
 
@@ -874,6 +906,47 @@ namespace Blockmaker
         public void OnWalletErrorFromJS(string error)
         {
             CancelWebGLTimeout();
+            FailWalletConnection(error);
+        }
+
+        // ── Pera official JS SDK callbacks (WebGL Pera path) ─────────────────────
+
+        /// <summary>
+        /// Success callback for BlockmakerWalletBridge.PeraJsConnect (WebGL only).
+        /// Receives the bare Algorand address — Pera's own modal handled the
+        /// QR / deep-link UX, so this feeds straight into the same post-connect
+        /// funnel as the other wallets (identity → SaveSession → TriggerWalletLogin).
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnPeraJsConnected(string address)
+        {
+            CancelWebGLTimeout();
+            if (!_isWalletConnecting)
+            {
+                BlockmakerLog.Warning("[BlockmakerAuth] Ignoring unexpected Pera JS connection callback.");
+                return;
+            }
+
+            CompleteWalletConnection(ProviderPera, address);
+        }
+
+        /// <summary>Error callback for BlockmakerWalletBridge.PeraJsConnect (WebGL only).</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnPeraJsError(string error)
+        {
+            CancelWebGLTimeout();
+            if (!_isWalletConnecting)
+            {
+                BlockmakerLog.Warning($"[BlockmakerAuth] Ignoring Pera JS error after connect ended: {error}");
+                return;
+            }
+
+            // Recognizable code sent by the jslib when the user simply closed Pera's modal.
+            if (error == "PERA_CONNECT_CANCELLED")
+                error = "The connection was cancelled. Please try again.";
+
             FailWalletConnection(error);
         }
 
