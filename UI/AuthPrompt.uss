@@ -282,11 +282,12 @@
 /* ── Provider icon colors ─────────────────────────────────────────────── */
 
 .auth-btn-icon--email {
-    background-color: rgba(124, 58, 237, 0.28);
+    /* dark inset chip — the old faint purple vanished against the purple button */
+    background-color: rgba(0, 0, 0, 0.30);
 }
 
 .auth-btn-icon--email .auth-btn-icon-glyph {
-    color:     rgb(167, 139, 250);
+    color:     rgb(255, 255, 255);
     font-size: 22px;
 }
 
