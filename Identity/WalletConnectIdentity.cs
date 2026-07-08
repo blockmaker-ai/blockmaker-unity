@@ -250,6 +250,20 @@ namespace Blockmaker
             }
 
             int signGen = BlockmakerAuth.Instance.BeginPendingSign();
+            if (ProviderName == BlockmakerAuth.ProviderPera &&
+                BlockmakerWalletBridge.PeraJsHasSession() == 1)
+            {
+                // Pera on WebGL: sign through the official @perawallet/connect JS
+                // session (established by PeraJsConnect / restored by PeraJsReconnect).
+                // Same pending-sign plumbing and callbacks as the generic bridge below.
+                BlockmakerWalletBridge.PeraJsSignTransaction(
+                    txnBase64:         unsignedTxnBase64,
+                    gameObjectName:    BlockmakerAuth.Instance.gameObject.name,
+                    successCallback:   nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
+                    errorCallback:     nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
+                );
+            }
+            else
             BlockmakerWalletBridge.SignTransaction(
                 provider:          ProviderName,
                 txnBase64:         unsignedTxnBase64,
@@ -456,6 +470,21 @@ namespace Blockmaker
             txnsJson += "]";
 
             int signGen = BlockmakerAuth.Instance.BeginPendingSign();
+            if (ProviderName == BlockmakerAuth.ProviderPera &&
+                BlockmakerWalletBridge.PeraJsHasSession() == 1)
+            {
+                // Pera on WebGL: sign through the official @perawallet/connect JS
+                // session. One atomic group, original order preserved; every txn is
+                // presented for signing (all-or-nothing), matching the WCv1/WC v2/
+                // bridge group paths.
+                BlockmakerWalletBridge.PeraJsSignGroupTransaction(
+                    txnsJson:          txnsJson,
+                    gameObjectName:    BlockmakerAuth.Instance.gameObject.name,
+                    successCallback:   nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
+                    errorCallback:     nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
+                );
+            }
+            else
             BlockmakerWalletBridge.SignGroupTransaction(
                 provider:          ProviderName,
                 txnsJson:          txnsJson,

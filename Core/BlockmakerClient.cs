@@ -992,6 +992,11 @@ namespace Blockmaker
         /// In player builds, returns empty string if no JWT is available —
         /// the server API key must never be shipped in client builds.
         /// </summary>
+        /// True when a request would carry real backend auth (player JWT — or the
+        /// dev API key in the editor). Guests get false in builds: use this to skip
+        /// best-effort backend calls that would otherwise just spam 401s.
+        public bool HasBackendSession => !string.IsNullOrEmpty(GetSessionToken());
+
         private string GetSessionToken()
         {
             var identity = BlockmakerAuth.Instance?.Identity;

@@ -143,6 +143,11 @@ namespace Blockmaker
             if (!identity.HasWallet) return;
             if (!isActiveAndEnabled) return;
 
+            // A restored wallet identity often has NO backend session yet (the JWT arrives
+            // after the wallet-signature login round-trip) — loading now just 401s. When
+            // the login completes, OnIdentityChanged re-fires and we land here again.
+            if (BlockmakerClient.Instance == null || !BlockmakerClient.Instance.HasBackendSession) return;
+
             _profileCoroutine    = StartCoroutine(LoadProfileRoutine(_generation));
             _onboardingCoroutine = StartCoroutine(LoadOnboardingStatusRoutine(_generation));
         }

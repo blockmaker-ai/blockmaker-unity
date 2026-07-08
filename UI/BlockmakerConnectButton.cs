@@ -103,7 +103,7 @@ namespace Blockmaker
             card.style.width = 360;
 
             // Checkmark
-            var check = new Label("✓");
+            var check = new Label("•");
             check.style.fontSize = 36;
             check.style.color = new Color(0.063f, 0.725f, 0.506f);
             check.style.marginBottom = 12;
