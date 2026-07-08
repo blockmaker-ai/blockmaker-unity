@@ -211,7 +211,7 @@
 
 .pera-steps-hint {
     font-size:         13px;
-    color:             rgba(254, 215, 0, 0.65);
+    color:             rgba(240, 240, 248, 0.45);
     white-space:       normal;
     -unity-text-align: upper-center;
     margin-top:        -8px;
@@ -233,13 +233,13 @@
     letter-spacing:             3px;
     -unity-font-style:          bold;
     -unity-text-align:          middle-center;
-    color:                      #FED700;
-    background-color:           rgba(254, 215, 0, 0.10);
+    color:                      rgba(240, 240, 248, 0.65);
+    background-color:           rgba(255, 255, 255, 0.05);
     border-top-width:           1px;
     border-right-width:         1px;
     border-bottom-width:        1px;
     border-left-width:          1px;
-    border-color:               rgba(254, 215, 0, 0.35);
+    border-color:               rgba(255, 255, 255, 0.12);
     border-top-left-radius:     14px;
     border-top-right-radius:    14px;
     border-bottom-left-radius:  14px;
@@ -277,14 +277,14 @@
     border-bottom-right-radius: 6px;
     margin-left:                6px;
     margin-right:               6px;
-    background-color:           rgba(254, 215, 0, 0.18);
+    background-color:           rgba(255, 255, 255, 0.14);
     transition-property:        background-color, scale;
     transition-duration:        0.25s;
     transition-timing-function: ease-in-out;
 }
 
 .pera-step2-dot--on {
-    background-color: #FED700;
+    background-color: #FFFFFF;
     scale:            1.4;
 }
 
@@ -307,13 +307,34 @@
 }
 
 /* Chained selector: must out-rank .pera-store-btn (defined later in this file,
-   and later rules win specificity ties in UITK). */
+   and later rules win specificity ties in UITK). Solid white PRIMARY action —
+   the one thing to do on this screen should look like it. */
 .pera-store-btn.pera-step2-resend-btn {
-    align-self:    center;
-    min-width:     260px;
-    margin-left:   0;
-    margin-right:  0;
-    margin-bottom: 4px;
+    align-self:          center;
+    min-width:           260px;
+    margin-left:         0;
+    margin-right:        0;
+    margin-bottom:       4px;
+    background-color:    #F2F2F6;
+    border-top-color:    rgba(255, 255, 255, 0.90);
+    border-left-color:   rgba(255, 255, 255, 0.70);
+    border-right-color:  rgba(255, 255, 255, 0.70);
+    border-bottom-color: rgba(200, 200, 210, 0.60);
+    color:               #101014;
+}
+
+.pera-store-btn.pera-step2-resend-btn:hover {
+    background-color:    #FFFFFF;
+    border-top-color:    #FFFFFF;
+    border-left-color:   #FFFFFF;
+    border-right-color:  #FFFFFF;
+    border-bottom-color: rgba(200, 200, 210, 0.60);
+    color:               #101014;
+}
+
+.pera-store-btn.pera-step2-resend-btn:active {
+    background-color: rgba(242, 242, 246, 0.80);
+    color:            rgba(16, 16, 20, 0.70);
 }
 
 .pera-store-btn.pera-step2-resend-btn:disabled {
@@ -380,7 +401,7 @@
     border-left-width:   0;
     border-right-width:  0;
     border-bottom-width: 0;
-    color:               #FED700;
+    color:               rgba(240, 240, 248, 0.90);
     font-size:           14px;
     -unity-font-style:   bold;
     height:              24px;
@@ -394,11 +415,11 @@
 }
 
 .pera-footer-link:hover {
-    color: #FFEB55;
+    color: #FFFFFF;
 }
 
 .pera-footer-link:active {
-    color: #D4B300;
+    color: rgba(240, 240, 248, 0.50);
 }
 
 
@@ -435,15 +456,15 @@
 }
 
 .pera-store-btn:hover {
-    background-color:    rgba(254, 215, 0, 0.10);
-    border-top-color:    rgba(254, 215, 0, 0.22);
-    border-left-color:   rgba(254, 215, 0, 0.15);
-    border-right-color:  rgba(254, 215, 0, 0.15);
-    border-bottom-color: rgba(254, 215, 0, 0.08);
-    color:               #FED700;
+    background-color:    rgba(255, 255, 255, 0.10);
+    border-top-color:    rgba(255, 255, 255, 0.20);
+    border-left-color:   rgba(255, 255, 255, 0.14);
+    border-right-color:  rgba(255, 255, 255, 0.14);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    color:               rgba(255, 255, 255, 0.95);
 }
 
 .pera-store-btn:active {
-    background-color: rgba(254, 215, 0, 0.04);
-    color:            #D4B300;
+    background-color: rgba(255, 255, 255, 0.04);
+    color:            rgba(240, 240, 248, 0.50);
 }
