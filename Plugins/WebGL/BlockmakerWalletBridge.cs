@@ -66,6 +66,51 @@ namespace Blockmaker
             string successCallback,
             string errorCallback);
 
+        // ── Pera official JS SDK (@perawallet/connect) — WebGL Pera path ──────────
+
+        /// <summary>
+        /// Connect via Pera's official browser SDK. Pera renders its OWN modal
+        /// (QR on desktop, deep links on mobile) — no QR is sent back to Unity.
+        /// successCallback receives the bare Algorand address; errorCallback a
+        /// message ("PERA_CONNECT_CANCELLED" when the user closed Pera's modal).
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void PeraJsConnect(
+            string gameObjectName,
+            string successCallback,
+            string errorCallback, string qrCb);
+
+        /// <summary>
+        /// Silently restore Pera's localStorage session on load.
+        /// successCallback receives "Pera:address" (same shape as TryReconnect).
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void PeraJsReconnect(
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>1 when a live Pera JS session exists, 0 otherwise.</summary>
+        [DllImport("__Internal")]
+        public static extern int PeraJsHasSession();
+
+        [DllImport("__Internal")]
+        public static extern void PeraJsSignTransaction(
+            string txnBase64,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        [DllImport("__Internal")]
+        public static extern void PeraJsSignGroupTransaction(
+            string txnsJson,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        [DllImport("__Internal")]
+        public static extern void PeraJsDisconnect();
+
         // ── Magic SDK ──────────────────────────────────────────────────────────────
 
         [DllImport("__Internal")]
@@ -123,6 +168,19 @@ namespace Blockmaker
             string successCallback,
             string errorCallback);
 
+        /// <summary>
+        /// Sign an arbitrary UTF-8 message with an EVM wallet (personal_sign /
+        /// sign-in proof). On success the successCallback receives the 0x-hex
+        /// signature; on error the errorCallback receives a message.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void EvmSignPersonal(
+            string message,
+            string evmAddress,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
         [DllImport("__Internal")]
         public static extern void EvmDisconnect();
 
@@ -130,6 +188,13 @@ namespace Blockmaker
 
         [DllImport("__Internal")]
         public static extern int IsFullscreen();
+
+        /// <summary>
+        /// 1 when the WebGL build is running in a mobile browser (phone/tablet,
+        /// including iPadOS masquerading as desktop Safari), 0 otherwise.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern int BmIsMobileBrowser();
 
         [DllImport("__Internal")]
         public static extern void ExitFullscreen();
@@ -156,6 +221,24 @@ namespace Blockmaker
 
         public static void TryReconnect(string p, string go, string s, string e)
             => BlockmakerLog.Warning($"[BlockmakerWalletBridge] TryReconnect({p}) — not in WebGL.");
+
+        // ── Pera official JS SDK stubs ─────────────────────────────────────────────
+
+        public static void PeraJsConnect(string go, string s, string e, string qr)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsConnect — not in WebGL. Pera uses the native WCv1 flow on this platform.");
+
+        public static void PeraJsReconnect(string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsReconnect — not in WebGL.");
+
+        public static int PeraJsHasSession() => 0;
+
+        public static void PeraJsSignTransaction(string txn, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsSignTransaction — not in WebGL.");
+
+        public static void PeraJsSignGroupTransaction(string txnsJson, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsSignGroupTransaction — not in WebGL.");
+
+        public static void PeraJsDisconnect() { }
 
         // ── Magic SDK stubs ────────────────────────────────────────────────────────
 
@@ -185,12 +268,16 @@ namespace Blockmaker
         public static void EvmSignTransaction(string txn, string evm, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignTransaction — not in WebGL.");
 
+        public static void EvmSignPersonal(string message, string evm, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignPersonal — not in WebGL.");
+
         public static void EvmDisconnect()
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmDisconnect — not in WebGL.");
 
         // ── Fullscreen stubs ──────────────────────────────────────────────────────
 
         public static int IsFullscreen() => 0;
+        public static int BmIsMobileBrowser() => 0;
         public static void ExitFullscreen() { }
         public static void RequestFullscreen() { }
 

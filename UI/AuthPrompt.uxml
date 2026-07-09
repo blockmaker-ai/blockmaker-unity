@@ -43,7 +43,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
                         <ui:Label class="auth-btn-label" text="X-Chain" />
-                        <ui:Label class="auth-btn-sub" text="Any EVM wallet — MetaMask, Rainbow + more" />
+                        <ui:Label class="auth-btn-sub" text="Any EVM wallet" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:Label class="auth-btn-chevron-glyph" text=">" />
@@ -92,7 +92,7 @@
                         <ui:Label class="auth-page-heading" text="Enter your email" />
                     </ui:VisualElement>
                     <ui:Label class="auth-field-label" text="EMAIL ADDRESS" />
-                    <ui:TextField name="input-email" class="auth-input" />
+                    <ui:TextField name="input-email" class="auth-input" keyboard-type="EmailAddress" />
                     <ui:Button name="btn-send-code" class="auth-cta-btn" text="Send Sign-In Code" />
                 </ui:VisualElement>
 
@@ -100,7 +100,7 @@
                     <ui:Label class="auth-page-heading auth-page-heading--standalone" text="Check your inbox" />
                     <ui:Label name="lbl-sent-to" class="auth-sent-hint" text="" />
                     <ui:Label class="auth-field-label" text="SIGN-IN CODE" />
-                    <ui:TextField name="input-otp" class="auth-input auth-input--code" max-length="6" />
+                    <ui:TextField name="input-otp" class="auth-input auth-input--code" max-length="6" keyboard-type="NumberPad" />
                     <ui:Button name="btn-verify" class="auth-cta-btn" text="Verify and Continue" />
                     <ui:Button name="btn-resend-code" class="auth-link-btn" text="Resend code (60s)" />
                 </ui:VisualElement>
@@ -126,7 +126,25 @@
                 </ui:VisualElement>
 
                 <ui:Label class="auth-qr-hint" text="Open your wallet app and scan the code to connect" />
+                <ui:Label class="auth-qr-steps-hint" text="Signing in takes 2 quick approvals in your wallet." />
+                <ui:Button name="btn-open-wallet" class="auth-pill-btn" text="OPEN IN WALLET APP" style="display: none;" />
                 <ui:Button name="btn-copy-wc-link" class="auth-pill-btn" text="Copy Link" />
+            </ui:VisualElement>
+
+            <!-- PAGE: waiting for the sign-in approval (wallet approval 2 of 2) -->
+            <ui:VisualElement name="page-step2" class="auth-page auth-page--center">
+                <ui:Label class="auth-step2-badge" text="STEP 2 OF 2" />
+                <ui:Label class="auth-step2-title" text="One more step!" />
+                <ui:Label name="lbl-step2-body" class="auth-step2-body" text="Approve the SIGN-IN REQUEST in your wallet app - it's a free signature, nothing leaves your wallet." />
+                <ui:VisualElement class="auth-step2-dots">
+                    <ui:VisualElement name="step2-dot-1" class="auth-step2-dot" />
+                    <ui:VisualElement name="step2-dot-2" class="auth-step2-dot" />
+                    <ui:VisualElement name="step2-dot-3" class="auth-step2-dot" />
+                </ui:VisualElement>
+                <ui:Label class="auth-step2-hint" text="Check your phone - the request is waiting in the app." />
+                <ui:Label name="lbl-step2-resend-hint" class="auth-step2-resend-hint" text="Request expired or nothing in your app? Resend it." />
+                <ui:Button name="btn-step2-resend" class="auth-step2-resend-btn" text="RESEND REQUEST" />
+                <ui:Button name="btn-step2-cancel" class="auth-link-btn auth-step2-cancel-btn" text="CANCEL" />
             </ui:VisualElement>
 
             <!-- Wallet address change warning -->
@@ -138,7 +156,7 @@
             <ui:Label name="lbl-auth-status" class="auth-status" text="" />
 
             <!-- Close button (last child so it renders above all pages) -->
-            <ui:Button name="btn-close" class="auth-close-btn" text="&#x2715;" />
+            <ui:Button name="btn-close" class="auth-close-btn" text="&#215;" />
 
         </ui:VisualElement>
     </ui:VisualElement>

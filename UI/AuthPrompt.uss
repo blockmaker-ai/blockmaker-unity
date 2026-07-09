@@ -23,7 +23,7 @@
 
 .auth-card {
     width:                      92%;
-    max-width:                  560px;
+    max-width:                  440px;   /* single-column sign-in — 560 read as too wide */
     flex-direction:             column;
     align-items:                stretch;
     background-color:           rgb(13, 13, 20);
@@ -49,7 +49,6 @@
     position:                   absolute;
     top:                        16px;
     right:                      16px;
-    z-index:                    100;
     width:                      32px;
     height:                     32px;
     border-top-left-radius:     8px;
@@ -68,7 +67,7 @@
     align-items:                center;
     justify-content:            center;
     cursor:                     link;
-    color:                      rgba(255, 255, 255, 0.25);
+    color:                      rgba(255, 255, 255, 0.65);   /* 0.25 was invisible on the dark card */
     font-size:                  18px;
     -unity-font-style:          normal;
     transition-property:        background-color, color;
@@ -77,8 +76,8 @@
 }
 
 .auth-close-btn:hover {
-    background-color: rgba(255, 255, 255, 0.06);
-    color:            rgba(255, 255, 255, 0.60);
+    background-color: rgba(255, 255, 255, 0.10);
+    color:            rgba(255, 255, 255, 1);
 }
 
 .auth-close-btn:active {
@@ -282,11 +281,12 @@
 /* ── Provider icon colors ─────────────────────────────────────────────── */
 
 .auth-btn-icon--email {
-    background-color: rgba(124, 58, 237, 0.28);
+    /* dark inset chip — the old faint purple vanished against the purple button */
+    background-color: rgba(0, 0, 0, 0.30);
 }
 
 .auth-btn-icon--email .auth-btn-icon-glyph {
-    color:     rgb(167, 139, 250);
+    color:     rgb(255, 255, 255);
     font-size: 22px;
 }
 
@@ -484,14 +484,12 @@
     padding-bottom:             4px;
     font-size:                  16px;
     --unity-cursor-color:       rgb(167, 139, 250);
-    box-shadow:                 0 0 0 0 rgba(0, 0, 0, 0);
     transition-property:        border-color, background-color;
     transition-duration:        0.2s;
 }
 
 .auth-input > .unity-base-text-field__input:focus {
     background-color:    rgb(16, 16, 26);
-    box-shadow:          0 0 0 0 rgba(0, 0, 0, 0);
 }
 
 .auth-input--code > .unity-base-text-field__input {
@@ -654,6 +652,157 @@
     margin-bottom:     18px;
     padding-left:      16px;
     padding-right:     16px;
+}
+
+.auth-qr-steps-hint {
+    font-size:         13px;
+    color:             rgba(167, 139, 250, 0.80);
+    -unity-text-align: middle-center;
+    white-space:       normal;
+    margin-top:        -6px;
+    margin-bottom:     18px;
+    padding-left:      16px;
+    padding-right:     16px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STEP 2 OF 2 — waiting for the wallet sign-in approval
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.auth-step2-badge {
+    align-self:                 center;
+    font-size:                  12px;
+    letter-spacing:             3px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    color:                      rgb(167, 139, 250);
+    background-color:           rgba(124, 58, 237, 0.14);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.35);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    padding-top:                6px;
+    padding-bottom:             6px;
+    padding-left:               16px;
+    padding-right:              16px;
+    margin-top:                 6px;
+    margin-bottom:              22px;
+}
+
+.auth-step2-title {
+    font-size:         30px;
+    -unity-font-style: bold;
+    color:             rgb(238, 238, 246);
+    -unity-text-align: middle-center;
+    letter-spacing:    -0.5px;
+    margin-bottom:     14px;
+}
+
+.auth-step2-body {
+    font-size:         16px;
+    color:             rgba(238, 238, 246, 0.85);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    max-width:         340px;
+    margin-bottom:     26px;
+}
+
+.auth-step2-dots {
+    flex-direction:  row;
+    justify-content: center;
+    align-items:     center;
+    height:          24px;
+    margin-bottom:   20px;
+}
+
+.auth-step2-dot {
+    width:                      12px;
+    height:                     12px;
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    margin-left:                6px;
+    margin-right:               6px;
+    background-color:           rgba(167, 139, 250, 0.18);
+    transition-property:        background-color, scale;
+    transition-duration:        0.25s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-step2-dot--on {
+    background-color: rgb(167, 139, 250);
+    scale:            1.4;
+}
+
+.auth-step2-hint {
+    font-size:         13px;
+    color:             rgba(238, 238, 246, 0.40);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+}
+
+/* ── Step 2 recovery controls (resend / cancel) ───────────────────────── */
+
+.auth-step2-resend-hint {
+    font-size:         12px;
+    color:             rgba(238, 238, 246, 0.30);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    margin-top:        20px;
+    margin-bottom:     12px;
+}
+
+.auth-step2-resend-btn {
+    height:                     48px;
+    min-width:                  260px;
+    background-color:           rgba(124, 58, 237, 0.10);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.35);
+    border-top-left-radius:     12px;
+    border-top-right-radius:    12px;
+    border-bottom-left-radius:  12px;
+    border-bottom-right-radius: 12px;
+    color:                      rgb(167, 139, 250);
+    font-size:                  14px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    padding-left:               24px;
+    padding-right:              24px;
+    padding-top:                0;
+    padding-bottom:             0;
+    cursor:                     link;
+    transition-property:        background-color, border-color, color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-step2-resend-btn:hover {
+    background-color: rgba(124, 58, 237, 0.18);
+    border-color:     rgba(167, 139, 250, 0.55);
+    color:            rgb(196, 181, 253);
+}
+
+.auth-step2-resend-btn:active {
+    background-color: rgba(124, 58, 237, 0.06);
+}
+
+.auth-step2-resend-btn:disabled {
+    opacity: 0.5;
+}
+
+.auth-step2-cancel-btn {
+    margin-top: 6px;
+    min-width:  260px;
+    height:     36px;
 }
 
 /* ── Copy-link text button ────────────────────────────────────────────── */

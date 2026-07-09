@@ -746,6 +746,76 @@ namespace Blockmaker
             }
         }
 
+        /// <summary>
+        /// Sign an arbitrary UTF-8 message with the connected EVM wallet via
+        /// personal_sign (sign-in proof). Returns the 0x-hex signature. Mirrors
+        /// <see cref="SignEvmTypedData"/> but uses the personal_sign method.
+        /// </summary>
+        public void SignEvmPersonalMessage(
+            string         evmAddress,
+            string         messageUtf8,
+            Action<string> onSignedHex = null,
+            Action<string> onError     = null)
+        {
+            var session = _session;
+            if (session == null)
+            {
+                onError?.Invoke("Your wallet is not connected. Please connect your wallet again to continue.");
+                return;
+            }
+
+            SignEvmPersonalMessageAsync(session.Topic, evmAddress, messageUtf8, onSignedHex, onError);
+        }
+
+        private async void SignEvmPersonalMessageAsync(
+            string topic, string evmAddress, string messageUtf8,
+            Action<string> onSignedHex, Action<string> onError)
+        {
+            try
+            {
+                var client = _signClient;
+                if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); return; }
+
+                // personal_sign params: [hexMessage, address]. The message is hex-encoded
+                // UTF-8 bytes; the wallet applies EIP-191 framing, and the server re-applies
+                // it (viem.recoverMessageAddress) when recovering the signer.
+                var hexMessage = "0x" + BytesToHex(System.Text.Encoding.UTF8.GetBytes(messageUtf8));
+
+                var result = await client.Request<string[], string>(
+                    topic, new[] { hexMessage, evmAddress }, EVM_CHAIN
+                );
+
+                if (_signClient == null)
+                {
+                    onError?.Invoke("Wallet was disconnected. Please reconnect and try again.");
+                    return;
+                }
+
+                if (string.IsNullOrEmpty(result))
+                {
+                    onError?.Invoke("Wallet declined to sign. Please approve the request in your wallet app.");
+                    return;
+                }
+
+                onSignedHex?.Invoke(result);
+                FireEvent(OnTransactionSigned, result);
+            }
+            catch (Exception e)
+            {
+                BlockmakerLog.Error($"[ReownWalletConnector] EVM personal_sign error: {e.Message}");
+                var msg = "Something went wrong. Please try again.";
+                onError?.Invoke(msg);
+                FireEvent(OnSignError, msg);
+            }
+        }
+
+        private static string BytesToHex(byte[] bytes)
+        {
+            var sb = new System.Text.StringBuilder(bytes.Length * 2);
+            foreach (var b in bytes) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
         // ── Cancel / Disconnect ───────────────────────────────────────────────────
 
         public void CancelConnection()

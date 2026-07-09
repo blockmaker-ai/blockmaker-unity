@@ -8,8 +8,8 @@ namespace Blockmaker
 {
 
     /// <summary>
-    /// Top-level auth UI MonoBehaviour.
-    /// Replaces the old BootManager + LoginScreenUI + OTPScreenUI + WalletUpgradePrompt.
+    /// Top-level auth UI MonoBehaviour: one component driving the full sign-in
+    /// surface (login options, email OTP, wallet connect + upgrade prompts).
     ///
     /// Attach to the _AuthUI GameObject alongside a UIDocument component.
     /// The UIDocument should reference AuthScreen.uxml as its source asset.

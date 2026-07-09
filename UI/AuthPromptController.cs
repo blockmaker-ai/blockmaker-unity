@@ -17,11 +17,14 @@ namespace Blockmaker
     ///   4. Subscribe to react after a successful login:
     ///        AuthPromptController.OnAuthSucceeded += () => SceneManager.LoadScene("Profile");
     ///
-    /// The prompt manages four pages:
+    /// The prompt manages five pages:
     ///   page-options       — Email / Algorand / xChain buttons
     ///   page-algo-wallets  — Pera / Defly wallet picker
     ///   page-otp           — step1 (email entry) → step2 (6-digit code)
     ///   page-qr            — WalletConnect QR code display
+    ///   page-step2         — "STEP 2 OF 2" wait state: the wallet is connected and
+    ///                        the free login-signature approval is pending in the
+    ///                        wallet app (players kept missing that second request)
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public class AuthPromptController : MonoBehaviour
@@ -76,8 +79,28 @@ namespace Blockmaker
         private VisualElement _qrLoadingWrap;
         private Label         _lblQrProvider;
         private Button        _btnCopyLink;
+        private Button        _btnOpenWallet;
 
         private Label _lblStatus;
+
+        // Step 2 of 2 (wallet sign-in approval) page
+        private VisualElement   _pageStep2;
+        private Label           _lblStep2Body;
+        private VisualElement[] _step2Dots;
+        private IVisualElementScheduledItem _step2DotAnim;
+        private int  _step2DotIndex;
+        private bool _authAnnounced;   // OnAuthSucceeded already fired this prompt session
+
+        // Step 2 recovery controls (resend the sign request / cancel the login)
+        private Button _btnStep2Resend;
+        private Button _btnStep2Cancel;
+        private Label  _lblStep2ResendHint;
+        private IVisualElementScheduledItem _step2ResendCooldown;
+        private bool _step2ResendCoolingDown;
+
+        private const string ResendRequestLabel = "RESEND REQUEST";
+        private const string ResendSentLabel    = "SENT - CHECK YOUR WALLET";
+        private const long   ResendCooldownMs   = 5000;
 
         // Wallet warning
         private VisualElement _walletWarningBanner;
@@ -87,6 +110,7 @@ namespace Blockmaker
 
         private string    _pendingEmail;
         private string    _pendingWcUri;
+        private string    _pendingProvider;
         private Coroutine _resendCoroutine;
         private Coroutine _connectTimeoutCoroutine;
         private Texture2D _qrTexture;
@@ -126,6 +150,21 @@ namespace Blockmaker
             _pageAlgoWallets = root.Q("page-algo-wallets");
             _pageOtp         = root.Q("page-otp");
             _pageQr          = root.Q("page-qr");
+            _pageStep2       = root.Q("page-step2");
+
+            // Step 2 of 2 (all null-safe — older UXML simply falls back to the status line)
+            _lblStep2Body = root.Q<Label>("lbl-step2-body");
+            _step2Dots    = new[]
+            {
+                root.Q("step2-dot-1"),
+                root.Q("step2-dot-2"),
+                root.Q("step2-dot-3"),
+            };
+            _btnStep2Resend     = root.Q<Button>("btn-step2-resend");
+            _btnStep2Cancel     = root.Q<Button>("btn-step2-cancel");
+            _lblStep2ResendHint = root.Q<Label>("lbl-step2-resend-hint");
+            _btnStep2Resend?.RegisterCallback<ClickEvent>(_ => OnStep2ResendClicked());
+            _btnStep2Cancel?.RegisterCallback<ClickEvent>(_ => OnStep2CancelClicked());
 
             // OTP
             _otpStep1    = root.Q("otp-step1");
@@ -142,6 +181,7 @@ namespace Blockmaker
             _qrLoadingWrap = root.Q("qr-loading");
             _lblQrProvider = root.Q<Label>("lbl-qr-provider");
             _btnCopyLink   = root.Q<Button>("btn-copy-wc-link");
+            _btnOpenWallet = root.Q<Button>("btn-open-wallet");
 
             _lblStatus = root.Q<Label>("lbl-auth-status");
 
@@ -153,7 +193,7 @@ namespace Blockmaker
             if (_inputOtp   != null) _inputOtp.textEdition.placeholder   = "6-digit code";
 
             // Button wiring
-            root.Q<Button>("btn-close")?.RegisterCallback<ClickEvent>(_        => Hide());
+            root.Q<Button>("btn-close")?.RegisterCallback<ClickEvent>(_        => OnCloseClicked());
             root.Q<Button>("btn-email")?.RegisterCallback<ClickEvent>(_        => ShowOtpPage());
             root.Q<Button>("btn-algorand")?.RegisterCallback<ClickEvent>(_       => SetPage(_pageAlgoWallets));
             root.Q<Button>("btn-back-from-wallets")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
@@ -167,6 +207,9 @@ namespace Blockmaker
             if (_btnMetamask != null) _btnMetamask.style.display = DisplayStyle.None;
             root.Q<Button>("btn-cancel-connect")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
             _btnCopyLink?.RegisterCallback<ClickEvent>(_ => CopyWcLink());
+            // Must run synchronously inside the click handler: on WebGL the deep link is a
+            // browser navigation, and iOS Safari only allows it from a user gesture.
+            _btnOpenWallet?.RegisterCallback<ClickEvent>(_ => OpenWalletApp());
             _btnSendCode?.RegisterCallback<ClickEvent>(_ => OnSendCodeClicked());
             _btnVerify?.RegisterCallback<ClickEvent>(_   => OnVerifyClicked());
             _btnResend?.RegisterCallback<ClickEvent>(_   => OnResendClicked());
@@ -190,6 +233,14 @@ namespace Blockmaker
                     ShowOptionsPage();
                 };
                 _peraCtrl.OnCloseClicked = () => Hide();
+                // Step-2 CANCEL inside the modal: the wallet login is already aborted
+                // by the modal controller — land back on the sign-in options with a
+                // neutral (non-error) note instead of a dead end.
+                _peraCtrl.OnSignInCancelled = () =>
+                {
+                    ShowOptionsPage();
+                    SetStatus("Sign-in cancelled.");
+                };
                 _peraRoot.style.display = DisplayStyle.None;
             }
 
@@ -201,6 +252,7 @@ namespace Blockmaker
             BlockmakerAuth.OnIdentityChanged      += HandleIdentityChanged;
             BlockmakerAuth.OnAuthError             += HandleAuthError;
             BlockmakerAuth.OnWalletQRReady         += HandleQRReady;
+            BlockmakerAuth.OnAuthStatus            += HandleAuthStatus;
             BlockmakerAuth.OnWalletAddressChanged  += HandleWalletAddressChanged;
             ReownWalletConnector.OnQRReady         += HandleNativeQRReady;
         }
@@ -210,6 +262,7 @@ namespace Blockmaker
             BlockmakerAuth.OnIdentityChanged      -= HandleIdentityChanged;
             BlockmakerAuth.OnAuthError             -= HandleAuthError;
             BlockmakerAuth.OnWalletQRReady         -= HandleQRReady;
+            BlockmakerAuth.OnAuthStatus            -= HandleAuthStatus;
             BlockmakerAuth.OnWalletAddressChanged  -= HandleWalletAddressChanged;
             ReownWalletConnector.OnQRReady         -= HandleNativeQRReady;
 
@@ -246,6 +299,23 @@ namespace Blockmaker
                 _overlay.style.display = DisplayStyle.Flex;
             else
                 BlockmakerLog.Error("[AuthPromptController] auth-overlay not found in AuthPrompt.uxml");
+        }
+
+        /// The x button. During the step-2 wait it must also abort the pending wallet
+        /// login — otherwise the session lingers half-authenticated behind a closed
+        /// prompt. Guarded by NeedsLoginSignature because Hide() also runs on SUCCESS
+        /// while the step-2 page is still visible (must not cancel a completed login).
+        private void OnCloseClicked()
+        {
+            bool stepTwoActive =
+                (_pageStep2 != null && _pageStep2.style.display == DisplayStyle.Flex) ||
+                (_peraCtrl != null && _peraCtrl.IsShowingStepTwo);
+
+            var auth = BlockmakerAuth.Instance;
+            if (stepTwoActive && auth != null && NeedsLoginSignature(auth.Identity))
+                auth.CancelWalletLogin();
+
+            Hide();
         }
 
         public void Hide()
@@ -300,10 +370,12 @@ namespace Blockmaker
             if (_lblQrProvider != null)
                 _lblQrProvider.text = $"Scan with {provider} Wallet";
 
+
             // Show loading state; hide QR image until received
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.Flex;
             if (_qrImage        != null) _qrImage.style.display       = DisplayStyle.None;
             if (_btnCopyLink    != null) _btnCopyLink.style.display    = DisplayStyle.None;
+            if (_btnOpenWallet  != null) _btnOpenWallet.style.display  = DisplayStyle.None;
         }
 
         private void SetPage(VisualElement activePage)
@@ -312,8 +384,166 @@ namespace Blockmaker
             if (_pageAlgoWallets != null) _pageAlgoWallets.style.display = DisplayStyle.None;
             if (_pageOtp         != null) _pageOtp.style.display         = DisplayStyle.None;
             if (_pageQr          != null) _pageQr.style.display          = DisplayStyle.None;
+            if (_pageStep2       != null) _pageStep2.style.display       = DisplayStyle.None;
+
+            if (activePage != _pageStep2)
+            {
+                StopStepTwoDots();
+                ResetStepTwoResend();
+            }
 
             if (activePage != null) activePage.style.display = DisplayStyle.Flex;
+        }
+
+        // ── Step 2 of 2 (wallet sign-in approval) ─────────────────────────────────
+
+        /// <summary>
+        /// Wallet sign-in needs TWO approvals: (1) connect, (2) a free login signature
+        /// that mints the backend session. Players kept approving #1 and missing #2,
+        /// so when the signature phase begins we switch whichever skin is on screen
+        /// (Pera/Defly connect modal, or this prompt's pages) to a bold "STEP 2 OF 2"
+        /// wait state instead of a one-line status. Returns false when neither skin
+        /// can show it (older UXML) so callers can fall back to the status label.
+        /// </summary>
+        private bool EnterStepTwoState(string provider)
+        {
+            if (_peraCtrl != null && _peraCtrl.IsOpen)
+            {
+                // The modal covers the prompt, so don't fall through to the page skin;
+                // a false return (older modal UXML) means callers keep old behavior.
+                return _peraCtrl.ShowStepTwo(provider);
+            }
+
+            if (_pageStep2 == null) return false;
+
+            SetPage(_pageStep2);
+            ClearStatus();
+            if (_lblStep2Body != null)
+            {
+                string appName = string.IsNullOrEmpty(provider) ? "wallet" : provider;
+                _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
+            }
+            RefreshStepTwoActions();
+            StartStepTwoDots();
+            return true;
+        }
+
+        /// Show/hide the resend controls based on whether the auth layer can actually
+        /// re-send the sign request. Re-entrant safe: a retry fires OnAuthStatus →
+        /// EnterStepTwoState again, and this must not wipe the "SENT" cooldown state.
+        private void RefreshStepTwoActions()
+        {
+            bool canRetry = BlockmakerAuth.CanRetryWalletLogin;
+
+            if (_btnStep2Resend != null)
+            {
+                _btnStep2Resend.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
+                if (!_step2ResendCoolingDown)
+                {
+                    _btnStep2Resend.text = ResendRequestLabel;
+                    _btnStep2Resend.SetEnabled(canRetry);
+                }
+            }
+
+            if (_lblStep2ResendHint != null)
+                _lblStep2ResendHint.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void OnStep2ResendClicked()
+        {
+            var auth = BlockmakerAuth.Instance;
+            if (auth == null || !BlockmakerAuth.CanRetryWalletLogin) return;
+
+            auth.RetryWalletLogin();
+
+            if (_btnStep2Resend == null) return;
+            _step2ResendCoolingDown = true;
+            _btnStep2Resend.text = ResendSentLabel;
+            _btnStep2Resend.SetEnabled(false);
+
+            if (_step2ResendCooldown == null)
+                _step2ResendCooldown = _btnStep2Resend.schedule.Execute(RestoreStepTwoResendButton);
+            _step2ResendCooldown.ExecuteLater(ResendCooldownMs);
+        }
+
+        private void RestoreStepTwoResendButton()
+        {
+            _step2ResendCoolingDown = false;
+            if (_btnStep2Resend == null) return;
+            _btnStep2Resend.text = ResendRequestLabel;
+            _btnStep2Resend.SetEnabled(BlockmakerAuth.CanRetryWalletLogin);
+        }
+
+        private void ResetStepTwoResend()
+        {
+            _step2ResendCooldown?.Pause();
+            _step2ResendCoolingDown = false;
+            if (_btnStep2Resend != null)
+            {
+                _btnStep2Resend.text = ResendRequestLabel;
+                _btnStep2Resend.SetEnabled(true);
+            }
+        }
+
+        private void OnStep2CancelClicked()
+        {
+            // Abort the pending wallet login (logs out the half-authenticated wallet
+            // identity). HandleIdentityChanged ignores the resulting Guest identity,
+            // so route back to the sign-in options explicitly — with a neutral note,
+            // not an error.
+            BlockmakerAuth.Instance?.CancelWalletLogin();
+            ShowOptionsPage();
+            SetStatus("Sign-in cancelled.");
+        }
+
+        private void StartStepTwoDots()
+        {
+            if (_pageStep2 == null || _step2Dots == null || _step2Dots.Length == 0) return;
+            _step2DotIndex = 0;
+            if (_step2DotAnim == null)
+                _step2DotAnim = _pageStep2.schedule.Execute(AdvanceStepTwoDot).Every(360);
+            else
+                _step2DotAnim.Resume();
+        }
+
+        private void StopStepTwoDots()
+        {
+            _step2DotAnim?.Pause();
+            if (_step2Dots == null) return;
+            foreach (var dot in _step2Dots)
+                dot?.RemoveFromClassList("auth-step2-dot--on");
+        }
+
+        private void AdvanceStepTwoDot()
+        {
+            if (_step2Dots == null || _step2Dots.Length == 0) return;
+            for (int i = 0; i < _step2Dots.Length; i++)
+                _step2Dots[i]?.EnableInClassList("auth-step2-dot--on", i == _step2DotIndex);
+            _step2DotIndex = (_step2DotIndex + 1) % _step2Dots.Length;
+        }
+
+        /// <summary>True for a self-custody wallet identity that has connected but not
+        /// yet completed the login signature (no backend session token yet).</summary>
+        private static bool NeedsLoginSignature(IBlockmakerIdentity identity)
+        {
+            if (identity is WalletConnectIdentity wc)  return string.IsNullOrEmpty(wc.SessionToken);
+            if (identity is EvmXChainIdentity   evm)   return string.IsNullOrEmpty(evm.SessionToken);
+            return false;
+        }
+
+        private static string CurrentWalletProviderName()
+        {
+            var id = BlockmakerAuth.Instance != null ? BlockmakerAuth.Instance.Identity : null;
+            if (id == null || id is GuestIdentity) return null;
+            return FriendlyWalletName(id.ProviderName);
+        }
+
+        /// "Pera"/"Defly" read well in player copy; internal names like "EvmXChain"
+        /// fall back to the generic "wallet" wording (null -> "wallet" downstream).
+        private static string FriendlyWalletName(string provider)
+        {
+            if (string.IsNullOrEmpty(provider) || provider == "EvmXChain") return null;
+            return provider;
         }
 
         // ── Wallet connect ─────────────────────────────────────────────────────────
@@ -358,6 +588,9 @@ namespace Blockmaker
                 {
                     if (this == null) return;
                     StopConnectTimeout();
+                    // Connected, but the modal may now be guiding approval 2 of 2
+                    // (the login signature) — keep it open until the token lands.
+                    if (_peraCtrl.IsShowingStepTwo) return;
                     _peraCtrl.Close();
                 },
                 onError: err =>
@@ -384,6 +617,8 @@ namespace Blockmaker
                     {
                         if (this == null) return;
                         StopConnectTimeout();
+                        // Keep the modal open while it shows approval 2 of 2.
+                        if (_peraCtrl.IsShowingStepTwo) return;
                         _peraCtrl.Close();
                     },
                     onError: err =>
@@ -435,10 +670,33 @@ namespace Blockmaker
             onTimeout?.Invoke("Still waiting for your wallet. Make sure the wallet app is open.");
         }
 
-        // Called via BlockmakerAuth.OnWalletQRReady
+        // Called via BlockmakerAuth.OnAuthStatus — today this fires exactly once, when
+        // the wallet connect approval is done and the SECOND approval (the free login
+        // signature) is about to arrive in the wallet app. See BlockmakerAuth.TriggerWalletLogin.
+        private void HandleAuthStatus(string msg)
+        {
+            // Session restores also trigger wallet logins — only react while visible.
+            if (_overlay == null || _overlay.style.display == DisplayStyle.None) return;
+
+            // Only take over the screen when the user is actually in a wallet-connect
+            // flow (a background reconnect must not hijack the email page).
+            bool inWalletFlow =
+                (_peraCtrl != null && _peraCtrl.IsOpen) ||
+                (_pageQr    != null && _pageQr.style.display    == DisplayStyle.Flex) ||
+                (_pageStep2 != null && _pageStep2.style.display == DisplayStyle.Flex);
+
+            // Preferred: the unmissable "STEP 2 OF 2" state in whichever skin is showing.
+            if (inWalletFlow && EnterStepTwoState(CurrentWalletProviderName())) return;
+
+            // Fallback (older UXML without the step-2 panel): plain status routing.
+            if (_peraCtrl != null && _peraCtrl.IsOpen) _peraCtrl.SetStatus(msg);
+            else SetStatus(msg);
+        }
+
         private void HandleQRReady(WalletQREventArgs e)
         {
-            _pendingWcUri = e.WalletConnectUri;
+            _pendingWcUri    = e.WalletConnectUri;
+            _pendingProvider = e.Provider;
 
             // Decode base64 PNG → Texture2D
             byte[] pngBytes;
@@ -456,11 +714,13 @@ namespace Blockmaker
 
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.None;
             if (_btnCopyLink   != null) _btnCopyLink.style.display   = DisplayStyle.Flex;
+            UpdateOpenWalletButton();
         }
 
         private void HandleNativeQRReady(string provider, string wcUri, Texture2D qrTexture)
         {
-            _pendingWcUri = wcUri;
+            _pendingWcUri    = wcUri;
+            _pendingProvider = provider;
 
             if (_qrTexture != null) { Destroy(_qrTexture); _qrTexture = null; }
             _qrTexture = new Texture2D(qrTexture.width, qrTexture.height, qrTexture.format, false);
@@ -474,6 +734,28 @@ namespace Blockmaker
 
             if (_qrLoadingWrap != null) _qrLoadingWrap.style.display = DisplayStyle.None;
             if (_btnCopyLink   != null) _btnCopyLink.style.display   = DisplayStyle.Flex;
+            UpdateOpenWalletButton();
+        }
+
+        /// <summary>
+        /// Show the "Open in wallet app" button only on mobile (native or mobile
+        /// browser) and only while a WalletConnect URI is pending. The QR code
+        /// stays visible as a fallback.
+        /// </summary>
+        private void UpdateOpenWalletButton()
+        {
+            if (_btnOpenWallet == null) return;
+            bool show = !string.IsNullOrEmpty(_pendingWcUri) && WalletDeepLink.IsMobilePlatform;
+            _btnOpenWallet.style.display = show ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        private void OpenWalletApp()
+        {
+            if (string.IsNullOrEmpty(_pendingWcUri)) return;
+            // Synchronous within the button's click event — see WalletDeepLink's note on
+            // iOS Safari requiring the WebGL navigation to happen inside a user gesture.
+            WalletDeepLink.OpenWallet(_pendingProvider, _pendingWcUri);
+            SetStatus("Opening your wallet app… approve the connection there, then return here.");
         }
 
         private void CopyWcLink()
@@ -614,12 +896,34 @@ namespace Blockmaker
             if (identity == null || identity.Tier == IdentityTier.Guest) return;
             // Only react if the overlay is currently visible — ignore session restores on scene load
             if (_overlay == null || _overlay.style.display == DisplayStyle.None) return;
+
+            // A wallet just connected but still owes the login signature (approval 2 of 2,
+            // fired via TriggerWalletLogin right after this event). Keep the prompt open in
+            // the "STEP 2 OF 2" state instead of closing — closing here is exactly how
+            // players ended up missing the second request. OnAuthSucceeded still fires now,
+            // at the same moment it always has.
+            if (NeedsLoginSignature(identity) && EnterStepTwoState(FriendlyWalletName(identity.ProviderName)))
+            {
+                if (!_authAnnounced)
+                {
+                    _authAnnounced = true;
+                    OnAuthSucceeded?.Invoke();
+                }
+                return;
+            }
+
+            // Fully signed in (or a skin without the step-2 UI) — close as before.
+            // Capture before Hide(): ResetState clears the flag.
+            bool alreadyAnnounced = _authAnnounced;
             Hide();
-            OnAuthSucceeded?.Invoke();
+            if (!alreadyAnnounced) OnAuthSucceeded?.Invoke();
         }
 
         private void HandleAuthError(string error)
         {
+            // If the connect modal is up (including its step-2 state), drop it so the
+            // error is visible on the options page.
+            _peraCtrl?.Close();
             ShowOptionsPage();
             SetStatus(error, isError: true);
         }
@@ -673,8 +977,13 @@ namespace Blockmaker
 
         private void ResetState()
         {
-            _pendingEmail = null;
-            _pendingWcUri = null;
+            _pendingEmail    = null;
+            _pendingWcUri    = null;
+            _pendingProvider = null;
+            _authAnnounced   = false;
+            StopStepTwoDots();
+            ResetStepTwoResend();
+            if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
             StopResendCountdown();
             StopConnectTimeout();
             SetLoading(false);

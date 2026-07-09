@@ -75,6 +75,24 @@ namespace Blockmaker
             DontDestroyOnLoad(gameObject);
         }
 
+
+        /// The balance endpoint needs a PLAYER session (JWT) — a wallet identity that
+        /// hasn't completed backend login (or an editor with only the dev API key)
+        /// would just 401 every poll. Each poll REQUEST is gated on a real session
+        /// token (see PollBalance), but the poll LOOP itself only requires a wallet:
+        /// the JWT can land SILENTLY (restore-time refresh, proactive refresh) with
+        /// no OnIdentityChanged, so a loop stopped on "no session yet" would never
+        /// learn the session arrived — the lobby chip then shows 0 forever.
+        private static bool HasPlayerSession()
+        {
+            var id = BlockmakerAuth.Instance?.Identity;
+            if (id is ServerSignedIdentity ss)  return !string.IsNullOrEmpty(ss.SessionToken);
+            if (id is MagicIdentity magic)      return !string.IsNullOrEmpty(magic.SessionToken);
+            if (id is WalletConnectIdentity wc) return !string.IsNullOrEmpty(wc.SessionToken);
+            if (id is EvmXChainIdentity evm)    return !string.IsNullOrEmpty(evm.SessionToken);
+            return false;
+        }
+
         private void OnEnable()
         {
             if (Instance != this) return;
@@ -102,13 +120,17 @@ namespace Blockmaker
         /// <summary>
         /// Call when an instant token reward has been sent. Updates the display
         /// balance immediately without waiting for the chain to confirm.
+        /// Negative amounts are CORRECTIONS (e.g. the backend paid a smaller
+        /// server-rolled crate tier, or refused the payout entirely) — they reduce
+        /// the pending total, clamped so display never drops below chain truth.
         /// </summary>
         public void AddPendingReward(long amount)
         {
-            if (amount <= 0) return;
+            if (amount == 0) return;
             _pendingRewards += amount;
+            if (_pendingRewards < 0) _pendingRewards = 0;
             _lastRewardTime = Time.realtimeSinceStartup;
-            OnRewardAdded?.Invoke(amount);
+            if (amount > 0) OnRewardAdded?.Invoke(amount);
             OnBalanceChanged?.Invoke(DisplayBalance);
         }
 
@@ -161,8 +183,26 @@ namespace Blockmaker
             }
         }
 
+        private bool _waitingForSessionLogged;
+
         private void PollBalance()
         {
+            // SKIP (never stop the loop) while the backend session hasn't arrived yet.
+            // A restored wallet identity often has no JWT at boot; the JWT can then land
+            // silently (restore-time RefreshToken, proactive refresh) without any
+            // OnIdentityChanged — the live loop picks it up within one poll interval.
+            // Skipping also keeps the cdf8e14 goal: no doomed 401 polls every 10s.
+            if (!HasPlayerSession())
+            {
+                if (!_waitingForSessionLogged)
+                {
+                    BlockmakerLog.Info("[TokenBalanceTracker] Wallet present but no backend session yet — polls deferred until the JWT arrives.");
+                    _waitingForSessionLogged = true;
+                }
+                return;
+            }
+            _waitingForSessionLogged = false;
+
             var bm = BlockmakerClient.Instance;
             if (bm == null) return;
 

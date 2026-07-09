@@ -26,6 +26,28 @@ namespace Blockmaker
 
         public string EvmAddress { get; }
 
+        /// <summary>Player JWT obtained via wallet-signature login (see <see cref="Login"/>).</summary>
+        public string SessionToken { get; private set; }
+        /// <summary>Long-lived refresh token paired with <see cref="SessionToken"/>.</summary>
+        public string RefreshToken { get; private set; }
+
+        internal void UpdateTokens(string sessionToken, string refreshToken)
+        {
+            if (!string.IsNullOrEmpty(sessionToken)) SessionToken = sessionToken;
+            if (!string.IsNullOrEmpty(refreshToken)) RefreshToken = refreshToken;
+        }
+
+        /// <summary>
+        /// Clear only the in-memory JWT/refresh tokens, leaving the wallet identity and the
+        /// live WalletConnect relay/session intact. Used when a token refresh fails but the
+        /// wallet can still re-sign for a fresh JWT (see BlockmakerAuth.VerifyRestoredSession).
+        /// </summary>
+        internal void ClearTokens()
+        {
+            SessionToken = null;
+            RefreshToken = null;
+        }
+
         public EvmXChainIdentity(string algorandAddress, string evmAddress)
         {
             if (string.IsNullOrEmpty(algorandAddress))
@@ -184,52 +206,45 @@ namespace Blockmaker
             }
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            // WebGL: delegate to JS bridge which handles groups atomically
-            if (BlockmakerAuth.Instance == null)
+            // WebGL has no atomic EVM group-signing bridge: the xChain JS SDK exposes only
+            // per-transaction signing (EvmSignTransaction), which authorizes each txn by its
+            // OWN transaction ID. A genuine atomic group must instead be authorized against the
+            // GROUP ID with a single signature reused across every txn (see the native branch
+            // below + XChainAddressDeriver) — so looping the per-txn signer would emit invalid
+            // group signatures, and there is no window.ethereum path that reproduces the group-id
+            // LogicSig wrapping in JS today. (The previous code called a JS bridge function that
+            // was never declared/implemented, which broke the WebGL player build.) So:
+            //   • no group field  → sign each txn individually via the single-txn path (identical
+            //                        to the native "no group field" branch — fully correct on WebGL).
+            //   • group field set → not supported on WebGL; fail cleanly rather than ship bad sigs.
+            byte[] webglGroupId;
+            try
             {
-                onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                webglGroupId = XChainAddressDeriver.ExtractGroupId(Convert.FromBase64String(unsignedTxnsBase64[0]));
+            }
+            catch (Exception ex)
+            {
+                BlockmakerLog.Error($"[EvmXChainIdentity] WebGL group-id parse error: {ex.Message}");
+                onError?.Invoke("Something went wrong while signing the transactions. Please try again.");
                 yield break;
             }
 
-            int signGen = BlockmakerAuth.Instance.BeginPendingSign();
-
-            var txnsJson = "[" + string.Join(",", System.Array.ConvertAll(unsignedTxnsBase64, t => "\"" + t + "\"")) + "]";
-            BlockmakerWalletBridge.EvmSignGroupTransaction(
-                txnsJson, EvmAddress,
-                BlockmakerAuth.Instance.gameObject.name,
-                nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
-                nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
-            );
-
-            float elapsed = 0f;
-            while (BlockmakerAuth.Instance != null &&
-                   BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen) &&
-                   BlockmakerAuth.Instance.PendingSignedTxns == null &&
-                   BlockmakerAuth.Instance.PendingSignError == null &&
-                   elapsed < BlockmakerAuth.WalletSignTimeout)
+            if (webglGroupId != null)
             {
-                elapsed += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            if (BlockmakerAuth.Instance == null || !BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen))
-            {
-                onError?.Invoke("The request was interrupted. Please try again.");
+                onError?.Invoke("Signing multiple transactions together isn't supported for this wallet on the web. Please try again from the app.");
                 yield break;
             }
 
-            if (BlockmakerAuth.Instance.PendingSignedTxns == null && BlockmakerAuth.Instance.PendingSignError == null)
+            var webglResults = new string[unsignedTxnsBase64.Length];
+            for (int wi = 0; wi < unsignedTxnsBase64.Length; wi++)
             {
-                onError?.Invoke("The request timed out. Please try again.");
-                yield break;
+                string webglSigned = null;
+                string webglErr    = null;
+                yield return SignTransaction(unsignedTxnsBase64[wi], s => { webglSigned = s; }, e => { webglErr = e; });
+                if (webglErr != null) { onError?.Invoke(webglErr); yield break; }
+                webglResults[wi] = webglSigned;
             }
-
-            var webglResults = BlockmakerAuth.Instance.ConsumePendingSignedTxns();
-            var webglError = BlockmakerAuth.Instance.ConsumePendingSignError();
-
-            if (webglResults != null) onSigned?.Invoke(webglResults);
-            else if (webglError != null) onError?.Invoke(webglError);
-            else onError?.Invoke("The request could not be completed. Please try again.");
+            onSigned?.Invoke(webglResults);
 #else
             // Native: atomic group signing via GroupID
             var connector = ReownWalletConnector.Instance;
@@ -342,7 +357,9 @@ namespace Blockmaker
             var data = new EvmSessionData
             {
                 algorandAddress = Address,
-                evmAddress      = EvmAddress
+                evmAddress      = EvmAddress,
+                sessionToken    = SessionToken,
+                refreshToken    = RefreshToken
             };
             SecurePrefs.SetString(SessionKey, JsonUtility.ToJson(data));
             SecurePrefs.Save();
@@ -395,6 +412,150 @@ namespace Blockmaker
         {
             public string algorandAddress;
             public string evmAddress;
+            public string sessionToken;
+            public string refreshToken;
+        }
+
+        // ── Wallet-signature login (challenge → personal_sign → verify → store JWT) ─
+
+        /// <summary>
+        /// Acquire a player session token by signing a server challenge with the
+        /// connected EVM wallet (personal_sign). The signature is verified against
+        /// <see cref="EvmAddress"/>, but the account/JWT address is the derived
+        /// Algorand <see cref="Address"/> (per the wallet-auth contract).
+        /// </summary>
+        public IEnumerator Login(Action onSuccess = null, Action<string> onError = null)
+        {
+            var client = BlockmakerClient.Instance;
+            if (client == null)
+            {
+                onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                yield break;
+            }
+
+            // 1) Challenge — walletAddress is the DERIVED Algorand address; evmAddress is the signer.
+            WalletChallengeResult challenge = null;
+            string challengeError = null;
+            bool challengeDone = false;
+            client.StartCoroutine(client.RequestWalletChallenge(
+                Address, "evm", EvmAddress,
+                r => { challenge = r; challengeDone = true; },
+                e => { challengeError = e; challengeDone = true; }));
+
+            float elapsed = 0f;
+            while (!challengeDone && elapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (!challengeDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+            if (challenge == null || !challenge.success || string.IsNullOrEmpty(challenge.message))
+            {
+                onError?.Invoke(challengeError ?? "Could not start wallet sign-in. Please try again.");
+                yield break;
+            }
+
+            // 2) Sign with personal_sign over the EXACT message
+            string signatureHex = null;
+            string signError = null;
+            bool signDone = false;
+
+    #if UNITY_WEBGL && !UNITY_EDITOR
+            if (BlockmakerAuth.Instance == null)
+            {
+                onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                yield break;
+            }
+            int signGen = BlockmakerAuth.Instance.BeginPendingSign();
+            BlockmakerWalletBridge.EvmSignPersonal(
+                challenge.message,
+                EvmAddress,
+                BlockmakerAuth.Instance.gameObject.name,
+                nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
+                nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS));
+
+            float jsElapsed = 0f;
+            while (BlockmakerAuth.Instance != null &&
+                   BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen) &&
+                   BlockmakerAuth.Instance.PendingSignedTxn == null &&
+                   BlockmakerAuth.Instance.PendingSignError == null &&
+                   jsElapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                jsElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (BlockmakerAuth.Instance == null ||
+                !BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen))
+            {
+                onError?.Invoke("The request was interrupted. Please try again.");
+                yield break;
+            }
+            if (BlockmakerAuth.Instance.PendingSignedTxn == null &&
+                BlockmakerAuth.Instance.PendingSignError == null)
+            {
+                onError?.Invoke("The request timed out. Please try again.");
+                yield break;
+            }
+            signatureHex = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
+            signError    = BlockmakerAuth.Instance.ConsumePendingSignError();
+    #else
+            var connector = ReownWalletConnector.Instance;
+            if (connector == null || !connector.IsConnected)
+            {
+                onError?.Invoke("Your wallet session has ended. Please connect your wallet again to continue.");
+                yield break;
+            }
+
+            connector.SignEvmPersonalMessage(
+                EvmAddress, challenge.message,
+                onSignedHex: sig => { signatureHex = sig; signDone = true; },
+                onError:     err => { signError = err; signDone = true; });
+
+            float sElapsed = 0f;
+            while (!signDone && sElapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                sElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (!signDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+    #endif
+
+            if (!string.IsNullOrEmpty(signError)) { onError?.Invoke(signError); yield break; }
+            if (string.IsNullOrEmpty(signatureHex))
+            {
+                onError?.Invoke("The sign-in request was not approved in your wallet. Please try again.");
+                yield break;
+            }
+
+            // 3) Verify → mint JWT (walletAddress = derived Algorand address; evmAddress = signer)
+            EmailVerifyResult verify = null;
+            string verifyError = null;
+            bool verifyDone = false;
+            client.StartCoroutine(client.VerifyWalletSignature(
+                Address, "evm", signatureHex, null, challenge.nonce, EvmAddress,
+                r => { verify = r; verifyDone = true; },
+                e => { verifyError = e; verifyDone = true; }));
+
+            float vElapsed = 0f;
+            while (!verifyDone && vElapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+                vElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+            if (!verifyDone) { onError?.Invoke("The request timed out. Please try again."); yield break; }
+            if (verify == null || !verify.success || string.IsNullOrEmpty(verify.sessionToken))
+            {
+                onError?.Invoke(verifyError ?? "Wallet sign-in failed. Please try again.");
+                yield break;
+            }
+
+            // 4) Store
+            UpdateTokens(verify.sessionToken, verify.refreshToken);
+            SaveSession();
+            BlockmakerLog.Info("[EvmXChainIdentity] Wallet sign-in complete — session token acquired.");
+            onSuccess?.Invoke();
         }
     }
 

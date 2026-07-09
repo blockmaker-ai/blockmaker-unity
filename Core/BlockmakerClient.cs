@@ -210,6 +210,51 @@ namespace Blockmaker
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
+        // WALLET-SIGNATURE AUTH (self-custody tier)
+        // ═══════════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Ask the server for a single-use challenge to sign with a self-custody wallet.
+        /// chain is "algorand" (Pera/Defly) or "evm" (xChain); pass the EVM signer
+        /// address for the "evm" path (null for "algorand").
+        /// </summary>
+        public IEnumerator RequestWalletChallenge(
+            string walletAddress, string chain, string evmAddress,
+            Action<WalletChallengeResult> onSuccess,
+            Action<string>                onError)
+        {
+            string url  = $"{_baseUrl}/v1/auth/wallet/challenge";
+            string body = JsonUtility.ToJson(new WalletChallengeRequest
+                { walletAddress = walletAddress, chain = chain, evmAddress = evmAddress });
+
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            yield return req.SendWebRequest();
+            HandleResponse(req, onSuccess, onError);
+        }
+
+        /// <summary>
+        /// Submit a wallet proof-of-ownership and receive a player session token +
+        /// refresh token (same shape as email/magic verify).
+        /// <para>algorand (Pera/Defly): pass <paramref name="signedTxn"/> (base64 of the
+        /// signed 0-amount self-payment whose note == nonce) and null for
+        /// <paramref name="signature"/>. evm (xChain): pass the personal_sign
+        /// <paramref name="signature"/> hex and null for <paramref name="signedTxn"/>.</para>
+        /// </summary>
+        public IEnumerator VerifyWalletSignature(
+            string walletAddress, string chain, string signature, string signedTxn, string nonce, string evmAddress,
+            Action<EmailVerifyResult> onSuccess,
+            Action<string>            onError)
+        {
+            string url  = $"{_baseUrl}/v1/auth/wallet/verify";
+            string body = JsonUtility.ToJson(new WalletVerifyRequest
+                { walletAddress = walletAddress, chain = chain, signature = signature, signedTxn = signedTxn, nonce = nonce, evmAddress = evmAddress });
+
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            yield return req.SendWebRequest();
+            HandleResponse(req, onSuccess, onError);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════════
         // SERVER-SIDE SIGNING (Email tier)
         // ═══════════════════════════════════════════════════════════════════════════
 
@@ -346,11 +391,18 @@ namespace Blockmaker
         /// endpoint directly and drain your treasury.
         /// For production, call the rewards endpoint from your own trusted server.
         /// </summary>
+        /// <param name="contextId">
+        /// Idempotency key. Pass a STABLE id you own for this logical reward (e.g.
+        /// "{raceId}:{wallet}:{reason}") and reuse the SAME value on any retry — the
+        /// server then dedups a retried send and never double-pays. Leave null and the
+        /// SDK mints a fresh key per call (protects only this call, not a caller-level retry).
+        /// </param>
         public void SendReward(
             string               recipientWallet,
             long                 amountMicroAlgo,
-            string               reason   = "reward",
-            long                 assetId  = 0,
+            string               reason    = "reward",
+            long                 assetId   = 0,
+            string               contextId = null,
             Action<RewardResult> onSuccess = null,
             Action<string>       onError   = null)
         {
@@ -366,7 +418,11 @@ namespace Blockmaker
                     recipientWallet = recipientWallet,
                     assetId         = assetId,
                     amountMicroAlgo = amountMicroAlgo,
-                    reason          = reason
+                    reason          = reason,
+                    // Stable key dedups retries; mint one if the caller didn't supply it.
+                    contextId       = string.IsNullOrEmpty(contextId)
+                        ? System.Guid.NewGuid().ToString("N")
+                        : contextId
                 },
                 config.longRequestTimeoutSeconds,
                 onSuccess, onError
@@ -375,15 +431,25 @@ namespace Blockmaker
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
-        // RACE RESULTS
+        // GAME-SPECIFIC ENDPOINTS
         // ═══════════════════════════════════════════════════════════════════════════
 
         /// <summary>POST JSON to a server path. Use for game-specific endpoints.</summary>
         public void Post<TReq, TRes>(string path, TReq body, Action<TRes> onSuccess = null, Action<string> onError = null) where TRes : class
         {
+            Post(path, body, config.defaultTimeoutSeconds, onSuccess, onError);
+        }
+
+        /// <summary>
+        /// POST JSON to a server path with an explicit timeout. Use a longer timeout (e.g.
+        /// <c>config.walletTimeoutSeconds</c>) for endpoints that scan a whole wallet — large
+        /// wallets can take well over the 10s default to enumerate on-chain.
+        /// </summary>
+        public void Post<TReq, TRes>(string path, TReq body, float timeoutSeconds, Action<TRes> onSuccess = null, Action<string> onError = null) where TRes : class
+        {
             StartCoroutine(PostJsonAuth<TRes>(
                 $"{_baseUrl}{path}", body,
-                config.defaultTimeoutSeconds,
+                timeoutSeconds,
                 onSuccess, onError
             ));
         }
@@ -921,8 +987,15 @@ namespace Blockmaker
         // ═══════════════════════════════════════════════════════════════════════════
 
         /// <summary>
+        /// True when a request would carry real backend auth (player JWT — or the
+        /// dev API key in the editor). Guests get false in builds: use this to skip
+        /// best-effort backend calls that would otherwise just spam 401s.
+        /// </summary>
+        public bool HasBackendSession => !string.IsNullOrEmpty(GetSessionToken());
+
+        /// <summary>
         /// Returns the best available auth token for the current identity:
-        /// JWT session token for Email/Magic tiers, API key in Editor only.
+        /// JWT session token for signed-in tiers, API key in Editor only.
         /// In player builds, returns empty string if no JWT is available —
         /// the server API key must never be shipped in client builds.
         /// </summary>
@@ -933,6 +1006,10 @@ namespace Blockmaker
                 return ss.SessionToken;
             if (identity is MagicIdentity magic && !string.IsNullOrEmpty(magic.SessionToken))
                 return magic.SessionToken;
+            if (identity is WalletConnectIdentity wc && !string.IsNullOrEmpty(wc.SessionToken))
+                return wc.SessionToken;
+            if (identity is EvmXChainIdentity evm && !string.IsNullOrEmpty(evm.SessionToken))
+                return evm.SessionToken;
     #if UNITY_EDITOR
             return config?.apiKey ?? "";
     #else

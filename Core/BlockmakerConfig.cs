@@ -42,8 +42,10 @@ namespace Blockmaker
         public bool enableMagicEmail = true;
 
         [Header("xChain EVM")]
-        [Tooltip("Enable xChain Accounts — lets EVM wallet users sign Algorand transactions from their existing wallet.")]
-        public bool enableEvmXChain = true;
+        [Tooltip("Enable xChain Accounts — lets EVM wallet users sign Algorand transactions from " +
+                 "their existing wallet. EXPERIMENTAL: works in native builds; the WebGL browser " +
+                 "path currently requires a self-hosted xChain JS bundle (see README).")]
+        public bool enableEvmXChain = false;
 
         [Header("Branding")]
         [Tooltip("URL shown in wallet apps when players approve connections. Defaults to your server URL if empty.")]
