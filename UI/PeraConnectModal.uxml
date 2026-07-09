@@ -7,8 +7,8 @@
         <!-- ── Connect Panel ─────────────────────────────────── -->
         <ui:VisualElement name="panel-connect" class="pera-card">
 
-            <ui:Button name="btn-back" class="pera-back-btn" text="&#x2190;" />
-            <ui:Button name="btn-close" class="pera-close-btn" text="&#x2715;" />
+            <ui:Button name="btn-back" class="pera-back-btn" text="&#x2039;" />
+            <ui:Button name="btn-close" class="pera-close-btn" text="&#215;" />
 
             <ui:VisualElement name="img-pera-icon" class="pera-logo" />
 
@@ -19,6 +19,24 @@
             </ui:VisualElement>
 
             <ui:Label name="lbl-connect-status" class="pera-status" text="Scan with your Pera Wallet" />
+            <ui:Label name="lbl-steps-hint" class="pera-steps-hint" text="Signing in takes 2 quick approvals in your wallet." />
+
+            <!-- Step 2 of 2: waiting for the sign-in approval (shown instead of the QR) -->
+            <ui:VisualElement name="panel-step2" class="pera-step2 pera-hidden">
+                <ui:Label class="pera-step2-badge" text="STEP 2 OF 2" />
+                <ui:Label name="lbl-step2-body" class="pera-step2-body" text="Approve the SIGN-IN REQUEST in your wallet app - it's a free signature, nothing leaves your wallet." />
+                <ui:VisualElement class="pera-step2-dots">
+                    <ui:VisualElement name="pera-step2-dot-1" class="pera-step2-dot" />
+                    <ui:VisualElement name="pera-step2-dot-2" class="pera-step2-dot" />
+                    <ui:VisualElement name="pera-step2-dot-3" class="pera-step2-dot" />
+                </ui:VisualElement>
+                <ui:Label class="pera-step2-hint" text="Check your phone - the request is waiting in the app." />
+                <ui:Label name="lbl-step2-resend-hint" class="pera-step2-resend-hint" text="Request expired or nothing in your app? Resend it." />
+                <ui:Button name="btn-step2-resend" class="pera-store-btn pera-step2-resend-btn" text="RESEND REQUEST" />
+                <ui:Button name="btn-step2-cancel" class="pera-step2-cancel-btn" text="CANCEL" />
+            </ui:VisualElement>
+
+            <ui:Button name="btn-open-wallet" class="pera-store-btn" text="OPEN IN WALLET APP" style="display: none; margin-bottom: 15px;" />
 
             <ui:VisualElement class="pera-divider" />
 
@@ -32,8 +50,8 @@
         <!-- ── Download Panel ────────────────────────────────── -->
         <ui:VisualElement name="panel-download" class="pera-card pera-hidden">
 
-            <ui:Button name="btn-download-back" class="pera-back-btn" text="&#x2190;" />
-            <ui:Button name="btn-close-dl" class="pera-close-btn" text="&#x2715;" />
+            <ui:Button name="btn-download-back" class="pera-back-btn" text="&#x2039;" />
+            <ui:Button name="btn-close-dl" class="pera-close-btn" text="&#215;" />
 
             <ui:VisualElement name="img-pera-icon-2" class="pera-logo" />
 

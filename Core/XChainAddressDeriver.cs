@@ -10,6 +10,8 @@ namespace Blockmaker
     /// LogicSig addresses from EVM addresses and provides signing utilities.
     /// SHA-512/256, Base32, and msgpack encoding are implemented internally
     /// so the Blockmaker SDK has zero external crypto dependencies.
+    /// LogicSig program template per the Algorand Foundation's xchain-accounts
+    /// (github.com/algorandfoundation/xchain-accounts, MIT).
     /// </summary>
     public static class XChainAddressDeriver
     {
