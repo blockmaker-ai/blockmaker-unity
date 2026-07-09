@@ -464,6 +464,13 @@ namespace Blockmaker
             {
                 BlockmakerLog.Warning("[BlockmakerAuth] No WalletConnect Project ID — Defly and X-Chain will not be available.");
             }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Restore browser-held wallet sessions (Pera JS etc.) NOW, independent of
+            // Reown init — a Reown failure/hang must not strand a returning Pera player's
+            // signing (their JWT restores but the Pera JS session never re-attached).
+            TryReconnectBrowserWalletSessions();
+#endif
         }
 
         private void OnReownInitialized()
@@ -758,6 +765,39 @@ namespace Blockmaker
             }
 
     #if UNITY_WEBGL && !UNITY_EDITOR
+            // Browser-held sessions (Pera JS lib / Magic / EVM) restore independently of
+            // Reown — see TryReconnectBrowserWalletSessions (idempotent; normally already
+            // fired from Start, this covers late callers).
+            TryReconnectBrowserWalletSessions();
+    #else
+            // Native (non-WebGL): the WCv1 Pera path doesn't go through _connector.TryRestoreSession
+            // above. If a wallet identity restored without a JWT, run a fresh wallet-signature login
+            // now that we're past Reown init. Login() itself waits for the WCv1 relay to reconnect,
+            // and RunWalletLogin defers while any sign is in flight. No-ops if a token already exists.
+            if (Identity is WalletConnectIdentity || Identity is EvmXChainIdentity)
+                TriggerWalletLogin(Identity);
+    #endif
+        }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+        // Guard so the browser reconnect runs exactly once whether it fires from Start
+        // (Reown-independent) or from OnReownInitialized (the legacy trigger).
+        private bool _browserWalletReconnectAttempted;
+
+        /// <summary>
+        /// Restore wallet sessions that live in the BROWSER, not in Reown: Pera's JS lib
+        /// (localStorage), Magic, and the EVM bridge. Historically this only ran from
+        /// OnReownInitialized — if Reown's init threw or hung (its failure path swallows
+        /// and never fires OnInitialized), a returning Pera player's JWT restored fine but
+        /// the Pera JS session was never re-attached, so their FIRST signature failed with
+        /// "Pera wallet not connected" until a manual reconnect. Pera needs nothing from
+        /// Reown, so this is also called directly from Start.
+        /// </summary>
+        private void TryReconnectBrowserWalletSessions()
+        {
+            if (_browserWalletReconnectAttempted) return;
+            _browserWalletReconnectAttempted = true;
+
             foreach (var provider in new[] { "Pera", "Defly" })
             {
                 BlockmakerWalletBridge.TryReconnect(
@@ -778,7 +818,6 @@ namespace Blockmaker
                     nameof(OnWalletReconnectFailed)
                 );
             }
-
 
             var cfg = BlockmakerClient.Instance?.config;
             if (Identity is MagicIdentity && cfg != null && cfg.enableMagicEmail && !string.IsNullOrEmpty(cfg.magicPublishableKey))
@@ -801,15 +840,8 @@ namespace Blockmaker
                     nameof(OnEvmRestoreError)
                 );
             }
-    #else
-            // Native (non-WebGL): the WCv1 Pera path doesn't go through _connector.TryRestoreSession
-            // above. If a wallet identity restored without a JWT, run a fresh wallet-signature login
-            // now that we're past Reown init. Login() itself waits for the WCv1 relay to reconnect,
-            // and RunWalletLogin defers while any sign is in flight. No-ops if a token already exists.
-            if (Identity is WalletConnectIdentity || Identity is EvmXChainIdentity)
-                TriggerWalletLogin(Identity);
-    #endif
         }
+#endif
 
         // ── Connect wallet (QR flow) ───────────────────────────────────────────────
 
@@ -1677,7 +1709,12 @@ namespace Blockmaker
 
             if (error != null)
             {
-                SafeInvoke(OnAuthError, error);
+                // Inline-only: the caller's onError renders the message ON the code-entry
+                // page. Broadcasting OnAuthError here too made AuthPromptController close
+                // the OTP page (HandleAuthError → ShowOptionsPage), so ONE typo ejected
+                // the player from code entry — and re-requesting a code burns the
+                // 3-per-10-min budget. A wrong code is a field-level error, not an
+                // auth-flow failure.
                 onError?.Invoke(error);
                 yield break;
             }
@@ -1976,7 +2013,11 @@ namespace Blockmaker
                             if (_walletLoginSeq != seq) { BlockmakerLog.Info($"[BlockmakerAuth] Ignoring stale wallet sign-in error for {wc.ProviderName} (superseded by retry/cancel): {err}"); return; }
                             _walletLoginInFlight = false;
                             BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for {wc.ProviderName}: {err}");
-                        });
+                            // Tell the step-2 panel — a declined/failed sign-in signature
+                            // previously only logged, leaving the panel silently pulsing
+                            // "approve the request" with no hint anything went wrong.
+                            SafeInvoke(OnAuthStatus,
+                                "Sign-in request was declined or failed — use RESEND to try again, or CANCEL.");
                 }
                 else if (identity is EvmXChainIdentity evm)
                 {
@@ -1992,7 +2033,8 @@ namespace Blockmaker
                             if (_walletLoginSeq != seq) { BlockmakerLog.Info($"[BlockmakerAuth] Ignoring stale wallet sign-in error for EVM xChain (superseded by retry/cancel): {err}"); return; }
                             _walletLoginInFlight = false;
                             BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for EVM xChain: {err}");
-                        });
+                            SafeInvoke(OnAuthStatus,
+                                "Sign-in request was declined or failed — use RESEND to try again, or CANCEL.");
                 }
                 else
                 {
