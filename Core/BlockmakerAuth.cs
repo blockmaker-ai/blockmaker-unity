@@ -2018,6 +2018,7 @@ namespace Blockmaker
                             // "approve the request" with no hint anything went wrong.
                             SafeInvoke(OnAuthStatus,
                                 "Sign-in request was declined or failed — use RESEND to try again, or CANCEL.");
+                        });
                 }
                 else if (identity is EvmXChainIdentity evm)
                 {
@@ -2035,6 +2036,7 @@ namespace Blockmaker
                             BlockmakerLog.Warning($"[BlockmakerAuth] Wallet sign-in failed for EVM xChain: {err}");
                             SafeInvoke(OnAuthStatus,
                                 "Sign-in request was declined or failed — use RESEND to try again, or CANCEL.");
+                        });
                 }
                 else
                 {
