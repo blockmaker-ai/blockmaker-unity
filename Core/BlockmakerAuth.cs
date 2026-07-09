@@ -1469,12 +1469,13 @@ namespace Blockmaker
         public void OnEvmRestoreSuccess(string payload)
         {
             _evmRestoreCapturedIdentity = null;
-            var parts = payload.Split('|');
-            if (parts.Length < 3) return;
-            BlockmakerLog.Info($"[BlockmakerAuth] xChain SDK loaded, EVM wallet reconnected: {parts[2]}");
-            // Relay confirmed live. If the restored EVM identity still has no JWT, run a fresh
-            // wallet-signature login now (the gated, connection-ready moment). No-ops if a token
-            // already exists (VerifyRestoredSession refreshes/verifies any existing one).
+            // payload is the raw EVM address ("0x…") — the jslib already verified it
+            // matches the expected address passed to EvmTryRestore.
+            if (string.IsNullOrEmpty(payload)) return;
+            BlockmakerLog.Info($"[BlockmakerAuth] EVM wallet reconnected: {payload}");
+            // Provider confirmed live. If the restored EVM identity still has no JWT, run a
+            // fresh wallet-signature login now (the gated, connection-ready moment). No-ops if
+            // a token already exists (VerifyRestoredSession refreshes/verifies any existing one).
             if (Identity is EvmXChainIdentity evm && string.IsNullOrEmpty(evm.SessionToken))
                 TriggerWalletLogin(evm);
         }
@@ -1511,10 +1512,17 @@ namespace Blockmaker
             _pendingEvmError   = onError;
 
     #if UNITY_WEBGL && !UNITY_EDITOR
-            BlockmakerWalletBridge.EvmConnect(
+            // Zero-bundle browser path: discover the installed EVM wallets first
+            // (EIP-6963), then connect. OnEvmWalletsDiscovered picks the wallet and
+            // calls EvmConnect; the timeout below covers the whole chain.
+            // _evmConnectDispatched guards the discover→connect hop: a cancel +
+            // immediate reconnect can leave a STALE discovery callback in flight,
+            // and without the guard both callbacks would call EvmConnect → duplicate
+            // eth_requestAccounts popups.
+            _evmConnectDispatched = false;
+            BlockmakerWalletBridge.EvmDiscoverWallets(
                 gameObject.name,
-                nameof(OnEvmConnected),
-                nameof(OnEvmError)
+                nameof(OnEvmWalletsDiscovered)
             );
             StartWebGLTimeout(WalletSignTimeout, () =>
             {
@@ -1531,23 +1539,57 @@ namespace Blockmaker
                 return;
             }
 
+            // OnEvmConnected receives the raw EVM address and derives the Algorand
+            // LogicSig address in C# — the same funnel the WebGL bridge feeds.
             _connector.ConnectEvm(
-                evmAddr =>
-                {
-                    try
-                    {
-                        var algoAddr = XChainAddressDeriver.DeriveAlgorandAddress(evmAddr);
-                        OnEvmConnected($"EvmXChain|{algoAddr}|{evmAddr}");
-                    }
-                    catch (Exception ex)
-                    {
-                        BlockmakerLog.Error($"[BlockmakerAuth] Failed to derive Algorand address: {ex.Message}");
-                        OnEvmError("Something went wrong while setting up your wallet. Please try again.");
-                    }
-                },
-                err => OnEvmError(err)
+                evmAddr => OnEvmConnected(evmAddr),
+                err     => OnEvmError(err)
             );
     #endif
+        }
+
+        /// <summary>
+        /// Callback for BlockmakerWalletBridge.EvmDiscoverWallets (WebGL only).
+        /// Payload: "rdns|name;rdns|name;…" — one entry per EIP-6963 wallet the page
+        /// announced; "" when only the legacy window.ethereum fallback exists;
+        /// "!none" when no EVM provider is installed at all.
+        /// TODO: surface this list in a wallet-picker UI and pass the chosen rdns to
+        /// BlockmakerWalletBridge.EvmConnect. For now we pass "" and the jslib
+        /// auto-picks: last-used rdns (localStorage) → first announced wallet →
+        /// window.ethereum.
+        /// </summary>
+        // True once the current connect attempt has dispatched EvmConnect — stale
+        // discovery callbacks (from a cancelled attempt) must not dispatch a second.
+        private bool _evmConnectDispatched;
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnEvmWalletsDiscovered(string payload)
+        {
+            if (_pendingEvmSuccess == null && _pendingEvmError == null)
+                return; // the connect was cancelled while discovery ran
+
+            if (_evmConnectDispatched)
+                return; // a discovery callback already advanced this attempt to connect
+
+            if (payload == "!none")
+            {
+                OnEvmError("No EVM wallet found. Please install one to continue.");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(payload))
+                BlockmakerLog.Info($"[BlockmakerAuth] EVM wallets discovered: {payload}");
+            else
+                BlockmakerLog.Info("[BlockmakerAuth] No EIP-6963 wallets announced — using the window.ethereum fallback.");
+
+            _evmConnectDispatched = true;
+            BlockmakerWalletBridge.EvmConnect(
+                "",   // auto-pick (see TODO above)
+                gameObject.name,
+                nameof(OnEvmConnected),
+                nameof(OnEvmError)
+            );
         }
 
         public void CancelEvmConnect()
@@ -1570,18 +1612,20 @@ namespace Blockmaker
             if (_pendingEvmSuccess == null && _pendingEvmError == null)
                 return;
 
-            var parts = payload.Split('|');
-            if (parts.Length < 3)
+            // payload is the raw EVM address ("0x…") — from the WebGL bridge or the
+            // native Reown connector. The Algorand LogicSig address is derived here
+            // in C# (byte-proven against the on-chain LogicSig derivation).
+            var evmAddress = payload;
+            if (string.IsNullOrEmpty(evmAddress) ||
+                !evmAddress.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             {
                 OnEvmError("Something went wrong during wallet connection. Please try again.");
                 return;
             }
 
-            var algoAddr   = parts[1];
-            var evmAddress = parts[2];
-
             try
             {
+                var algoAddr = XChainAddressDeriver.DeriveAlgorandAddress(evmAddress);
                 var prevTier = Tier;
                 var identity = new EvmXChainIdentity(algoAddr, evmAddress);
                 SetIdentity(identity);

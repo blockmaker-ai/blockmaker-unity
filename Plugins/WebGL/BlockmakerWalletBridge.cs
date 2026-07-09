@@ -146,24 +146,41 @@ namespace Blockmaker
             string errorCallback);
 
         // ── xChain EVM ─────────────────────────────────────────────────────────────
+        // Zero-bundle path: the jslib is a thin EIP-1193 transport (EIP-6963
+        // discovery + account requests + signing); all address derivation and
+        // signed-transaction assembly happens in C# (XChainAddressDeriver).
 
+        /// <summary>
+        /// Collect EIP-6963 wallet announcements (~300ms window). The callback
+        /// receives "rdns|name;rdns|name;…" — one entry per announced wallet;
+        /// "" when only the legacy window.ethereum fallback exists; "!none"
+        /// when no EVM provider is available at all.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void EvmDiscoverWallets(
+            string gameObjectName,
+            string callback);
+
+        /// <summary>
+        /// Connect an EVM wallet via eth_requestAccounts. rdns selects a specific
+        /// EIP-6963 wallet ("" = last-used → first announced → window.ethereum).
+        /// successCallback receives the raw EVM address ("0x…") — the Algorand
+        /// LogicSig address is derived in C#.
+        /// </summary>
         [DllImport("__Internal")]
         public static extern void EvmConnect(
+            string rdns,
             string gameObjectName,
             string successCallback,
             string errorCallback);
 
+        /// <summary>
+        /// Silently re-attach the EVM wallet after a page reload (eth_accounts,
+        /// no popup). successCallback receives the raw EVM address ("0x…").
+        /// </summary>
         [DllImport("__Internal")]
         public static extern void EvmTryRestore(
             string expectedEvmAddress,
-            string gameObjectName,
-            string successCallback,
-            string errorCallback);
-
-        [DllImport("__Internal")]
-        public static extern void EvmSignTransaction(
-            string txnBase64,
-            string evmAddress,
             string gameObjectName,
             string successCallback,
             string errorCallback);
@@ -177,6 +194,19 @@ namespace Blockmaker
         public static extern void EvmSignPersonal(
             string message,
             string evmAddress,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>
+        /// Sign C#-built EIP-712 typed data via eth_signTypedData_v4. The
+        /// successCallback receives the raw 0x-hex signature; C# parses it
+        /// (ParseEvmSignature) and assembles the LogicSig-signed transaction.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void EvmSignTypedData(
+            string evmAddress,
+            string typedDataJson,
             string gameObjectName,
             string successCallback,
             string errorCallback);
@@ -259,17 +289,20 @@ namespace Blockmaker
 
         // ── xChain EVM stubs ───────────────────────────────────────────────────────
 
+        public static void EvmDiscoverWallets(string go, string cb)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmDiscoverWallets — not in WebGL.");
+
         public static void EvmTryRestore(string evm, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmTryRestore — not in WebGL.");
 
-        public static void EvmConnect(string go, string s, string e)
+        public static void EvmConnect(string rdns, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmConnect — not in WebGL. Use ReownWalletConnector for native.");
-
-        public static void EvmSignTransaction(string txn, string evm, string go, string s, string e)
-            => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignTransaction — not in WebGL.");
 
         public static void EvmSignPersonal(string message, string evm, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignPersonal — not in WebGL.");
+
+        public static void EvmSignTypedData(string evm, string typedDataJson, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignTypedData — not in WebGL.");
 
         public static void EvmDisconnect()
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmDisconnect — not in WebGL.");
