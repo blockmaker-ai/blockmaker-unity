@@ -116,6 +116,7 @@ namespace Blockmaker
 
         // ── Unified wallet picker (page-evm-wallets) ──────────────────────────────
         private VisualElement _pageEvmWallets;
+        private Button        _btnBackCorner;
         private Label         _lblEvmHeading;
         private Label         _lblEvmSubheading;
         private VisualElement _evmStateList;    // list pane: the unified row list
@@ -291,7 +292,10 @@ namespace Blockmaker
                 root.Q("evm-dot-2"),
                 root.Q("evm-dot-3"),
             };
-            root.Q<Button>("btn-back-from-evm")?.RegisterCallback<ClickEvent>(_   => OnEvmBackClicked());
+            // Single card-level corner back button — its action is set per page
+            // via SetBack() (routed contextually; hidden on the first page).
+            _btnBackCorner = root.Q<Button>("btn-back-corner");
+            _btnBackCorner?.RegisterCallback<ClickEvent>(_ => _backAction?.Invoke());
             root.Q<Button>("btn-evm-find-wallet")?.RegisterCallback<ClickEvent>(_ => OnEvmFindWalletClicked());
             _btnEvmRetry?.RegisterCallback<ClickEvent>(_  => OnEvmRetryClicked());
             _btnEvmCancel?.RegisterCallback<ClickEvent>(_ => OnEvmCancelClicked());
@@ -307,10 +311,8 @@ namespace Blockmaker
             // "EVM / AVM Wallets" page (name kept for back-compat with older UXML).
             root.Q<Button>("btn-algorand")?.RegisterCallback<ClickEvent>(_     => BeginUnifiedWalletFlow());
             // Pera/Defly rows are no longer static UXML — BuildBaseWalletRows adds
-            // them to the unified list when the picker page opens.
-            root.Q<Button>("btn-back-options")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
-
-            root.Q<Button>("btn-cancel-connect")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
+            // them to the unified list when the picker page opens. (The old per-page
+            // back buttons are gone; the corner button above handles all back nav.)
             _btnCopyLink?.RegisterCallback<ClickEvent>(_ => CopyWcLink());
             // Must run synchronously inside the click handler: on WebGL the deep link is a
             // browser navigation, and iOS Safari only allows it from a user gesture.
@@ -500,6 +502,25 @@ namespace Blockmaker
             }
 
             if (activePage != null) activePage.style.display = DisplayStyle.Flex;
+
+            // Route the shared corner back button for this page. The picker delegates
+            // to OnEvmBackClicked (which itself cancels a connect/error or returns to
+            // options). The first page has no back.
+            if      (activePage == _pageOptions)    SetBack(null);
+            else if (activePage == _pageEvmWallets) SetBack(OnEvmBackClicked);
+            else if (activePage == _pageOtp)        SetBack(ShowOptionsPage);
+            else if (activePage == _pageQr)         SetBack(ShowOptionsPage);
+            else                                    SetBack(null);   // step2 etc.: no back mid-flow
+        }
+
+        // The corner back button's action for the current page (null = hidden).
+        private System.Action _backAction;
+
+        private void SetBack(System.Action action)
+        {
+            _backAction = action;
+            if (_btnBackCorner != null)
+                _btnBackCorner.style.display = action == null ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         // ── Step 2 of 2 (wallet sign-in approval) ─────────────────────────────────
@@ -937,12 +958,13 @@ namespace Blockmaker
         // Curated wallets for native/editor builds (replaces the single "scan QR"
         // row) — each connects via the existing Reown QR fallback flow. Letter-glyph
         // chips with FIXED hues (same S/V as WalletFallbackColor).
-        private static readonly (string name, string letter, float hue)[] CuratedEvmWallets =
+        // letter/hue are the fallback chip if the logo texture is ever missing.
+        private static readonly (string name, string letter, float hue, string logoClass)[] CuratedEvmWallets =
         {
-            ("MetaMask",        "M",  30f),
-            ("Rainbow",         "R", 260f),
-            ("Coinbase Wallet", "C", 220f),
-            ("Trust Wallet",    "T", 160f),
+            ("MetaMask",        "M",  30f, "wallet-logo--metamask"),
+            ("Rainbow",         "R", 260f, "wallet-logo--rainbow"),
+            ("Coinbase Wallet", "C", 220f, "wallet-logo--coinbase"),
+            ("Trust Wallet",    "T", 160f, "wallet-logo--trust"),
         };
 
         /// The Pera (RECOMMENDED) + Defly rows that top the unified list on every
@@ -992,14 +1014,15 @@ namespace Blockmaker
             RemoveEvmSkeletonRow();
 
             int index = 0;
-            foreach (var (name, letter, hue) in CuratedEvmWallets)
+            foreach (var (name, letter, hue, logoClass) in CuratedEvmWallets)
             {
                 string walletName  = name;   // capture per-row
                 string chipLetter  = letter;
                 float  chipHue     = hue;
+                string chipLogo    = logoClass;
                 var row = BuildWalletRow(
                     walletName, null, WalletBadge.None,
-                    (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, chipLetter, chipHue),
+                    (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, chipLetter, chipHue, chipLogo),
                     () => BeginEvmConnectFallback(walletName));
                 AnimateRowEnter(row, index++);
                 _evmWalletList.Add(row);
@@ -1196,8 +1219,16 @@ namespace Blockmaker
         /// Letter-glyph chip for a curated wallet: FIXED hue (same S/V as
         /// WalletFallbackColor) so the four keep stable brand-adjacent colors
         /// without shipping logo assets.
-        private static void ApplyCuratedWalletIcon(VisualElement icon, Label glyph, string letter, float hue)
+        private static void ApplyCuratedWalletIcon(VisualElement icon, Label glyph, string letter, float hue, string logoClass = null)
         {
+            if (!string.IsNullOrEmpty(logoClass))
+            {
+                // Real brand logo (USS background-image); no letter chip.
+                icon.style.backgroundColor = StyleKeyword.None;
+                icon.AddToClassList(logoClass);
+                if (glyph != null) glyph.style.display = DisplayStyle.None;
+                return;
+            }
             icon.style.backgroundImage = StyleKeyword.None;
             icon.style.backgroundColor = Color.HSVToRGB(hue / 360f, 0.42f, 0.38f);
             if (glyph != null)

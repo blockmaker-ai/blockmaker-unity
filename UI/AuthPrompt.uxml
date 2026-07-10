@@ -45,9 +45,6 @@
             <ui:VisualElement name="page-evm-wallets" class="auth-page">
 
                 <ui:VisualElement class="auth-page-nav">
-                    <ui:Button name="btn-back-from-evm" class="auth-back-btn" text="">
-                        <ui:VisualElement class="auth-chevron auth-chevron--left" />
-                    </ui:Button>
                     <ui:VisualElement class="auth-page-heading-wrap">
                         <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="EVM / AVM Wallets" />
                     </ui:VisualElement>
@@ -94,9 +91,6 @@
 
                 <ui:VisualElement name="otp-step1" class="auth-step">
                     <ui:VisualElement class="auth-page-nav">
-                        <ui:Button name="btn-back-options" class="auth-back-btn" text="">
-                            <ui:VisualElement class="auth-chevron auth-chevron--left" />
-                        </ui:Button>
                         <ui:Label class="auth-page-heading" text="Enter your email" />
                     </ui:VisualElement>
                     <ui:Label class="auth-field-label" text="EMAIL ADDRESS" />
@@ -119,9 +113,6 @@
             <ui:VisualElement name="page-qr" class="auth-page auth-page--center">
 
                 <ui:VisualElement class="auth-page-nav">
-                    <ui:Button name="btn-cancel-connect" class="auth-back-btn" text="">
-                        <ui:VisualElement class="auth-chevron auth-chevron--left" />
-                    </ui:Button>
                     <ui:Label name="lbl-qr-provider" class="auth-page-heading" text="Scan with Pera Wallet" />
                 </ui:VisualElement>
 
@@ -164,6 +155,12 @@
 
             <!-- Status / error -->
             <ui:Label name="lbl-auth-status" class="auth-status" text="" />
+
+            <!-- Card-level back button — top-left corner, mirrors the close button.
+                 Shown only on sub-pages; the controller routes its action per page. -->
+            <ui:Button name="btn-back-corner" class="auth-back-btn" text="">
+                <ui:VisualElement class="auth-chevron auth-chevron--left" />
+            </ui:Button>
 
             <!-- Close button (last child so it renders above all pages) -->
             <ui:Button name="btn-close" class="auth-close-btn" text="">

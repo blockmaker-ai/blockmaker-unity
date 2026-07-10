@@ -127,19 +127,23 @@
 /* ── Page navigation (back arrow + heading) ────────────────────────────── */
 
 .auth-page-nav {
-    flex-direction: row;
-    align-items:    center;
-    margin-bottom:  28px;
-    align-self:     stretch;
+    flex-direction:  row;
+    align-items:     center;
+    justify-content: center;   /* heading centred between the corner back + close buttons */
+    margin-bottom:   28px;
+    align-self:      stretch;
 }
 
 .auth-back-btn {
-    width:                      42px;
-    height:                     42px;
-    border-top-left-radius:     12px;
-    border-top-right-radius:    12px;
-    border-bottom-left-radius:  12px;
-    border-bottom-right-radius: 12px;
+    position:                   absolute;
+    top:                        14px;
+    left:                       14px;
+    width:                      36px;
+    height:                     36px;
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
     border-top-width:           1px;
     border-right-width:         1px;
     border-bottom-width:        1px;
@@ -307,6 +311,7 @@
 .auth-btn-icon--email .auth-btn-icon-glyph {
     color:     rgb(255, 255, 255);
     font-size: 22px;
+    translate: 1px 0;   /* optical-centre the @ — its ink sits left of the advance box */
 }
 
 /* Unified wallet entry (options page) — generic wallet mark, not one brand */
@@ -327,6 +332,13 @@
     background-size: 100% 100%;
     background-position: center;
 }
+
+/* Curated EVM wallet logos (native/editor rows) — full-bleed square brand tiles
+   in the rounded 40px chip. */
+.wallet-logo--metamask { background-image: url("metamask-logo.png"); background-size: 100% 100%; }
+.wallet-logo--coinbase { background-image: url("coinbase-logo.png"); background-size: 100% 100%; }
+.wallet-logo--rainbow  { background-image: url("rainbow-logo.png");  background-size: 100% 100%; }
+.wallet-logo--trust    { background-image: url("trust-logo.png");    background-size: 100% 100%; }
 
 .auth-btn-icon--pera .auth-btn-icon-glyph {
     display: none;
