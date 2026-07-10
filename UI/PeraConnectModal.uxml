@@ -7,8 +7,15 @@
         <!-- ── Connect Panel ─────────────────────────────────── -->
         <ui:VisualElement name="panel-connect" class="pera-card">
 
-            <ui:Button name="btn-back" class="pera-back-btn" text="&#x2039;" />
-            <ui:Button name="btn-close" class="pera-close-btn" text="&#215;" />
+            <ui:Button name="btn-back" class="pera-back-btn" text="">
+                <ui:VisualElement class="auth-chevron auth-chevron--left" />
+            </ui:Button>
+            <ui:Button name="btn-close" class="pera-close-btn" text="">
+                <ui:VisualElement class="auth-close-x">
+                    <ui:VisualElement class="auth-close-bar auth-close-bar--a" />
+                    <ui:VisualElement class="auth-close-bar auth-close-bar--b" />
+                </ui:VisualElement>
+            </ui:Button>
 
             <ui:VisualElement name="img-pera-icon" class="pera-logo" />
 
@@ -50,8 +57,15 @@
         <!-- ── Download Panel ────────────────────────────────── -->
         <ui:VisualElement name="panel-download" class="pera-card pera-hidden">
 
-            <ui:Button name="btn-download-back" class="pera-back-btn" text="&#x2039;" />
-            <ui:Button name="btn-close-dl" class="pera-close-btn" text="&#215;" />
+            <ui:Button name="btn-download-back" class="pera-back-btn" text="">
+                <ui:VisualElement class="auth-chevron auth-chevron--left" />
+            </ui:Button>
+            <ui:Button name="btn-close-dl" class="pera-close-btn" text="">
+                <ui:VisualElement class="auth-close-x">
+                    <ui:VisualElement class="auth-close-bar auth-close-bar--a" />
+                    <ui:VisualElement class="auth-close-bar auth-close-bar--b" />
+                </ui:VisualElement>
+            </ui:Button>
 
             <ui:VisualElement name="img-pera-icon-2" class="pera-logo" />
 

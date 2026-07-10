@@ -83,10 +83,31 @@ namespace Blockmaker
                 yield break;
             }
 
+            // Zero-bundle WebGL path — same shape as the native Reown branch below:
+            // C# builds the EIP-712 payload over the txn's raw TxID, the browser
+            // wallet signs it via eth_signTypedData_v4 (thin jslib transport), and
+            // C# parses the signature and assembles the LogicSig-signed bytes.
+            byte[] unsignedBytes = null;
+            byte[] program       = null;
+            string typedData     = null;
+            try
+            {
+                unsignedBytes = Convert.FromBase64String(unsignedTxnBase64);
+                var txnId     = XChainAddressDeriver.ComputeTransactionId(unsignedBytes);
+                typedData     = XChainAddressDeriver.BuildEip712TypedData(txnId);
+                program       = XChainAddressDeriver.GetLogicSigProgram(EvmAddress);
+            }
+            catch (Exception ex)
+            {
+                BlockmakerLog.Error($"[EvmXChainIdentity] Sign setup error: {ex.Message}");
+                onError?.Invoke("Something went wrong while preparing the transaction. Please try again.");
+                yield break;
+            }
+
             int signGen = BlockmakerAuth.Instance.BeginPendingSign();
-            BlockmakerWalletBridge.EvmSignTransaction(
-                unsignedTxnBase64,
+            BlockmakerWalletBridge.EvmSignTypedData(
                 EvmAddress,
+                typedData,
                 BlockmakerAuth.Instance.gameObject.name,
                 nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
                 nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
@@ -122,8 +143,23 @@ namespace Blockmaker
                 yield break;
             }
 
-            result = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
-            error  = BlockmakerAuth.Instance.ConsumePendingSignError();
+            var hexSig = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
+            error      = BlockmakerAuth.Instance.ConsumePendingSignError();
+
+            if (hexSig != null)
+            {
+                try
+                {
+                    var sigArg = XChainAddressDeriver.ParseEvmSignature(hexSig);
+                    var signed = XChainAddressDeriver.BuildSignedTransaction(unsignedBytes, program, sigArg);
+                    result = Convert.ToBase64String(signed);
+                }
+                catch (Exception ex)
+                {
+                    BlockmakerLog.Error($"[EvmXChainIdentity] Build signed txn error: {ex.Message}");
+                    error = "Something went wrong while completing the signature. Please try again.";
+                }
+            }
     #else
             var connector = ReownWalletConnector.Instance;
             if (connector == null || !connector.IsConnected)
@@ -206,45 +242,129 @@ namespace Blockmaker
             }
 
 #if UNITY_WEBGL && !UNITY_EDITOR
-            // WebGL has no atomic EVM group-signing bridge: the xChain JS SDK exposes only
-            // per-transaction signing (EvmSignTransaction), which authorizes each txn by its
-            // OWN transaction ID. A genuine atomic group must instead be authorized against the
-            // GROUP ID with a single signature reused across every txn (see the native branch
-            // below + XChainAddressDeriver) — so looping the per-txn signer would emit invalid
-            // group signatures, and there is no window.ethereum path that reproduces the group-id
-            // LogicSig wrapping in JS today. (The previous code called a JS bridge function that
-            // was never declared/implemented, which broke the WebGL player build.) So:
-            //   • no group field  → sign each txn individually via the single-txn path (identical
-            //                        to the native "no group field" branch — fully correct on WebGL).
-            //   • group field set → not supported on WebGL; fail cleanly rather than ship bad sigs.
-            byte[] webglGroupId;
+            // Zero-bundle WebGL group signing — mirrors the native Reown branch below:
+            // ONE eth_signTypedData_v4 signature over the 32-byte GROUP ID, then the
+            // SAME parsed signature arg + LogicSig program attach to EVERY txn in the
+            // group. (Proven against the on-chain LogicSig via mainnet simulate.)
+            if (BlockmakerAuth.Instance == null)
+            {
+                onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                yield break;
+            }
+
+            // Extract GroupID (non-yielding setup — catch sets error flag instead of yielding)
+            byte[] groupId    = null;
+            string typedData  = null;
+            byte[] program    = null;
+            string setupError = null;
             try
             {
-                webglGroupId = XChainAddressDeriver.ExtractGroupId(Convert.FromBase64String(unsignedTxnsBase64[0]));
+                var firstTxnBytes = Convert.FromBase64String(unsignedTxnsBase64[0]);
+                groupId = XChainAddressDeriver.ExtractGroupId(firstTxnBytes);
+
+                if (groupId != null)
+                {
+                    typedData = XChainAddressDeriver.BuildEip712TypedData(groupId);
+                    program   = XChainAddressDeriver.GetLogicSigProgram(EvmAddress);
+                }
             }
             catch (Exception ex)
             {
-                BlockmakerLog.Error($"[EvmXChainIdentity] WebGL group-id parse error: {ex.Message}");
+                BlockmakerLog.Error($"[EvmXChainIdentity] Group sign setup error: {ex.Message}");
+                setupError = "Something went wrong while signing the transactions. Please try again.";
+            }
+
+            if (setupError != null)
+            {
+                onError?.Invoke(setupError);
+                yield break;
+            }
+
+            if (groupId == null)
+            {
+                // No group field — sign individually (not an atomic group)
+                var results = new string[unsignedTxnsBase64.Length];
+                for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+                {
+                    string signed = null;
+                    string err = null;
+                    yield return SignTransaction(unsignedTxnsBase64[i], s => { signed = s; }, e => { err = e; });
+                    if (err != null) { onError?.Invoke(err); yield break; }
+                    results[i] = signed;
+                }
+                onSigned?.Invoke(results);
+                yield break;
+            }
+
+            // Sign the GroupID with the browser EVM wallet (yields outside try-catch)
+            int signGen = BlockmakerAuth.Instance.BeginPendingSign();
+            BlockmakerWalletBridge.EvmSignTypedData(
+                EvmAddress,
+                typedData,
+                BlockmakerAuth.Instance.gameObject.name,
+                nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
+                nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
+            );
+
+            float elapsed = 0f;
+            while (BlockmakerAuth.Instance != null &&
+                   BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen) &&
+                   BlockmakerAuth.Instance.PendingSignedTxn == null &&
+                   BlockmakerAuth.Instance.PendingSignError == null &&
+                   elapsed < BlockmakerAuth.WalletSignTimeout)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (BlockmakerAuth.Instance == null ||
+                !BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen))
+            {
+                onError?.Invoke("The request was interrupted. Please try again.");
+                yield break;
+            }
+
+            if (BlockmakerAuth.Instance.PendingSignedTxn == null &&
+                BlockmakerAuth.Instance.PendingSignError == null)
+            {
+                onError?.Invoke("The request timed out. Please try again.");
+                yield break;
+            }
+
+            var hexSig    = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
+            var signError = BlockmakerAuth.Instance.ConsumePendingSignError();
+
+            if (signError != null)
+            {
+                onError?.Invoke(signError);
+                yield break;
+            }
+            if (string.IsNullOrEmpty(hexSig))
+            {
+                onError?.Invoke("The transaction was not approved in your wallet. Please try again.");
+                yield break;
+            }
+
+            // Build all signed transactions with the SAME signature arg (non-yielding)
+            try
+            {
+                var sigArg = XChainAddressDeriver.ParseEvmSignature(hexSig);
+                var signedResults = new string[unsignedTxnsBase64.Length];
+
+                for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+                {
+                    var txnBytes    = Convert.FromBase64String(unsignedTxnsBase64[i]);
+                    var signedBytes = XChainAddressDeriver.BuildSignedTransaction(txnBytes, program, sigArg);
+                    signedResults[i] = Convert.ToBase64String(signedBytes);
+                }
+
+                onSigned?.Invoke(signedResults);
+            }
+            catch (Exception ex)
+            {
+                BlockmakerLog.Error($"[EvmXChainIdentity] Group sign error: {ex.Message}");
                 onError?.Invoke("Something went wrong while signing the transactions. Please try again.");
-                yield break;
             }
-
-            if (webglGroupId != null)
-            {
-                onError?.Invoke("Signing multiple transactions together isn't supported for this wallet on the web. Please try again from the app.");
-                yield break;
-            }
-
-            var webglResults = new string[unsignedTxnsBase64.Length];
-            for (int wi = 0; wi < unsignedTxnsBase64.Length; wi++)
-            {
-                string webglSigned = null;
-                string webglErr    = null;
-                yield return SignTransaction(unsignedTxnsBase64[wi], s => { webglSigned = s; }, e => { webglErr = e; });
-                if (webglErr != null) { onError?.Invoke(webglErr); yield break; }
-                webglResults[wi] = webglSigned;
-            }
-            onSigned?.Invoke(webglResults);
 #else
             // Native: atomic group signing via GroupID
             var connector = ReownWalletConnector.Instance;

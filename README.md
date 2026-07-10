@@ -8,7 +8,7 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 |--------|-------------|
 | **Pera** | QR code scan (WalletConnect v1). On WebGL the SDK uses Pera's official [@perawallet/connect](https://github.com/perawallet/connect); mobile browsers get an "Open in wallet app" deep link |
 | **Defly** | QR code scan (WalletConnect v2), mobile deep link per Defly's official SDK |
-| **X-Chain** *(experimental)* | Any EVM wallet (MetaMask, Rainbow, Coinbase + more) via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts). Native builds only for now — the WebGL browser path requires a self-hosted xChain JS bundle |
+| **X-Chain** *(beta)* | Any EVM wallet via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts). On WebGL the SDK discovers every wallet installed in the player's browser (EIP-6963) and shows it in the picker with its real icon — MetaMask, Rainbow, Coinbase Wallet, Trust + more; native builds connect via WalletConnect QR. Off by default — set `enableEvmXChain` in your BlockmakerConfig |
 | **Email** | Server-managed OTP out of the box (all platforms); optionally Magic SDK on WebGL with your own key |
 
 > Currently Algorand **mainnet** only.
@@ -31,7 +31,7 @@ Open `Packages/manifest.json` in your project folder and add:
 
 **In `"dependencies"`:**
 ```json
-"com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git#v1.1.0",
+"com.blockmaker.sdk": "https://github.com/blockmaker-ai/blockmaker-unity.git#v1.2.0",
 "com.nethereum.unity": "4.19.2",
 "com.reown.sign.nethereum": "1.6.0",
 "com.reown.sign.unity": "1.6.0",
@@ -88,11 +88,11 @@ BlockmakerAuth.Instance.ConnectWallet("Defly",
     error    => Debug.Log(error)
 );
 
-// X-Chain — any EVM wallet (MetaMask, Rainbow, Coinbase + more)
-// Experimental: native builds only for now (see Supported Wallets); enable via
-// enableEvmXChain in your BlockmakerConfig.
+// X-Chain — any EVM wallet (beta). On WebGL this auto-picks the player's
+// last-used browser wallet; native builds show a WalletConnect QR.
+// Off by default — set enableEvmXChain in your BlockmakerConfig.
 BlockmakerAuth.Instance.ConnectEvm(
-    identity => Debug.Log($"Connected: {identity.Address}"),
+    identity => Debug.Log($"Connected: {identity.Address}"),   // Algorand address, derived from the EVM key
     error    => Debug.Log(error)
 );
 
@@ -219,12 +219,40 @@ BlockmakerAuth.Instance.Logout();
 
 The SDK includes ready-to-use UI screens built with UI Toolkit:
 
-- **Auth screen** — wallet selection, QR display, email OTP flow
+- **Auth screen** — wallet picker, QR display, email OTP flow
 - **Wallet bar** — shows connected address, tier badge
 - **QR modal** — Pera/Defly/X-Chain connection with copy-link fallback
 - **Wallet upgrade prompt** — nudges guests to connect
 
 All UI is optional — you can build your own using the `BlockmakerAuth` API directly.
+
+## Wallet picker
+
+The built-in auth prompt includes a wallet picker — one flat list, no extra setup:
+
+- **Pera and Defly** always on top (QR connect, mobile deep links)
+- **EVM wallets** (when `enableEvmXChain` is on): on WebGL every wallet installed in
+  the player's browser appears automatically with its real icon (EIP-6963 discovery);
+  on native builds a curated set (MetaMask, Rainbow, Coinbase Wallet, Trust) connects
+  by WalletConnect QR
+- **Honest per-wallet states** — connecting, declined-in-wallet, request-already-pending,
+  each with retry/back; a "Find one" link when no browser wallet is installed
+
+Building your own picker instead? Two calls drive it:
+
+```csharp
+// List installed browser wallets (WebGL). Returns raw JSON:
+// {"wallets":[{"rdns":"io.metamask","name":"MetaMask","icon":"<base64 PNG>","lastUsed":true}],"legacy":true}
+// — or "!none" when no EVM wallet is installed. On native platforms it returns
+// {"wallets":[],"legacy":false,"native":true}: skip the picker and call ConnectEvm().
+BlockmakerAuth.Instance.DiscoverEvmWallets(json => BuildMyPicker(json));
+
+// Connect the wallet the player picked (rdns from discovery; "" = auto-pick).
+BlockmakerAuth.Instance.ConnectEvmWallet("io.metamask",
+    identity => Debug.Log($"Connected: {identity.Address}"),
+    error    => Debug.Log(error)   // "code|message", e.g. "4001|User rejected the request."
+);
+```
 
 ## Logging
 
@@ -248,7 +276,7 @@ All fields are optional — the SDK works with defaults out of the box.
 | `apiKey` | Your own API key (`sk_` prefix). **Only used in the Unity Editor, never shipped in player builds** |
 | `walletConnectProjectId` | Your own WalletConnect project ID. Leave empty to use the shared default |
 | `magicPublishableKey` | Magic SDK key for email login on WebGL. Without it, email login uses the built-in server OTP flow |
-| `enableEvmXChain` | Enable the experimental X-Chain EVM wallet login (default: off) |
+| `enableEvmXChain` | Enable X-Chain EVM wallet login *(beta)* — shows installed EVM wallets in the built-in picker (default: off) |
 | `dAppUrl` | URL shown in wallet apps when players approve a connection |
 | `dAppIconUrl` | Icon shown in wallet apps |
 | `walletSignTimeoutSeconds` | How long to wait for wallet approval (default: 120 seconds) |

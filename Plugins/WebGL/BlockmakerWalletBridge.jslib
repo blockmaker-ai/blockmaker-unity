@@ -49,11 +49,21 @@
  * MagicLogout          — Logs out of Magic and clears the session.
  * MagicTryRestore      — Checks if a Magic session is still active on load.
  *
- * ── xChain EVM ──────────────────────────────────────────────────────────────
- * EvmConnect           — Connects an EVM wallet (window.ethereum), derives an
- *                        Algorand LogicSig address. Returns "EvmXChain|algoAddr|evmAddr".
- * EvmSignTransaction   — Converts an Algorand txn to EIP-712, signs via the EVM
- *                        wallet, returns a LogicSig-wrapped signed transaction.
+ * ── xChain EVM (zero-bundle: EIP-6963 + EIP-1193, no SDK imports) ───────────
+ * EvmDiscoverWallets   — Collects EIP-6963 wallet announcements (~300ms),
+ *                        rasterizes each wallet icon to a 96x96 PNG and sends
+ *                        ONE JSON payload:
+ *                        {wallets:[{rdns,name,icon,lastUsed}],legacy:bool}
+ *                        ('!none' = no EVM provider at all).
+ * EvmConnect           — Connects a chosen (or last-used) EVM wallet via
+ *                        eth_requestAccounts. Returns the raw EVM address —
+ *                        C# derives the Algorand LogicSig address. Errors are
+ *                        "code|message" (numeric EIP-1193 code or '').
+ * EvmTryRestore        — Silent session restore via eth_accounts (no popup).
+ * EvmSignPersonal      — personal_sign for the wallet-login proof.
+ * EvmSignTypedData     — eth_signTypedData_v4 over C#-built EIP-712 typed data;
+ *                        returns the raw hex signature (C# parses it and
+ *                        assembles the LogicSig-signed transaction bytes).
  * EvmDisconnect        — Clears xChain state.
  */
 mergeInto(LibraryManager.library, {
@@ -1141,120 +1151,266 @@ mergeInto(LibraryManager.library, {
   // ══════════════════════════════════════════════════════════════════════════
   // ══  xChain EVM  ════════════════════════════════════════════════════════
   // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Zero-bundle design: NO SDK imports. The C# side (XChainAddressDeriver /
+  // EvmXChainIdentity) derives the Algorand LogicSig address, builds the
+  // EIP-712 typed data and assembles the final LogicSig-signed transaction
+  // bytes — these functions are a thin transport to the browser wallet's
+  // EIP-1193 provider (account requests + signing only). Wallets are found
+  // via EIP-6963 (multi-wallet safe, keyed by info.rdns which is stable
+  // across page loads); window.ethereum remains as a legacy fallback when
+  // nothing announces itself.
 
-  $loadXChainSDK: function() {
-    if (window._bmXChainPromise && !window._bmXChainFailed) return window._bmXChainPromise;
-    window._bmXChainFailed = false;
-    window._bmXChainPromise =
-      import('https://cdn.jsdelivr.net/npm/@algorandfoundation/xchain-js/+esm')
-        .then(function(mod) {
-          window._bmXChain = mod;
-          return mod;
-        })
-        .catch(function() {
-          return import('https://cdn.jsdelivr.net/npm/algo-models/+esm')
-            .then(function(mod) {
-              window._bmXChain = mod;
-              return mod;
-            });
-        })
-        .catch(function(err) {
-          window._bmXChainFailed = true;
-          throw err;
-        });
-    return window._bmXChainPromise;
+  // Collect EIP-6963 announcements into window._bmEvmProviders (rdns → {info,
+  // provider}). Wallets re-announce on every 'eip6963:requestProvider'
+  // dispatch, so this is safely re-runnable. Resolves with the map after
+  // ~waitMs (the announce events are synchronous in practice, but the spec
+  // doesn't require it).
+  $bmEvmDiscover: function(waitMs) {
+    if (!window._bmEvmProviders) window._bmEvmProviders = {};
+    if (!window._bmEvmAnnounceWired) {
+      window._bmEvmAnnounceWired = true;
+      window.addEventListener('eip6963:announceProvider', function(e) {
+        try {
+          var d = e.detail;
+          if (d && d.info && d.info.rdns && d.provider)
+            window._bmEvmProviders[d.info.rdns] = d;
+        } catch(err) {}
+      });
+    }
+    try { window.dispatchEvent(new Event('eip6963:requestProvider')); } catch(e) {}
+    return new Promise(function(resolve) {
+      setTimeout(function() { resolve(window._bmEvmProviders); }, waitMs || 300);
+    });
   },
 
-  /**
-   * EvmConnect
-   * Connects an EVM wallet (window.ethereum), derives a deterministic Algorand
-   * LogicSig address from the EVM address using xChain Accounts.
-   * On success: successCb("EvmXChain|algorandAddress|evmAddress")
-   * On error:   errorCb("error message")
-   */
-  EvmConnect__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$loadXChainSDK'],
-  EvmConnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr) {
-    var gameObjectName = UTF8ToString(gameObjectNamePtr);
-    var successCb      = UTF8ToString(successCbPtr);
-    var errorCb        = UTF8ToString(errorCbPtr);
+  // Pick a provider entry ({info, provider}): explicit rdns first, then the
+  // last-used rdns remembered in localStorage, then the first announced
+  // wallet, then legacy window.ethereum. Returns null when no provider
+  // exists at all. Call after bmEvmDiscover so the map is populated.
+  $bmEvmPickProvider: function(rdns) {
+    var map = window._bmEvmProviders || {};
+    if (rdns && map[rdns]) return map[rdns];
+    var last = null;
+    try { last = localStorage.getItem('bm_evm_last_wallet_rdns'); } catch(e) {}
+    if (last && map[last]) return map[last];
+    var keys = Object.keys(map);
+    if (keys.length > 0) return map[keys[0]];
+    if (typeof window.ethereum !== 'undefined' && window.ethereum)
+      return { info: null, provider: window.ethereum };
+    return null;
+  },
 
-    if (typeof window.ethereum === 'undefined') {
-      SendMessage(gameObjectName, errorCb, 'No EVM wallet found. Please install one to continue.');
-      return;
-    }
+  // The provider chosen by EvmConnect / EvmTryRestore, falling back to
+  // window.ethereum so signing still works if state was lost (e.g. a sign
+  // request lands before any connect/restore ran).
+  $bmEvmActiveProvider: function() {
+    if (window._bmEvmProviderEntry && window._bmEvmProviderEntry.provider)
+      return window._bmEvmProviderEntry.provider;
+    if (typeof window.ethereum !== 'undefined' && window.ethereum) return window.ethereum;
+    return null;
+  },
 
-    var evmAddress = null;
-
-    bmExitFullscreen()
-    .then(function() { return window.ethereum.request({ method: 'eth_requestAccounts' }); })
-    .then(function(accounts) {
-      if (!accounts || accounts.length === 0) throw new Error('No EVM accounts returned.');
-      evmAddress = accounts[0];
-      return loadXChainSDK();
-    })
-    .then(function(xchain) {
-      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || (xchain.default && xchain.default.deriveAddress);
-      if (!deriveAddress) throw new Error('xChain SDK: address derivation function not found.');
-      var algoAddr = deriveAddress(evmAddress);
-      window._bmEvmAddress  = evmAddress;
-      window._bmXChainAlgoAddr = algoAddr;
-      console.log('[BlockmakerWalletBridge] xChain connected:', evmAddress, '->', algoAddr);
-      bmRestoreFullscreen();
-      SendMessage(gameObjectName, successCb, 'EvmXChain|' + algoAddr + '|' + evmAddress);
-    })
-    .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'EVM wallet connection failed.';
-      console.error('[BlockmakerWalletBridge] EvmConnect error:', msg);
-      bmRestoreFullscreen();
-      SendMessage(gameObjectName, errorCb, msg);
+  // Rasterize one EIP-6963 wallet icon into a 96x96 PNG, resolving with the
+  // base64 payload (no 'data:image/png;base64,' prefix) or '' on ANY failure —
+  // this promise never rejects. info.icon is a data: URI; 6 of 9 major wallets
+  // ship SVG data URIs (Zerion's is percent-encoded rather than base64), and
+  // Unity's Texture2D.LoadImage cannot decode SVG — loading through a JS Image
+  // handles any valid data URI encoding, sandboxes the SVG (no script
+  // execution), and the canvas re-encode yields a uniform PNG Unity CAN load.
+  // Phantom pads its data URI with literal newlines — trim first. Raw icon
+  // strings over 64KB are skipped, and each rasterization is capped at ~800ms
+  // so one broken icon can never stall discovery.
+  $bmEvmRasterizeIcon: function(iconUri) {
+    return new Promise(function(resolve) {
+      try {
+        var src = (typeof iconUri === 'string') ? iconUri.trim() : '';
+        if (!src || src.length > 65536) { resolve(''); return; }
+        var done = false;
+        var finish = function(b64) { if (!done) { done = true; resolve(b64); } };
+        var timer = setTimeout(function() { finish(''); }, 800);
+        var img = new Image();
+        img.crossOrigin = 'anonymous'; // no-op for data: URIs; avoids canvas taint on remote icons
+        img.onload = function() {
+          clearTimeout(timer);
+          try {
+            var canvas    = document.createElement('canvas');
+            canvas.width  = 96;
+            canvas.height = 96;
+            canvas.getContext('2d').drawImage(img, 0, 0, 96, 96);
+            var dataUrl = canvas.toDataURL('image/png');
+            finish(dataUrl.replace(/^data:image\/png;base64,/, ''));
+          } catch (e) { finish(''); }
+        };
+        img.onerror = function() { clearTimeout(timer); finish(''); };
+        img.src = src;
+      } catch (e) { resolve(''); }
     });
   },
 
   /**
-   * EvmSignTransaction
-   * Converts an Algorand transaction to EIP-712 typed data, signs via the EVM
-   * wallet, and constructs a LogicSig-wrapped signed transaction.
-   * On success: successCb("base64SignedTxn")
-   * On error:   errorCb("error message")
+   * EvmDiscoverWallets — collect EIP-6963 wallet announcements (~300ms window),
+   * rasterize each wallet's icon to a 96x96 PNG, then send ONE JSON payload:
+   *   {"wallets":[{"rdns":"io.metamask","name":"MetaMask",
+   *                "icon":"<base64 PNG or ''>","lastUsed":true|false}, …],
+   *    "legacy":true|false}
+   *   - wallets  : one entry per announced EIP-6963 wallet (may be empty)
+   *   - name     : raw wallet name (JSON escaping handles any character)
+   *   - icon     : base64 PNG bytes, 96x96, NO "data:image/png;base64," prefix;
+   *                '' when the icon failed/timed out rasterizing
+   *   - lastUsed : true on the wallet matching localStorage bm_evm_last_wallet_rdns
+   *   - legacy   : true when a legacy window.ethereum provider exists
+   * Sentinel: '!none' when there is no EVM provider at all (no announced
+   * wallets AND no window.ethereum) — also the safety net on any discovery error.
    */
-  EvmSignTransaction__deps: ['$bmUint8ToBase64', '$bmBase64ToUint8', '$bmExitFullscreen', '$bmRestoreFullscreen'],
-  EvmSignTransaction: function(txnBase64Ptr, evmAddressPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
-    var txnBase64      = UTF8ToString(txnBase64Ptr);
-    var evmAddress     = UTF8ToString(evmAddressPtr);
+  EvmDiscoverWallets__deps: ['$bmEvmDiscover', '$bmEvmRasterizeIcon'],
+  EvmDiscoverWallets: function(gameObjectNamePtr, callbackPtr) {
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var callback       = UTF8ToString(callbackPtr);
+
+    bmEvmDiscover(300).then(function(map) {
+      var keys   = Object.keys(map);
+      var legacy = !!(typeof window.ethereum !== 'undefined' && window.ethereum);
+      if (keys.length === 0 && !legacy) {
+        SendMessage(gameObjectName, callback, '!none');
+        return;
+      }
+
+      var lastRdns = null;
+      try { lastRdns = localStorage.getItem('bm_evm_last_wallet_rdns'); } catch(e) {}
+
+      // All icon rasterizations run in parallel; each already resolves '' on
+      // its own failure/timeout, and the per-job .catch is a belt-and-braces
+      // guard so Promise.all can never reject. ONE SendMessage at the end.
+      var iconJobs = keys.map(function(k) {
+        return bmEvmRasterizeIcon(map[k].info.icon).catch(function() { return ''; });
+      });
+
+      return Promise.all(iconJobs).then(function(icons) {
+        var wallets = [];
+        for (var i = 0; i < keys.length; i++) {
+          var info = map[keys[i]].info;
+          wallets.push({
+            rdns:     info.rdns,
+            name:     String(info.name || info.rdns),
+            icon:     icons[i] || '',
+            lastUsed: !!(lastRdns && info.rdns === lastRdns)
+          });
+        }
+        SendMessage(gameObjectName, callback, JSON.stringify({ wallets: wallets, legacy: legacy }));
+      });
+    }).catch(function(err) {
+      // Discovery must never leave the C# side waiting on an unhandled rejection —
+      // report "no provider" so the flow fails fast with a friendly message (the
+      // C#-side timeout would eventually recover anyway, this is just quicker).
+      console.error('[Blockmaker] EVM wallet discovery failed:', err);
+      try { SendMessage(gameObjectName, callback, '!none'); } catch (_) {}
+    });
+  },
+
+  /**
+   * EvmConnect — connect an EVM wallet via eth_requestAccounts.
+   * rdns selects a specific EIP-6963 wallet; when provided it MUST match an
+   * announced provider — if it doesn't (e.g. the wallet was uninstalled since
+   * discovery), the error callback fires rather than silently connecting a
+   * different wallet than the one the user picked. Pass '' to auto-pick
+   * (last-used rdns from localStorage → first announced wallet →
+   * window.ethereum).
+   * On success: successCb("rdns|0xEvmAddress") — the CONNECTED wallet's rdns
+   * ('' for the window.ethereum fallback) followed by the address. The rdns
+   * echo lets C# drop a STALE success: cancel wallet A mid-popup, pick wallet
+   * B, then approve A's still-open popup — without the echo that approval
+   * would log the player into the wrong wallet. C# derives the Algorand
+   * LogicSig address from the address part.
+   * On error: errorCb("code|message") where code is the wallet's numeric
+   * EIP-1193 / JSON-RPC error code when it supplied one ('' otherwise), e.g.
+   * "4001|User rejected the request." (user declined) or
+   * "-32002|Already processing eth_requestAccounts…" (request already pending);
+   * "|No EVM wallet found. Please install one to continue." when no code.
+   * The message part is err.message verbatim. EvmConnect is the ONLY EVM entry
+   * point that forwards codes — sign errors keep their message-only shape.
+   */
+  EvmConnect__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$bmEvmDiscover', '$bmEvmPickProvider'],
+  EvmConnect: function(rdnsPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var rdns           = UTF8ToString(rdnsPtr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
     var successCb      = UTF8ToString(successCbPtr);
     var errorCb        = UTF8ToString(errorCbPtr);
 
-    if (typeof window.ethereum === 'undefined') {
-      SendMessage(gameObjectName, errorCb, 'No EVM wallet found.');
-      return;
-    }
-
-    if (!window._bmXChain) {
-      SendMessage(gameObjectName, errorCb, 'xChain SDK not loaded. Connect first.');
-      return;
-    }
-
-    var xchain = window._bmXChain;
-    var signTransaction = xchain.signTransaction || (xchain.default && xchain.default.signTransaction);
-    if (!signTransaction) {
-      SendMessage(gameObjectName, errorCb, 'xChain SDK: signTransaction function not found.');
-      return;
-    }
-
-    var bytes = bmBase64ToUint8(txnBase64);
-
     bmExitFullscreen()
-    .then(function() { return signTransaction(bytes, evmAddress, window.ethereum); })
-    .then(function(signedTxnBytes) {
-      var raw = signedTxnBytes instanceof Uint8Array ? signedTxnBytes : new Uint8Array(signedTxnBytes);
-      var b64 = bmUint8ToBase64(raw);
-      bmRestoreFullscreen();
-      SendMessage(gameObjectName, successCb, b64);
+    .then(function() { return bmEvmDiscover(300); })
+    .then(function(map) {
+      var entry;
+      if (rdns) {
+        // The user explicitly picked this wallet — never substitute another.
+        entry = (map && map[rdns]) ? map[rdns] : null;
+        if (!entry) throw new Error('The selected wallet (' + rdns + ') is not available. Please choose another wallet.');
+      } else {
+        entry = bmEvmPickProvider('');
+        if (!entry) throw new Error('No EVM wallet found. Please install one to continue.');
+      }
+      return entry.provider.request({ method: 'eth_requestAccounts' })
+        .then(function(accounts) {
+          if (!accounts || accounts.length === 0) throw new Error('No EVM accounts returned.');
+          var evmAddress = accounts[0];
+          window._bmEvmProviderEntry = entry;
+          window._bmEvmAddress       = evmAddress;
+          try {
+            if (entry.info && entry.info.rdns) localStorage.setItem('bm_evm_last_wallet_rdns', entry.info.rdns);
+            else localStorage.removeItem('bm_evm_last_wallet_rdns');
+          } catch(e) {}
+          var label = (entry.info && entry.info.name) ? entry.info.name : 'window.ethereum';
+          console.log('[BlockmakerWalletBridge] EVM wallet connected (' + label + '):', evmAddress);
+          bmRestoreFullscreen();
+          var echoRdns = (entry.info && entry.info.rdns) ? entry.info.rdns : '';
+          SendMessage(gameObjectName, successCb, echoRdns + '|' + evmAddress);
+        });
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'EVM wallet signing failed.';
+      // "code|message" — see the doc comment above. EvmConnect only; the C#
+      // side (OnEvmError) splits it and the picker UI branches on the code.
+      var code = (err && typeof err.code === 'number' && isFinite(err.code)) ? String(err.code) : '';
+      var msg  = (err && err.message) ? err.message : 'EVM wallet connection failed.';
+      console.error('[BlockmakerWalletBridge] EvmConnect error:', code ? code + ' ' + msg : msg);
       bmRestoreFullscreen();
+      SendMessage(gameObjectName, errorCb, code + '|' + msg);
+    });
+  },
+
+  /**
+   * EvmTryRestore — silently re-attach the EVM wallet after a page reload.
+   * Re-discovers wallets (preferring the last-used rdns) and uses eth_accounts
+   * (non-interactive) so no popup appears.
+   * On success: successCb("0xEvmAddress"). On error: errorCb(message).
+   */
+  EvmTryRestore__deps: ['$bmEvmDiscover', '$bmEvmPickProvider'],
+  EvmTryRestore: function(expectedEvmAddrPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var expectedEvmAddr = UTF8ToString(expectedEvmAddrPtr);
+    var gameObjectName  = UTF8ToString(gameObjectNamePtr);
+    var successCb       = UTF8ToString(successCbPtr);
+    var errorCb         = UTF8ToString(errorCbPtr);
+
+    bmEvmDiscover(300)
+    .then(function() {
+      var entry = bmEvmPickProvider('');
+      if (!entry) throw new Error('No EVM wallet found.');
+      return entry.provider.request({ method: 'eth_accounts' })
+        .then(function(accounts) {
+          if (!accounts || accounts.length === 0) {
+            throw new Error('EVM wallet not connected.');
+          }
+          var evmAddress = accounts[0];
+          if (expectedEvmAddr && evmAddress.toLowerCase() !== expectedEvmAddr.toLowerCase()) {
+            throw new Error('EVM wallet account changed.');
+          }
+          window._bmEvmProviderEntry = entry;
+          window._bmEvmAddress       = evmAddress;
+          console.log('[BlockmakerWalletBridge] EVM wallet session restored:', evmAddress);
+          SendMessage(gameObjectName, successCb, evmAddress);
+        });
+    })
+    .catch(function(err) {
+      var msg = (err && err.message) ? err.message : 'EVM restore failed.';
       SendMessage(gameObjectName, errorCb, msg);
     });
   },
@@ -1264,7 +1420,7 @@ mergeInto(LibraryManager.library, {
    * personal_sign (sign-in proof). The message is hex-encoded; the wallet applies
    * EIP-191 framing. On success: successCb("0xHexSignature"); on error: errorCb(msg).
    */
-  EvmSignPersonal__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen'],
+  EvmSignPersonal__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$bmEvmActiveProvider'],
   EvmSignPersonal: function(messagePtr, evmAddressPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var message        = UTF8ToString(messagePtr);
     var evmAddress     = UTF8ToString(evmAddressPtr);
@@ -1272,7 +1428,8 @@ mergeInto(LibraryManager.library, {
     var successCb      = UTF8ToString(successCbPtr);
     var errorCb        = UTF8ToString(errorCbPtr);
 
-    if (typeof window.ethereum === 'undefined') {
+    var provider = bmEvmActiveProvider();
+    if (!provider) {
       SendMessage(gameObjectName, errorCb, 'No EVM wallet found.');
       return;
     }
@@ -1286,7 +1443,7 @@ mergeInto(LibraryManager.library, {
 
     bmExitFullscreen()
     .then(function() {
-      return window.ethereum.request({ method: 'personal_sign', params: [hex, evmAddress] });
+      return provider.request({ method: 'personal_sign', params: [hex, evmAddress] });
     })
     .then(function(signature) {
       bmRestoreFullscreen();
@@ -1301,56 +1458,65 @@ mergeInto(LibraryManager.library, {
   },
 
   /**
-   * EvmTryRestore — reconnects the EVM wallet and loads xChain SDK after page reload.
-   * Uses eth_accounts (non-interactive) so no popup appears.
-   * On success: successCb("EvmXChain|algorandAddress|evmAddress")
-   * On error:   errorCb("error message")
+   * EvmSignTypedData — sign C#-built EIP-712 typed data (the xChain
+   * "Algorand Transaction" envelope over a TxID or a 32-byte group id) via
+   * eth_signTypedData_v4. Returns the RAW 0x-hex signature — the C# side
+   * parses it (ParseEvmSignature) and assembles the LogicSig-signed
+   * transaction bytes (BuildSignedTransaction).
+   * On success: successCb("0xHexSignature"). On error: errorCb(message).
    */
-  EvmTryRestore__deps: ['$loadXChainSDK'],
-  EvmTryRestore: function(expectedEvmAddrPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
-    var expectedEvmAddr = UTF8ToString(expectedEvmAddrPtr);
-    var gameObjectName  = UTF8ToString(gameObjectNamePtr);
-    var successCb       = UTF8ToString(successCbPtr);
-    var errorCb         = UTF8ToString(errorCbPtr);
+  EvmSignTypedData__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$bmEvmActiveProvider'],
+  EvmSignTypedData: function(evmAddressPtr, typedDataJsonPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var evmAddress     = UTF8ToString(evmAddressPtr);
+    var typedDataJson  = UTF8ToString(typedDataJsonPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
 
-    if (typeof window.ethereum === 'undefined') {
+    var provider = bmEvmActiveProvider();
+    if (!provider) {
       SendMessage(gameObjectName, errorCb, 'No EVM wallet found.');
       return;
     }
 
-    window.ethereum.request({ method: 'eth_accounts' })
-    .then(function(accounts) {
-      if (!accounts || accounts.length === 0) {
-        throw new Error('EVM wallet not connected.');
-      }
-      var evmAddress = accounts[0];
-      if (expectedEvmAddr && evmAddress.toLowerCase() !== expectedEvmAddr.toLowerCase()) {
-        throw new Error('EVM wallet account changed.');
-      }
-      window._bmEvmAddress = evmAddress;
-      return loadXChainSDK();
+    bmExitFullscreen()
+    .then(function() {
+      return provider.request({ method: 'eth_signTypedData_v4', params: [evmAddress, typedDataJson] });
     })
-    .then(function(xchain) {
-      var deriveAddress = xchain.deriveAddress || xchain.getAlgorandAddress || (xchain.default && xchain.default.deriveAddress);
-      if (!deriveAddress) throw new Error('xChain SDK: address derivation function not found.');
-      var algoAddr = deriveAddress(window._bmEvmAddress);
-      window._bmXChainAlgoAddr = algoAddr;
-      console.log('[BlockmakerWalletBridge] xChain session restored:', window._bmEvmAddress, '->', algoAddr);
-      SendMessage(gameObjectName, successCb, 'EvmXChain|' + algoAddr + '|' + window._bmEvmAddress);
+    .then(function(signature) {
+      bmRestoreFullscreen();
+      if (!signature) { SendMessage(gameObjectName, errorCb, 'Signature was empty or rejected.'); return; }
+      SendMessage(gameObjectName, successCb, signature);
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'EVM restore failed.';
+      var msg = (err && err.message) ? err.message : 'EVM wallet signing failed.';
+      bmRestoreFullscreen();
       SendMessage(gameObjectName, errorCb, msg);
     });
   },
 
   /**
-   * EvmDisconnect — clears xChain EVM state.
+   * EvmDisconnect — clears xChain EVM state (including the remembered
+   * last-used wallet, so the next connect starts from a clean slate).
    */
   EvmDisconnect: function() {
-    window._bmEvmAddress     = null;
-    window._bmXChainAlgoAddr = null;
+    window._bmEvmProviderEntry = null;
+    window._bmEvmAddress       = null;
+    try { localStorage.removeItem('bm_evm_last_wallet_rdns'); } catch(e) {}
     console.log('[BlockmakerWalletBridge] xChain EVM disconnected.');
+  },
+
+  /**
+   * OpenUrlInNewTab — open a URL in a NEW browser tab. On WebGL,
+   * Application.OpenURL performs a same-tab location change (see
+   * WalletDeepLink.cs) — fine for mobile wallet deep links, fatal for
+   * informational links like "find a wallet", which would replace the running
+   * game. noopener keeps the new tab from scripting back into the game.
+   */
+  OpenUrlInNewTab: function(urlPtr) {
+    var url = UTF8ToString(urlPtr);
+    try { window.open(url, '_blank', 'noopener'); }
+    catch (e) { console.error('[BlockmakerWalletBridge] OpenUrlInNewTab failed:', e); }
   }
 
 });

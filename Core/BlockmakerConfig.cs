@@ -43,8 +43,9 @@ namespace Blockmaker
 
         [Header("xChain EVM")]
         [Tooltip("Enable xChain Accounts — lets EVM wallet users sign Algorand transactions from " +
-                 "their existing wallet. EXPERIMENTAL: works in native builds; the WebGL browser " +
-                 "path currently requires a self-hosted xChain JS bundle (see README).")]
+                 "their existing wallet. Works on WebGL (any installed browser wallet via EIP-6963) " +
+                 "and native (WalletConnect QR). BETA: off by default while it matures — flip on " +
+                 "to show EVM wallets in the connect modal.")]
         public bool enableEvmXChain = false;
 
         [Header("Branding")]
