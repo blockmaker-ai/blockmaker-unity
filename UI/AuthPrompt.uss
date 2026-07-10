@@ -181,6 +181,17 @@
     margin-bottom: 24px;
 }
 
+/* Heading + small subtitle stacked next to the back arrow */
+.auth-page-heading-wrap {
+    flex-direction: column;
+}
+
+.auth-page-subheading {
+    font-size:  12px;
+    color:      rgba(238, 238, 246, 0.35);
+    margin-top: 2px;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    BUTTONS
    ═══════════════════════════════════════════════════════════════════════ */
@@ -290,26 +301,15 @@
     font-size: 22px;
 }
 
-.auth-btn-icon--algo {
-    background-color: rgb(255, 255, 255);
-    background-image: url("algorand-logo.png");
+/* Unified wallet entry (options page) — generic wallet mark, not one brand */
+.auth-btn-icon--wallets {
+    background-image: url("generic-wallet-icon.png");
     -unity-background-scale-mode: scale-to-fit;
     background-size: 100% 100%;
     background-position: center;
 }
 
-.auth-btn-icon--algo .auth-btn-icon-glyph {
-    display: none;
-}
-
-.auth-btn-icon--evm {
-    background-image: url("xchain-logo.png");
-    -unity-background-scale-mode: scale-to-fit;
-    background-size: 100% 100%;
-    background-position: center;
-}
-
-.auth-btn-icon--evm .auth-btn-icon-glyph {
+.auth-btn-icon--wallets .auth-btn-icon-glyph {
     display: none;
 }
 
@@ -837,11 +837,11 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   EVM WALLET PICKER (page-evm-wallets)
+   UNIFIED WALLET PICKER (page-evm-wallets)
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* Each state container is hidden by default; the controller flips exactly
-   one of them to flex (LOADING / EMPTY / LIST / CONNECTING+error). */
+/* The two panes are hidden by default; the controller flips exactly one to
+   flex: the LIST pane (Pera/Defly + the EVM portion) or CONNECTING+error. */
 .evm-state {
     flex-direction: column;
     display:        none;
@@ -853,41 +853,80 @@
     padding-bottom: 6px;
 }
 
-/* ── Loading ──────────────────────────────────────────────────────────── */
+/* ── EVM portion of the list (below the Pera/Defly rows) ──────────────── */
 
-.evm-spinner {
-    margin-top:    18px;
-    margin-bottom: 18px;
+.evm-section {
+    flex-direction: column;
 }
 
-.evm-loading-text {
+.evm-section-divider {
+    margin-top:    4px;
+    margin-bottom: 16px;
+}
+
+/* EVM sub-state containers — hidden by default; the controller shows one
+   (LOADING row / wallet rows / "none found" row). */
+.evm-substate {
+    display: none;
+}
+
+/* ── Loading row (discovery in flight) ────────────────────────────────── */
+
+.evm-sub-loading {
+    flex-direction: row;
+    align-items:    center;
+    height:         48px;
+    padding-left:   14px;
+}
+
+.evm-sub-spinner {
+    width:                      20px;
+    height:                     20px;
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    border-top-width:           2px;
+    border-right-width:         2px;
+    border-bottom-width:        2px;
+    border-left-width:          2px;
+    margin-right:               12px;
+    margin-top:                 0;
+    margin-bottom:              0;
+    flex-shrink:                0;
+}
+
+.evm-sub-loading-text {
     font-size:         13px;
     color:             rgba(238, 238, 246, 0.32);
-    -unity-text-align: middle-center;
-    margin-bottom:     16px;
+    -unity-text-align: middle-left;
 }
 
-/* ── Empty (no wallet detected) ───────────────────────────────────────── */
+/* ── "None found" row (quiet) ─────────────────────────────────────────── */
 
-.evm-empty-title {
-    font-size:         18px;
-    -unity-font-style: bold;
-    color:             rgb(238, 238, 246);
-    -unity-text-align: middle-center;
-    margin-top:        6px;
-    margin-bottom:     22px;
+.evm-none-row {
+    flex-direction:  row;
+    align-items:     center;
+    justify-content: space-between;
+    height:          48px;
+    padding-left:    14px;
+    padding-right:   6px;
 }
 
-.evm-find-btn {
-    margin-bottom: 18px;
-}
-
-.evm-empty-hint {
+.evm-none-text {
     font-size:         13px;
-    color:             rgba(238, 238, 246, 0.40);
-    white-space:       normal;
-    -unity-text-align: middle-center;
-    max-width:         320px;
+    color:             rgba(238, 238, 246, 0.32);
+    -unity-text-align: middle-left;
+}
+
+.evm-find-link {
+    height:      36px;
+    flex-shrink: 0;
+    color:       rgba(167, 139, 250, 0.60);
+}
+
+.evm-find-link:hover {
+    color: rgba(167, 139, 250, 0.90);
 }
 
 /* ── Wallet list ──────────────────────────────────────────────────────── */
@@ -901,6 +940,11 @@
 .evm-wallet-row {
     height:        56px;
     margin-bottom: 10px;
+}
+
+/* Rows with a second line (e.g. the native "scan QR" row) need more height */
+.evm-wallet-row--two-line {
+    height: 64px;
 }
 
 .evm-wallet-icon {

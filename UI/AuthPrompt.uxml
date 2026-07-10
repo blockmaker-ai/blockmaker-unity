@@ -28,22 +28,12 @@
                 </ui:VisualElement>
 
                 <ui:Button name="btn-algorand" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--algo">
-                        <ui:Label class="auth-btn-icon-glyph" text="A" />
-                    </ui:VisualElement>
-                    <ui:Label class="auth-btn-label" text="Algorand" />
-                    <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                    </ui:VisualElement>
-                </ui:Button>
-
-                <ui:Button name="btn-metamask" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--evm">
-                        <ui:Label class="auth-btn-icon-glyph" text="X" />
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--wallets">
+                        <ui:Label class="auth-btn-icon-glyph" text="W" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
-                        <ui:Label class="auth-btn-label" text="X-Chain" />
-                        <ui:Label class="auth-btn-sub" text="Any EVM wallet" />
+                        <ui:Label class="auth-btn-label" text="EVM / AVM Wallets" />
+                        <ui:Label class="auth-btn-sub" text="Algorand &amp; Ethereum-compatible" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:Label class="auth-btn-chevron-glyph" text=">" />
@@ -52,60 +42,67 @@
 
             </ui:VisualElement>
 
-            <!-- PAGE: Algorand wallet picker -->
-            <ui:VisualElement name="page-algo-wallets" class="auth-page">
-
-                <ui:VisualElement class="auth-page-nav">
-                    <ui:Button name="btn-back-from-wallets" class="auth-back-btn" text="&lt;" />
-                    <ui:Label class="auth-page-heading" text="Choose Wallet" />
-                </ui:VisualElement>
-
-                <ui:Button name="btn-pera" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--pera">
-                        <ui:Label class="auth-btn-icon-glyph" text="P" />
-                    </ui:VisualElement>
-                    <ui:Label class="auth-btn-label" text="Pera Wallet" />
-                    <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                    </ui:VisualElement>
-                </ui:Button>
-
-                <ui:Button name="btn-defly" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--defly">
-                        <ui:Label class="auth-btn-icon-glyph" text="D" />
-                    </ui:VisualElement>
-                    <ui:Label class="auth-btn-label" text="Defly Wallet" />
-                    <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                    </ui:VisualElement>
-                </ui:Button>
-
-
-            </ui:VisualElement>
-
-            <!-- PAGE: EVM wallet picker (EIP-6963 discovered wallets) -->
+            <!-- PAGE: unified wallet picker (Pera/Defly + EIP-6963 discovered EVM wallets) -->
             <ui:VisualElement name="page-evm-wallets" class="auth-page">
 
                 <ui:VisualElement class="auth-page-nav">
                     <ui:Button name="btn-back-from-evm" class="auth-back-btn" text="&lt;" />
-                    <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="Choose Wallet" />
+                    <ui:VisualElement class="auth-page-heading-wrap">
+                        <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="EVM / AVM Wallets" />
+                        <ui:Label name="lbl-evm-subheading" class="auth-page-subheading" text="Algorand &amp; Ethereum-compatible" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- STATE: loading (discovery in flight) -->
-                <ui:VisualElement name="evm-state-loading" class="evm-state evm-state--center">
-                    <ui:VisualElement class="auth-qr-spinner evm-spinner" />
-                    <ui:Label class="evm-loading-text" text="Looking for wallets..." />
-                </ui:VisualElement>
+                <!-- STATE: the unified list — Pera/Defly always, the EVM portion below -->
+                <ui:VisualElement name="evm-state-list" class="evm-state">
 
-                <!-- STATE: no wallet detected -->
-                <ui:VisualElement name="evm-state-empty" class="evm-state evm-state--center">
-                    <ui:Label class="evm-empty-title" text="No EVM wallet detected." />
-                    <ui:Button name="btn-evm-find-wallet" class="auth-cta-btn evm-find-btn" text="Find a Wallet" />
-                    <ui:Label class="evm-empty-hint" text="On a phone? Open this page in your wallet's built-in browser." />
-                </ui:VisualElement>
+                    <ui:Button name="btn-pera" class="auth-btn auth-btn--wallet" text="">
+                        <ui:VisualElement class="auth-btn-icon auth-btn-icon--pera">
+                            <ui:Label class="auth-btn-icon-glyph" text="P" />
+                        </ui:VisualElement>
+                        <ui:Label class="auth-btn-label" text="Pera Wallet" />
+                        <ui:VisualElement class="auth-btn-chevron">
+                            <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                        </ui:VisualElement>
+                    </ui:Button>
 
-                <!-- STATE: wallet list (rows are built in code, one per discovered wallet) -->
-                <ui:ScrollView name="evm-wallet-list" class="evm-state evm-wallet-list" />
+                    <ui:Button name="btn-defly" class="auth-btn auth-btn--wallet" text="">
+                        <ui:VisualElement class="auth-btn-icon auth-btn-icon--defly">
+                            <ui:Label class="auth-btn-icon-glyph" text="D" />
+                        </ui:VisualElement>
+                        <ui:Label class="auth-btn-label" text="Defly Wallet" />
+                        <ui:VisualElement class="auth-btn-chevron">
+                            <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                        </ui:VisualElement>
+                    </ui:Button>
+
+                    <!-- EVM portion — hidden entirely when config.enableEvmXChain is off -->
+                    <ui:VisualElement name="evm-section" class="evm-section">
+
+                        <ui:VisualElement class="auth-divider evm-section-divider">
+                            <ui:VisualElement class="auth-divider-line" />
+                            <ui:Label class="auth-divider-text" text="EVM WALLETS" />
+                            <ui:VisualElement class="auth-divider-line" />
+                        </ui:VisualElement>
+
+                        <!-- SUB-STATE: discovery in flight -->
+                        <ui:VisualElement name="evm-sub-loading" class="evm-substate evm-sub-loading">
+                            <ui:VisualElement class="auth-qr-spinner evm-sub-spinner" />
+                            <ui:Label class="evm-sub-loading-text" text="Looking for wallets..." />
+                        </ui:VisualElement>
+
+                        <!-- SUB-STATE: wallet rows (built in code: discovered / legacy / native) -->
+                        <ui:ScrollView name="evm-wallet-list" class="evm-substate evm-wallet-list" />
+
+                        <!-- SUB-STATE: nothing discovered -->
+                        <ui:VisualElement name="evm-sub-none" class="evm-substate evm-none-row">
+                            <ui:Label class="evm-none-text" text="Other EVM wallets &#8212; none found" />
+                            <ui:Button name="btn-evm-find-wallet" class="auth-link-btn evm-find-link" text="Find one" />
+                        </ui:VisualElement>
+
+                    </ui:VisualElement>
+
+                </ui:VisualElement>
 
                 <!-- STATE: connecting to one wallet (also hosts the error states) -->
                 <ui:VisualElement name="evm-state-connecting" class="evm-state evm-state--center">
