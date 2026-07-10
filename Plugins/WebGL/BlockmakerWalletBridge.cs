@@ -151,10 +151,15 @@ namespace Blockmaker
         // signed-transaction assembly happens in C# (XChainAddressDeriver).
 
         /// <summary>
-        /// Collect EIP-6963 wallet announcements (~300ms window). The callback
-        /// receives "rdns|name;rdns|name;…" — one entry per announced wallet;
-        /// "" when only the legacy window.ethereum fallback exists; "!none"
-        /// when no EVM provider is available at all.
+        /// Collect EIP-6963 wallet announcements (~300ms window), rasterize each
+        /// wallet's icon to a 96x96 PNG in-browser, and deliver ONE payload to the
+        /// callback:
+        ///   JSON — {"wallets":[{"rdns","name","icon","lastUsed"},…],"legacy":bool}
+        ///   where icon is base64 PNG bytes (no data: prefix, "" if unavailable),
+        ///   lastUsed marks the localStorage last-used wallet, and legacy is true
+        ///   when a window.ethereum provider exists;
+        ///   or the sentinel "!none" when no EVM provider is available at all
+        ///   (also sent on any discovery failure).
         /// </summary>
         [DllImport("__Internal")]
         public static extern void EvmDiscoverWallets(
@@ -163,9 +168,14 @@ namespace Blockmaker
 
         /// <summary>
         /// Connect an EVM wallet via eth_requestAccounts. rdns selects a specific
-        /// EIP-6963 wallet ("" = last-used → first announced → window.ethereum).
-        /// successCallback receives the raw EVM address ("0x…") — the Algorand
-        /// LogicSig address is derived in C#.
+        /// EIP-6963 wallet and MUST match an announced provider (no silent fallback
+        /// when the picked wallet is gone); "" = auto-pick (last-used → first
+        /// announced → window.ethereum). successCallback receives the raw EVM
+        /// address ("0x…") — the Algorand LogicSig address is derived in C#.
+        /// errorCallback receives "code|message" where code is the wallet's numeric
+        /// EIP-1193 / JSON-RPC error code when supplied ("" otherwise), e.g.
+        /// "4001|User rejected the request." — connect only; sign errors stay
+        /// message-only.
         /// </summary>
         [DllImport("__Internal")]
         public static extern void EvmConnect(
@@ -213,6 +223,14 @@ namespace Blockmaker
 
         [DllImport("__Internal")]
         public static extern void EvmDisconnect();
+
+        /// <summary>
+        /// Open a URL in a NEW browser tab (noopener). Use for informational links
+        /// (e.g. "find a wallet") — Application.OpenURL on WebGL is a same-tab
+        /// location change that would replace the running game.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void OpenUrlInNewTab(string url);
 
         // ── Fullscreen management ─────────────────────────────────────────────────
 
@@ -306,6 +324,9 @@ namespace Blockmaker
 
         public static void EvmDisconnect()
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmDisconnect — not in WebGL.");
+
+        public static void OpenUrlInNewTab(string url)
+            => Application.OpenURL(url); // native: a normal external-browser open is correct
 
         // ── Fullscreen stubs ──────────────────────────────────────────────────────
 

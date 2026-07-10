@@ -837,6 +837,173 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
+   EVM WALLET PICKER (page-evm-wallets)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Each state container is hidden by default; the controller flips exactly
+   one of them to flex (LOADING / EMPTY / LIST / CONNECTING+error). */
+.evm-state {
+    flex-direction: column;
+    display:        none;
+}
+
+.evm-state--center {
+    align-items:    center;
+    padding-top:    10px;
+    padding-bottom: 6px;
+}
+
+/* ── Loading ──────────────────────────────────────────────────────────── */
+
+.evm-spinner {
+    margin-top:    18px;
+    margin-bottom: 18px;
+}
+
+.evm-loading-text {
+    font-size:         13px;
+    color:             rgba(238, 238, 246, 0.32);
+    -unity-text-align: middle-center;
+    margin-bottom:     16px;
+}
+
+/* ── Empty (no wallet detected) ───────────────────────────────────────── */
+
+.evm-empty-title {
+    font-size:         18px;
+    -unity-font-style: bold;
+    color:             rgb(238, 238, 246);
+    -unity-text-align: middle-center;
+    margin-top:        6px;
+    margin-bottom:     22px;
+}
+
+.evm-find-btn {
+    margin-bottom: 18px;
+}
+
+.evm-empty-hint {
+    font-size:         13px;
+    color:             rgba(238, 238, 246, 0.40);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    max-width:         320px;
+}
+
+/* ── Wallet list ──────────────────────────────────────────────────────── */
+
+/* Caps at ~5 rows (5 x 66px incl. margin) — taller lists scroll. */
+.evm-wallet-list {
+    max-height: 336px;
+    flex-grow:  0;
+}
+
+.evm-wallet-row {
+    height:        56px;
+    margin-bottom: 10px;
+}
+
+.evm-wallet-icon {
+    width:                      32px;
+    height:                     32px;
+    border-top-left-radius:     8px;
+    border-top-right-radius:    8px;
+    border-bottom-left-radius:  8px;
+    border-bottom-right-radius: 8px;
+    margin-left:                14px;
+    overflow:                   hidden;
+    -unity-background-scale-mode: scale-to-fit;
+    background-size:            100% 100%;
+    background-position:        center;
+}
+
+.evm-wallet-glyph {
+    font-size: 14px;
+    color:     rgba(255, 255, 255, 0.90);
+}
+
+.evm-wallet-name {
+    font-size: 15px;
+}
+
+.evm-badge {
+    font-size:                  10px;
+    letter-spacing:             1px;
+    -unity-font-style:          bold;
+    -unity-text-align:          middle-center;
+    color:                      rgb(167, 139, 250);
+    background-color:           rgba(124, 58, 237, 0.14);
+    border-top-width:           1px;
+    border-right-width:         1px;
+    border-bottom-width:        1px;
+    border-left-width:          1px;
+    border-color:               rgba(167, 139, 250, 0.35);
+    border-top-left-radius:     9px;
+    border-top-right-radius:    9px;
+    border-bottom-left-radius:  9px;
+    border-bottom-right-radius: 9px;
+    padding-top:                3px;
+    padding-bottom:             3px;
+    padding-left:               9px;
+    padding-right:              9px;
+    margin-right:               2px;
+    flex-shrink:                0;
+}
+
+/* ── Connecting pane (one wallet) ─────────────────────────────────────── */
+
+.evm-connect-icon {
+    width:                      64px;
+    height:                     64px;
+    border-top-left-radius:     16px;
+    border-top-right-radius:    16px;
+    border-bottom-left-radius:  16px;
+    border-bottom-right-radius: 16px;
+    background-color:           rgb(20, 20, 30);
+    align-items:                center;
+    justify-content:            center;
+    overflow:                   hidden;
+    margin-top:                 4px;
+    margin-bottom:              22px;
+    -unity-background-scale-mode: scale-to-fit;
+    background-size:            100% 100%;
+    background-position:        center;
+}
+
+.evm-connect-glyph {
+    font-size:         26px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color:             rgba(255, 255, 255, 0.90);
+}
+
+.evm-connect-title {
+    font-size:         24px;
+    -unity-font-style: bold;
+    color:             rgb(238, 238, 246);
+    -unity-text-align: middle-center;
+    letter-spacing:    -0.3px;
+    margin-bottom:     12px;
+}
+
+.evm-connect-body {
+    font-size:         15px;
+    color:             rgba(238, 238, 246, 0.85);
+    white-space:       normal;
+    -unity-text-align: middle-center;
+    max-width:         340px;
+    margin-bottom:     18px;
+}
+
+.evm-connect-body--error {
+    color: rgb(248, 113, 113);
+}
+
+.evm-retry-btn {
+    margin-top: 4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    STATUS
    ═══════════════════════════════════════════════════════════════════════ */
 

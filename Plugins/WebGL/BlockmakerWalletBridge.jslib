@@ -50,12 +50,15 @@
  * MagicTryRestore      — Checks if a Magic session is still active on load.
  *
  * ── xChain EVM (zero-bundle: EIP-6963 + EIP-1193, no SDK imports) ───────────
- * EvmDiscoverWallets   — Collects EIP-6963 wallet announcements (~300ms) and
- *                        sends "rdns|name;rdns|name;…" ('' = only the legacy
- *                        window.ethereum fallback, '!none' = no provider at all).
+ * EvmDiscoverWallets   — Collects EIP-6963 wallet announcements (~300ms),
+ *                        rasterizes each wallet icon to a 96x96 PNG and sends
+ *                        ONE JSON payload:
+ *                        {wallets:[{rdns,name,icon,lastUsed}],legacy:bool}
+ *                        ('!none' = no EVM provider at all).
  * EvmConnect           — Connects a chosen (or last-used) EVM wallet via
  *                        eth_requestAccounts. Returns the raw EVM address —
- *                        C# derives the Algorand LogicSig address.
+ *                        C# derives the Algorand LogicSig address. Errors are
+ *                        "code|message" (numeric EIP-1193 code or '').
  * EvmTryRestore        — Silent session restore via eth_accounts (no popup).
  * EvmSignPersonal      — personal_sign for the wallet-login proof.
  * EvmSignTypedData     — eth_signTypedData_v4 over C#-built EIP-712 typed data;
@@ -1208,32 +1211,94 @@ mergeInto(LibraryManager.library, {
     return null;
   },
 
+  // Rasterize one EIP-6963 wallet icon into a 96x96 PNG, resolving with the
+  // base64 payload (no 'data:image/png;base64,' prefix) or '' on ANY failure —
+  // this promise never rejects. info.icon is a data: URI; 6 of 9 major wallets
+  // ship SVG data URIs (Zerion's is percent-encoded rather than base64), and
+  // Unity's Texture2D.LoadImage cannot decode SVG — loading through a JS Image
+  // handles any valid data URI encoding, sandboxes the SVG (no script
+  // execution), and the canvas re-encode yields a uniform PNG Unity CAN load.
+  // Phantom pads its data URI with literal newlines — trim first. Raw icon
+  // strings over 64KB are skipped, and each rasterization is capped at ~800ms
+  // so one broken icon can never stall discovery.
+  $bmEvmRasterizeIcon: function(iconUri) {
+    return new Promise(function(resolve) {
+      try {
+        var src = (typeof iconUri === 'string') ? iconUri.trim() : '';
+        if (!src || src.length > 65536) { resolve(''); return; }
+        var done = false;
+        var finish = function(b64) { if (!done) { done = true; resolve(b64); } };
+        var timer = setTimeout(function() { finish(''); }, 800);
+        var img = new Image();
+        img.crossOrigin = 'anonymous'; // no-op for data: URIs; avoids canvas taint on remote icons
+        img.onload = function() {
+          clearTimeout(timer);
+          try {
+            var canvas    = document.createElement('canvas');
+            canvas.width  = 96;
+            canvas.height = 96;
+            canvas.getContext('2d').drawImage(img, 0, 0, 96, 96);
+            var dataUrl = canvas.toDataURL('image/png');
+            finish(dataUrl.replace(/^data:image\/png;base64,/, ''));
+          } catch (e) { finish(''); }
+        };
+        img.onerror = function() { clearTimeout(timer); finish(''); };
+        img.src = src;
+      } catch (e) { resolve(''); }
+    });
+  },
+
   /**
-   * EvmDiscoverWallets — collect EIP-6963 wallet announcements (~300ms window).
-   * Callback payload: "rdns|name;rdns|name;…" — one entry per announced wallet;
-   * '' when only the legacy window.ethereum fallback exists;
-   * '!none' when no EVM provider is available at all.
+   * EvmDiscoverWallets — collect EIP-6963 wallet announcements (~300ms window),
+   * rasterize each wallet's icon to a 96x96 PNG, then send ONE JSON payload:
+   *   {"wallets":[{"rdns":"io.metamask","name":"MetaMask",
+   *                "icon":"<base64 PNG or ''>","lastUsed":true|false}, …],
+   *    "legacy":true|false}
+   *   - wallets  : one entry per announced EIP-6963 wallet (may be empty)
+   *   - name     : raw wallet name (JSON escaping handles any character)
+   *   - icon     : base64 PNG bytes, 96x96, NO "data:image/png;base64," prefix;
+   *                '' when the icon failed/timed out rasterizing
+   *   - lastUsed : true on the wallet matching localStorage bm_evm_last_wallet_rdns
+   *   - legacy   : true when a legacy window.ethereum provider exists
+   * Sentinel: '!none' when there is no EVM provider at all (no announced
+   * wallets AND no window.ethereum) — also the safety net on any discovery error.
    */
-  EvmDiscoverWallets__deps: ['$bmEvmDiscover'],
+  EvmDiscoverWallets__deps: ['$bmEvmDiscover', '$bmEvmRasterizeIcon'],
   EvmDiscoverWallets: function(gameObjectNamePtr, callbackPtr) {
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
     var callback       = UTF8ToString(callbackPtr);
 
     bmEvmDiscover(300).then(function(map) {
-      var keys = Object.keys(map);
-      if (keys.length === 0) {
-        var hasLegacy = (typeof window.ethereum !== 'undefined' && window.ethereum);
-        SendMessage(gameObjectName, callback, hasLegacy ? '' : '!none');
+      var keys   = Object.keys(map);
+      var legacy = !!(typeof window.ethereum !== 'undefined' && window.ethereum);
+      if (keys.length === 0 && !legacy) {
+        SendMessage(gameObjectName, callback, '!none');
         return;
       }
-      var parts = [];
-      for (var i = 0; i < keys.length; i++) {
-        var info = map[keys[i]].info;
-        // '|' and ';' are structural in the payload — strip them from names.
-        var name = String(info.name || info.rdns).replace(/[|;]/g, ' ');
-        parts.push(info.rdns + '|' + name);
-      }
-      SendMessage(gameObjectName, callback, parts.join(';'));
+
+      var lastRdns = null;
+      try { lastRdns = localStorage.getItem('bm_evm_last_wallet_rdns'); } catch(e) {}
+
+      // All icon rasterizations run in parallel; each already resolves '' on
+      // its own failure/timeout, and the per-job .catch is a belt-and-braces
+      // guard so Promise.all can never reject. ONE SendMessage at the end.
+      var iconJobs = keys.map(function(k) {
+        return bmEvmRasterizeIcon(map[k].info.icon).catch(function() { return ''; });
+      });
+
+      return Promise.all(iconJobs).then(function(icons) {
+        var wallets = [];
+        for (var i = 0; i < keys.length; i++) {
+          var info = map[keys[i]].info;
+          wallets.push({
+            rdns:     info.rdns,
+            name:     String(info.name || info.rdns),
+            icon:     icons[i] || '',
+            lastUsed: !!(lastRdns && info.rdns === lastRdns)
+          });
+        }
+        SendMessage(gameObjectName, callback, JSON.stringify({ wallets: wallets, legacy: legacy }));
+      });
     }).catch(function(err) {
       // Discovery must never leave the C# side waiting on an unhandled rejection —
       // report "no provider" so the flow fails fast with a friendly message (the
@@ -1245,10 +1310,25 @@ mergeInto(LibraryManager.library, {
 
   /**
    * EvmConnect — connect an EVM wallet via eth_requestAccounts.
-   * rdns selects a specific EIP-6963 wallet; pass '' to auto-pick (last-used
-   * rdns from localStorage → first announced wallet → window.ethereum).
-   * On success: successCb("0xEvmAddress") — the C# side derives the Algorand
-   * LogicSig address. On error: errorCb(message).
+   * rdns selects a specific EIP-6963 wallet; when provided it MUST match an
+   * announced provider — if it doesn't (e.g. the wallet was uninstalled since
+   * discovery), the error callback fires rather than silently connecting a
+   * different wallet than the one the user picked. Pass '' to auto-pick
+   * (last-used rdns from localStorage → first announced wallet →
+   * window.ethereum).
+   * On success: successCb("rdns|0xEvmAddress") — the CONNECTED wallet's rdns
+   * ('' for the window.ethereum fallback) followed by the address. The rdns
+   * echo lets C# drop a STALE success: cancel wallet A mid-popup, pick wallet
+   * B, then approve A's still-open popup — without the echo that approval
+   * would log the player into the wrong wallet. C# derives the Algorand
+   * LogicSig address from the address part.
+   * On error: errorCb("code|message") where code is the wallet's numeric
+   * EIP-1193 / JSON-RPC error code when it supplied one ('' otherwise), e.g.
+   * "4001|User rejected the request." (user declined) or
+   * "-32002|Already processing eth_requestAccounts…" (request already pending);
+   * "|No EVM wallet found. Please install one to continue." when no code.
+   * The message part is err.message verbatim. EvmConnect is the ONLY EVM entry
+   * point that forwards codes — sign errors keep their message-only shape.
    */
   EvmConnect__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$bmEvmDiscover', '$bmEvmPickProvider'],
   EvmConnect: function(rdnsPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
@@ -1259,9 +1339,16 @@ mergeInto(LibraryManager.library, {
 
     bmExitFullscreen()
     .then(function() { return bmEvmDiscover(300); })
-    .then(function() {
-      var entry = bmEvmPickProvider(rdns);
-      if (!entry) throw new Error('No EVM wallet found. Please install one to continue.');
+    .then(function(map) {
+      var entry;
+      if (rdns) {
+        // The user explicitly picked this wallet — never substitute another.
+        entry = (map && map[rdns]) ? map[rdns] : null;
+        if (!entry) throw new Error('The selected wallet (' + rdns + ') is not available. Please choose another wallet.');
+      } else {
+        entry = bmEvmPickProvider('');
+        if (!entry) throw new Error('No EVM wallet found. Please install one to continue.');
+      }
       return entry.provider.request({ method: 'eth_requestAccounts' })
         .then(function(accounts) {
           if (!accounts || accounts.length === 0) throw new Error('No EVM accounts returned.');
@@ -1275,14 +1362,18 @@ mergeInto(LibraryManager.library, {
           var label = (entry.info && entry.info.name) ? entry.info.name : 'window.ethereum';
           console.log('[BlockmakerWalletBridge] EVM wallet connected (' + label + '):', evmAddress);
           bmRestoreFullscreen();
-          SendMessage(gameObjectName, successCb, evmAddress);
+          var echoRdns = (entry.info && entry.info.rdns) ? entry.info.rdns : '';
+          SendMessage(gameObjectName, successCb, echoRdns + '|' + evmAddress);
         });
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'EVM wallet connection failed.';
-      console.error('[BlockmakerWalletBridge] EvmConnect error:', msg);
+      // "code|message" — see the doc comment above. EvmConnect only; the C#
+      // side (OnEvmError) splits it and the picker UI branches on the code.
+      var code = (err && typeof err.code === 'number' && isFinite(err.code)) ? String(err.code) : '';
+      var msg  = (err && err.message) ? err.message : 'EVM wallet connection failed.';
+      console.error('[BlockmakerWalletBridge] EvmConnect error:', code ? code + ' ' + msg : msg);
       bmRestoreFullscreen();
-      SendMessage(gameObjectName, errorCb, msg);
+      SendMessage(gameObjectName, errorCb, code + '|' + msg);
     });
   },
 
@@ -1413,6 +1504,19 @@ mergeInto(LibraryManager.library, {
     window._bmEvmAddress       = null;
     try { localStorage.removeItem('bm_evm_last_wallet_rdns'); } catch(e) {}
     console.log('[BlockmakerWalletBridge] xChain EVM disconnected.');
+  },
+
+  /**
+   * OpenUrlInNewTab — open a URL in a NEW browser tab. On WebGL,
+   * Application.OpenURL performs a same-tab location change (see
+   * WalletDeepLink.cs) — fine for mobile wallet deep links, fatal for
+   * informational links like "find a wallet", which would replace the running
+   * game. noopener keeps the new tab from scripting back into the game.
+   */
+  OpenUrlInNewTab: function(urlPtr) {
+    var url = UTF8ToString(urlPtr);
+    try { window.open(url, '_blank', 'noopener'); }
+    catch (e) { console.error('[BlockmakerWalletBridge] OpenUrlInNewTab failed:', e); }
   }
 
 });

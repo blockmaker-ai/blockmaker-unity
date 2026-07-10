@@ -17,14 +17,21 @@ namespace Blockmaker
     ///   4. Subscribe to react after a successful login:
     ///        AuthPromptController.OnAuthSucceeded += () => SceneManager.LoadScene("Profile");
     ///
-    /// The prompt manages five pages:
+    /// The prompt manages six pages:
     ///   page-options       — Email / Algorand / xChain buttons
     ///   page-algo-wallets  — Pera / Defly wallet picker
+    ///   page-evm-wallets   — EVM (EIP-6963) wallet picker: LOADING → EMPTY / LIST /
+    ///                        CONNECTING (+ error states) — see the "EVM wallet picker"
+    ///                        region for the state machine
     ///   page-otp           — step1 (email entry) → step2 (6-digit code)
     ///   page-qr            — WalletConnect QR code display
     ///   page-step2         — "STEP 2 OF 2" wait state: the wallet is connected and
     ///                        the free login-signature approval is pending in the
     ///                        wallet app (players kept missing that second request)
+    ///
+    /// TODO: AuthScreenController and WalletUpgradeController still call the plain
+    /// ConnectEvm (auto-pick, no picker). Funnel those surfaces through this prompt's
+    /// page-evm-wallets flow so every EVM entry point gets the wallet picker.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public class AuthPromptController : MonoBehaviour
@@ -108,6 +115,56 @@ namespace Blockmaker
 
         private Button    _btnMetamask;
 
+        // ── EVM wallet picker (page-evm-wallets) ──────────────────────────────────
+        private VisualElement _pageEvmWallets;
+        private Label         _lblEvmHeading;
+        private VisualElement _evmStateLoading;
+        private VisualElement _evmStateEmpty;
+        private ScrollView    _evmWalletList;
+        private VisualElement _evmStateConnecting;
+        private VisualElement _evmConnectIcon;
+        private Label         _lblEvmConnectGlyph;
+        private Label         _lblEvmConnectTitle;
+        private Label         _lblEvmConnectBody;
+        private Button        _btnEvmRetry;
+        private Button        _btnEvmCancel;
+        private VisualElement[] _evmDots;
+        private IVisualElementScheduledItem _evmDotAnim;
+        private int _evmDotIndex;
+
+        private enum EvmPageState { Loading, Empty, List, Connecting, Error }
+        private EvmPageState _evmState = EvmPageState.Loading;
+
+        // Discovered wallets (lastUsed first, then announced order) + textures we
+        // decoded for their icons (destroyed when the list is rebuilt / prompt reset).
+        private readonly System.Collections.Generic.List<EvmWalletEntry> _evmWallets =
+            new System.Collections.Generic.List<EvmWalletEntry>();
+        private readonly System.Collections.Generic.List<Texture2D> _evmIconTextures =
+            new System.Collections.Generic.List<Texture2D>();
+
+        private EvmWalletEntry _evmSelectedWallet;   // wallet the connecting pane targets
+        private bool           _evmHasList;          // 2+ wallets → Cancel/Back returns to LIST
+        private int            _evmFlowSeq;          // stale-callback guard for discovery
+        private Coroutine      _evmConnectDelayCoroutine;
+
+        // Matches the DiscoverEvmWallets JSON contract:
+        //   {"wallets":[{"rdns","name","icon","lastUsed"}], "legacy":bool, "native":bool}
+        // icon = base64 PNG rasterized 96x96 in-browser, may be "".
+        [Serializable] private class EvmWalletEntry
+        {
+            public string rdns;
+            public string name;
+            public string icon;
+            public bool   lastUsed;
+        }
+
+        [Serializable] private class EvmWalletDiscovery
+        {
+            public EvmWalletEntry[] wallets;
+            public bool legacy;
+            public bool native;
+        }
+
         private string    _pendingEmail;
         private string    _pendingWcUri;
         private string    _pendingProvider;
@@ -154,6 +211,9 @@ namespace Blockmaker
 
             // Step 2 of 2 (all null-safe — older UXML simply falls back to the status line)
             _lblStep2Body = root.Q<Label>("lbl-step2-body");
+            // The step-2 copy interpolates the picked wallet's UNTRUSTED display name —
+            // rich text off so a wallet named "<size=64>" etc. can't mangle/spoof the UI.
+            if (_lblStep2Body != null) _lblStep2Body.enableRichText = false;
             _step2Dots    = new[]
             {
                 root.Q("step2-dot-1"),
@@ -188,6 +248,30 @@ namespace Blockmaker
             _walletWarningBanner = root.Q("wallet-warning-banner");
             _lblWalletWarning    = root.Q<Label>("lbl-wallet-warning");
 
+            // EVM wallet picker (all null-safe — older UXML falls back to plain ConnectEvm)
+            _pageEvmWallets     = root.Q("page-evm-wallets");
+            _lblEvmHeading      = root.Q<Label>("lbl-evm-heading");
+            _evmStateLoading    = root.Q("evm-state-loading");
+            _evmStateEmpty      = root.Q("evm-state-empty");
+            _evmWalletList      = root.Q<ScrollView>("evm-wallet-list");
+            _evmStateConnecting = root.Q("evm-state-connecting");
+            _evmConnectIcon     = root.Q("evm-connect-icon");
+            _lblEvmConnectGlyph = root.Q<Label>("lbl-evm-connect-glyph");
+            _lblEvmConnectTitle = root.Q<Label>("lbl-evm-connect-title");
+            _lblEvmConnectBody  = root.Q<Label>("lbl-evm-connect-body");
+            _btnEvmRetry        = root.Q<Button>("btn-evm-retry");
+            _btnEvmCancel       = root.Q<Button>("btn-evm-cancel");
+            _evmDots            = new[]
+            {
+                root.Q("evm-dot-1"),
+                root.Q("evm-dot-2"),
+                root.Q("evm-dot-3"),
+            };
+            root.Q<Button>("btn-back-from-evm")?.RegisterCallback<ClickEvent>(_   => OnEvmBackClicked());
+            root.Q<Button>("btn-evm-find-wallet")?.RegisterCallback<ClickEvent>(_ => OnEvmFindWalletClicked());
+            _btnEvmRetry?.RegisterCallback<ClickEvent>(_  => OnEvmRetryClicked());
+            _btnEvmCancel?.RegisterCallback<ClickEvent>(_ => OnEvmCancelClicked());
+
             // Placeholder text
             if (_inputEmail != null) _inputEmail.textEdition.placeholder = "your@email.com";
             if (_inputOtp   != null) _inputOtp.textEdition.placeholder   = "6-digit code";
@@ -200,7 +284,7 @@ namespace Blockmaker
             root.Q<Button>("btn-pera")?.RegisterCallback<ClickEvent>(_         => BeginWalletConnect("Pera"));
             root.Q<Button>("btn-defly")?.RegisterCallback<ClickEvent>(_        => BeginWalletConnect("Defly"));
             var btnMm = root.Q<Button>("btn-metamask");
-            if (btnMm != null) btnMm.RegisterCallback<ClickEvent>(_ => BeginEvmConnect());
+            if (btnMm != null) btnMm.RegisterCallback<ClickEvent>(_ => BeginEvmFlow());
             root.Q<Button>("btn-back-options")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
 
             _btnMetamask = btnMm;
@@ -268,6 +352,8 @@ namespace Blockmaker
 
             StopResendCountdown();
             StopConnectTimeout();
+            CancelEvmConnectDelay();
+            StopEvmDots();
             SetLoading(false);
         }
 
@@ -382,6 +468,7 @@ namespace Blockmaker
         {
             if (_pageOptions     != null) _pageOptions.style.display     = DisplayStyle.None;
             if (_pageAlgoWallets != null) _pageAlgoWallets.style.display = DisplayStyle.None;
+            if (_pageEvmWallets  != null) _pageEvmWallets.style.display  = DisplayStyle.None;
             if (_pageOtp         != null) _pageOtp.style.display         = DisplayStyle.None;
             if (_pageQr          != null) _pageQr.style.display          = DisplayStyle.None;
             if (_pageStep2       != null) _pageStep2.style.display       = DisplayStyle.None;
@@ -390,6 +477,13 @@ namespace Blockmaker
             {
                 StopStepTwoDots();
                 ResetStepTwoResend();
+            }
+
+            if (activePage != _pageEvmWallets)
+            {
+                StopEvmDots();
+                CancelEvmConnectDelay();
+                _evmFlowSeq++;   // invalidate any in-flight discovery callback
             }
 
             if (activePage != null) activePage.style.display = DisplayStyle.Flex;
@@ -531,18 +625,22 @@ namespace Blockmaker
             return false;
         }
 
-        private static string CurrentWalletProviderName()
+        private string CurrentWalletProviderName()
         {
             var id = BlockmakerAuth.Instance != null ? BlockmakerAuth.Instance.Identity : null;
             if (id == null || id is GuestIdentity) return null;
-            return FriendlyWalletName(id.ProviderName);
+            return FriendlyWalletNameFor(id);
         }
 
-        /// "Pera"/"Defly" read well in player copy; internal names like "EvmXChain"
-        /// fall back to the generic "wallet" wording (null -> "wallet" downstream).
-        private static string FriendlyWalletName(string provider)
+        /// "Pera"/"Defly" read well in player copy; the internal "EvmXChain" name maps
+        /// to the picked EVM wallet's own name when the picker chose one, otherwise it
+        /// falls back to the generic "wallet" wording (null -> "wallet" downstream).
+        private string FriendlyWalletNameFor(IBlockmakerIdentity identity)
         {
-            if (string.IsNullOrEmpty(provider) || provider == "EvmXChain") return null;
+            string provider = identity != null ? identity.ProviderName : null;
+            if (string.IsNullOrEmpty(provider)) return null;
+            if (provider == "EvmXChain")
+                return _evmSelectedWallet != null ? ClampWalletName(_evmSelectedWallet.name) : null;
             return provider;
         }
 
@@ -604,7 +702,486 @@ namespace Blockmaker
             );
         }
 
-        private void BeginEvmConnect()
+        // ── EVM wallet picker (page-evm-wallets) ──────────────────────────────────
+        //
+        // State machine (one active state at a time inside page-evm-wallets):
+        //
+        //   ENTRY (X-Chain button) → LOADING → DiscoverEvmWallets →
+        //     '!none'                    → EMPTY  ("No EVM wallet detected." + Find a Wallet)
+        //     native:true (non-WebGL)    → close picker, BeginEvmConnectFallback (Reown QR)
+        //     legacy-only (0 wallets)    → close picker, BeginEvmConnectFallback (window.ethereum)
+        //     exactly 1 wallet           → CONNECTING for it (no list-of-one)
+        //     2+ wallets                 → LIST (lastUsed first, then announced order)
+        //   LIST row click → CONNECTING → (0.6s registration delay) → ConnectEvmWallet →
+        //     success → HandleIdentityChanged (step-2 page or close, as with other wallets)
+        //     error   → ERROR on the same pane ("code|message": 4001 / -32002 / generic)
+        //   CONNECTING/ERROR: Cancel/Back → CancelEvmConnect → LIST (or options if no list)
+
+        /// Delay between the row click and the actual connect call, so the connecting
+        /// pane registers on screen before the extension popup steals focus.
+        private const float EvmConnectClickDelaySeconds = 0.6f;
+        private const float EvmDiscoveryTimeoutSeconds  = 12f;
+        private const int   EvmWalletNameMaxChars       = 24;
+        private const string EvmFindWalletUrl = "https://ethereum.org/en/wallets/find-wallet/";
+
+        /// Entry point for the X-Chain / EVM button.
+        private void BeginEvmFlow()
+        {
+            if (BlockmakerAuth.Instance == null) { SetStatus("Unable to connect right now. Please restart the game.", isError: true); return; }
+
+            // Older UXML without the picker page — keep the previous direct behavior.
+            if (_pageEvmWallets == null) { BeginEvmConnectFallback(); return; }
+
+            SetPage(_pageEvmWallets);
+            ClearStatus();
+            ClearEvmWalletState();   // drop rows/textures from a previous pass
+            ShowEvmState(EvmPageState.Loading);
+
+            int seq = ++_evmFlowSeq;
+
+            // Discovery is expected to answer fast (it's an in-page query); if the
+            // callback never lands, fail soft back to the options page. Reuses the
+            // shared timeout slot so page switches / Hide() stop it as usual.
+            StopConnectTimeout();
+            _connectTimeoutCoroutine = StartCoroutine(EvmDiscoveryTimeoutRoutine(seq));
+
+            BlockmakerAuth.Instance.DiscoverEvmWallets(result =>
+            {
+                if (this == null) return;
+                if (seq != _evmFlowSeq) return; // user navigated away / restarted the flow
+                StopConnectTimeout();
+                HandleEvmDiscovery(result);
+            });
+        }
+
+        private IEnumerator EvmDiscoveryTimeoutRoutine(int seq)
+        {
+            yield return new WaitForSecondsRealtime(EvmDiscoveryTimeoutSeconds);
+            _connectTimeoutCoroutine = null;
+            if (seq != _evmFlowSeq) yield break;
+            ShowOptionsPage();
+            SetStatus("Couldn't check for wallets. Please try again.", isError: true);
+        }
+
+        private void HandleEvmDiscovery(string result)
+        {
+            // No EVM provider at all → the empty state with install guidance.
+            if (result == "!none")
+            {
+                ShowEvmState(EvmPageState.Empty);
+                return;
+            }
+
+            EvmWalletDiscovery discovery = null;
+            try { discovery = JsonUtility.FromJson<EvmWalletDiscovery>(result); }
+            catch (Exception e) { BlockmakerLog.Warning($"[AuthPrompt] EVM discovery payload unreadable: {e.Message}"); }
+
+            if (discovery == null)
+            {
+                // Unreadable payload — fall back to today's auto-pick connect.
+                ShowOptionsPage();
+                BeginEvmConnectFallback();
+                return;
+            }
+
+            // Native (non-WebGL) → no in-page wallets to pick from; Reown QR path.
+            if (discovery.native)
+            {
+                ShowOptionsPage();
+                BeginEvmConnectFallback();
+                return;
+            }
+
+            int count = discovery.wallets != null ? discovery.wallets.Length : 0;
+
+            // Legacy-only window.ethereum (no EIP-6963 announcements) → connect as
+            // today; there is nothing meaningful to list (generic icon).
+            if (count == 0)
+            {
+                if (discovery.legacy)
+                {
+                    ShowOptionsPage();
+                    BeginEvmConnectFallback();
+                }
+                else
+                {
+                    ShowEvmState(EvmPageState.Empty);
+                }
+                return;
+            }
+
+            // Order: lastUsed first, then announced order (stable).
+            _evmWallets.Clear();
+            foreach (var w in discovery.wallets) if (w != null &&  w.lastUsed) _evmWallets.Add(w);
+            foreach (var w in discovery.wallets) if (w != null && !w.lastUsed) _evmWallets.Add(w);
+
+            _evmHasList = _evmWallets.Count >= 2;
+
+            if (!_evmHasList)
+            {
+                // Exactly one wallet — don't make the player pick from a list of one.
+                BeginEvmWalletConnect(_evmWallets[0]);
+                return;
+            }
+
+            BuildEvmWalletList();
+            ShowEvmState(EvmPageState.List);
+        }
+
+        // ── EVM state switching ────────────────────────────────────────────────────
+
+        private void ShowEvmState(EvmPageState state)
+        {
+            _evmState = state;
+
+            if (_evmStateLoading    != null) _evmStateLoading.style.display    = state == EvmPageState.Loading ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_evmStateEmpty      != null) _evmStateEmpty.style.display      = state == EvmPageState.Empty   ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_evmWalletList      != null) _evmWalletList.style.display      = state == EvmPageState.List    ? DisplayStyle.Flex : DisplayStyle.None;
+            bool connectingPane = state == EvmPageState.Connecting || state == EvmPageState.Error;
+            if (_evmStateConnecting != null) _evmStateConnecting.style.display = connectingPane ? DisplayStyle.Flex : DisplayStyle.None;
+
+            if (_lblEvmHeading != null)
+            {
+                switch (state)
+                {
+                    case EvmPageState.Empty:      _lblEvmHeading.text = "No Wallet Found"; break;
+                    case EvmPageState.Connecting:
+                    case EvmPageState.Error:      _lblEvmHeading.text = "Connect Wallet"; break;
+                    default:                      _lblEvmHeading.text = "Choose Wallet";  break;
+                }
+            }
+
+            if (state == EvmPageState.Connecting) StartEvmDots();
+            else                                  StopEvmDots();
+        }
+
+        // ── EVM wallet list ────────────────────────────────────────────────────────
+
+        private void BuildEvmWalletList()
+        {
+            if (_evmWalletList == null) return;
+            _evmWalletList.Clear();
+
+            foreach (var wallet in _evmWallets)
+            {
+                var entry = wallet; // capture per-row
+                var row = new Button(() => BeginEvmWalletConnect(entry)) { text = string.Empty };
+                row.AddToClassList("auth-btn");
+                row.AddToClassList("auth-btn--wallet");
+                row.AddToClassList("evm-wallet-row");
+
+                // Icon: decoded PNG, or a letter-glyph chip in the Pera/Defly style
+                // with a deterministic per-wallet hue.
+                var icon = new VisualElement();
+                icon.AddToClassList("auth-btn-icon");
+                icon.AddToClassList("evm-wallet-icon");
+                var glyph = new Label();
+                glyph.AddToClassList("auth-btn-icon-glyph");
+                glyph.AddToClassList("evm-wallet-glyph");
+                icon.Add(glyph);
+                ApplyEvmWalletIcon(icon, glyph, entry);
+                row.Add(icon);
+
+                // Name: untrusted text — rich text off, length-clamped.
+                var nameLbl = new Label(ClampWalletName(entry.name));
+                nameLbl.enableRichText = false;
+                nameLbl.AddToClassList("auth-btn-label");
+                nameLbl.AddToClassList("evm-wallet-name");
+                row.Add(nameLbl);
+
+                if (entry.lastUsed)
+                {
+                    var badge = new Label("RECENT");
+                    badge.AddToClassList("evm-badge");
+                    row.Add(badge);
+                }
+
+                var chevWrap = new VisualElement();
+                chevWrap.AddToClassList("auth-btn-chevron");
+                var chev = new Label(">");
+                chev.AddToClassList("auth-btn-chevron-glyph");
+                chevWrap.Add(chev);
+                row.Add(chevWrap);
+
+                _evmWalletList.Add(row);
+            }
+        }
+
+        /// <summary>
+        /// Paints a wallet icon element: base64 PNG when it decodes, otherwise a
+        /// letter-glyph chip (first letter of the name, deterministic hue from rdns).
+        /// </summary>
+        private void ApplyEvmWalletIcon(VisualElement icon, Label glyph, EvmWalletEntry wallet)
+        {
+            Texture2D texture = DecodeWalletIcon(wallet.icon);
+            if (texture != null)
+            {
+                icon.style.backgroundImage = new StyleBackground(texture);
+                icon.style.backgroundColor = Color.clear;
+                if (glyph != null) glyph.style.display = DisplayStyle.None;
+            }
+            else
+            {
+                icon.style.backgroundImage = StyleKeyword.None;
+                icon.style.backgroundColor = WalletFallbackColor(wallet.rdns ?? wallet.name);
+                if (glyph != null)
+                {
+                    glyph.style.display = DisplayStyle.Flex;
+                    glyph.text = WalletGlyphLetter(wallet.name);
+                }
+            }
+        }
+
+        private Texture2D DecodeWalletIcon(string base64Png)
+        {
+            if (string.IsNullOrEmpty(base64Png)) return null;
+            byte[] bytes;
+            try { bytes = Convert.FromBase64String(base64Png); }
+            catch { return null; }
+
+            var tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            if (!tex.LoadImage(bytes)) { Destroy(tex); return null; }
+            _evmIconTextures.Add(tex);
+            return tex;
+        }
+
+        private static string ClampWalletName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "Wallet";
+            name = name.Trim();
+            if (name.Length == 0) return "Wallet";
+            if (name.Length <= EvmWalletNameMaxChars) return name;
+            return name.Substring(0, EvmWalletNameMaxChars - 1) + "…";
+        }
+
+        private static string WalletGlyphLetter(string name)
+        {
+            if (!string.IsNullOrEmpty(name))
+                foreach (char c in name)
+                    if (char.IsLetterOrDigit(c)) return char.ToUpperInvariant(c).ToString();
+            return "W";
+        }
+
+        /// Deterministic per-wallet chip color (FNV-1a over rdns → hue), muted to sit
+        /// on the dark card like the other icon chips.
+        private static Color WalletFallbackColor(string key)
+        {
+            uint hash = 2166136261;
+            if (!string.IsNullOrEmpty(key))
+                foreach (char c in key) { hash ^= c; hash *= 16777619; }
+            float hue = (hash % 360u) / 360f;
+            return Color.HSVToRGB(hue, 0.42f, 0.38f);
+        }
+
+        // ── EVM connecting pane ────────────────────────────────────────────────────
+
+        private void BeginEvmWalletConnect(EvmWalletEntry wallet)
+        {
+            if (wallet == null) return;
+            if (BlockmakerAuth.Instance == null) { SetStatus("Unable to connect right now. Please restart the game.", isError: true); return; }
+
+            _evmSelectedWallet = wallet;
+
+            string name = ClampWalletName(wallet.name);
+
+            if (_evmConnectIcon != null && _lblEvmConnectGlyph != null)
+                ApplyEvmWalletIcon(_evmConnectIcon, _lblEvmConnectGlyph, wallet);
+
+            if (_lblEvmConnectTitle != null) _lblEvmConnectTitle.text = "Requesting connection…";
+            SetEvmConnectBody($"Accept the request in {name}.", isError: false);
+            if (_btnEvmRetry  != null) _btnEvmRetry.style.display = DisplayStyle.None;
+            if (_btnEvmCancel != null) _btnEvmCancel.text = "CANCEL";
+
+            ShowEvmState(EvmPageState.Connecting);
+
+            // Give the pane a beat to register before the extension popup steals focus.
+            CancelEvmConnectDelay();
+            _evmConnectDelayCoroutine = StartCoroutine(EvmConnectAfterDelay(wallet));
+        }
+
+        private IEnumerator EvmConnectAfterDelay(EvmWalletEntry wallet)
+        {
+            yield return new WaitForSecondsRealtime(EvmConnectClickDelaySeconds);
+            _evmConnectDelayCoroutine = null;
+
+            if (_evmState != EvmPageState.Connecting || _evmSelectedWallet != wallet) yield break;
+
+            StartConnectTimeout(msg =>
+            {
+                if (this == null) return;
+                if (_evmState == EvmPageState.Connecting)
+                    SetEvmConnectBody(msg, isError: false);
+            });
+
+            BlockmakerAuth.Instance.ConnectEvmWallet(
+                wallet.rdns,
+                onSuccess: _ =>
+                {
+                    if (this == null) return;
+                    StopConnectTimeout();
+                    // Success closes the prompt (or enters the step-2 wait state) via
+                    // HandleIdentityChanged, exactly like the other wallets.
+                },
+                onError: err =>
+                {
+                    if (this == null) return;
+                    StopConnectTimeout();
+                    if (_evmState != EvmPageState.Connecting) return; // cancelled meanwhile
+                    ShowEvmConnectError(err, wallet);
+                }
+            );
+        }
+
+        /// onError payload is "code|message" — code may be "" or an EIP-1193 number.
+        private void ShowEvmConnectError(string payload, EvmWalletEntry wallet)
+        {
+            string code = string.Empty;
+            string message = payload ?? string.Empty;
+            int sep = message.IndexOf('|');
+            if (sep >= 0)
+            {
+                code    = message.Substring(0, sep).Trim();
+                message = message.Substring(sep + 1);
+            }
+
+            string name = ClampWalletName(wallet != null ? wallet.name : null);
+            bool showRetry;
+            string body;
+
+            switch (code)
+            {
+                case "4001":     // EIP-1193: user rejected the request
+                    body      = $"Request cancelled — you declined in {name}.";
+                    showRetry = true;
+                    break;
+                case "-32002":   // EIP-1193: request already pending — do NOT auto re-request
+                    body      = $"A connection request is already waiting — open {name} and approve it.";
+                    showRetry = false;
+                    break;
+                default:
+                    // Includes server-side signature-verify failures (e.g. unsupported
+                    // smart-contract wallets) — show the message verbatim when we have one.
+                    body      = string.IsNullOrEmpty(message)
+                        ? $"Couldn't connect to {name}. Please try again."
+                        : message;
+                    showRetry = true;
+                    break;
+            }
+
+            if (_lblEvmConnectTitle != null) _lblEvmConnectTitle.text = "Connection failed";
+            SetEvmConnectBody(body, isError: true);
+            if (_btnEvmRetry  != null) _btnEvmRetry.style.display = showRetry ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_btnEvmCancel != null) _btnEvmCancel.text = "BACK";
+
+            ShowEvmState(EvmPageState.Error);
+        }
+
+        private void SetEvmConnectBody(string text, bool isError)
+        {
+            if (_lblEvmConnectBody == null) return;
+            _lblEvmConnectBody.enableRichText = false; // may embed wallet names / server text
+            _lblEvmConnectBody.text = text;
+            _lblEvmConnectBody.EnableInClassList("evm-connect-body--error", isError);
+        }
+
+        private void OnEvmRetryClicked()
+        {
+            if (_evmSelectedWallet == null) return;
+            BlockmakerAuth.Instance?.CancelEvmConnect();
+            BeginEvmWalletConnect(_evmSelectedWallet);
+        }
+
+        private void OnEvmCancelClicked()
+        {
+            CancelEvmConnectDelay();
+            StopConnectTimeout();
+            BlockmakerAuth.Instance?.CancelEvmConnect();
+            _evmSelectedWallet = null;
+
+            if (_evmHasList) ShowEvmState(EvmPageState.List);
+            else             ShowOptionsPage();
+        }
+
+        /// The nav back arrow: context-sensitive — a plain back on LOADING/EMPTY/LIST,
+        /// a cancel on the connecting/error pane.
+        private void OnEvmBackClicked()
+        {
+            switch (_evmState)
+            {
+                case EvmPageState.Connecting:
+                case EvmPageState.Error:
+                    OnEvmCancelClicked();
+                    break;
+                default:
+                    ShowOptionsPage();
+                    break;
+            }
+        }
+
+        private void OnEvmFindWalletClicked()
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Application.OpenURL on WebGL is a same-tab LOCATION CHANGE — it would
+            // replace the running game with ethereum.org. Open a new tab instead.
+            BlockmakerWalletBridge.OpenUrlInNewTab(EvmFindWalletUrl);
+#else
+            Application.OpenURL(EvmFindWalletUrl);
+#endif
+        }
+
+        // ── EVM dots (connecting pane, same grammar as the step-2 dots) ───────────
+
+        private void StartEvmDots()
+        {
+            if (_evmStateConnecting == null || _evmDots == null || _evmDots.Length == 0) return;
+            _evmDotIndex = 0;
+            if (_evmDotAnim == null)
+                _evmDotAnim = _evmStateConnecting.schedule.Execute(AdvanceEvmDot).Every(360);
+            else
+                _evmDotAnim.Resume();
+        }
+
+        private void StopEvmDots()
+        {
+            _evmDotAnim?.Pause();
+            if (_evmDots == null) return;
+            foreach (var dot in _evmDots)
+                dot?.RemoveFromClassList("auth-step2-dot--on");
+        }
+
+        private void AdvanceEvmDot()
+        {
+            if (_evmDots == null || _evmDots.Length == 0) return;
+            for (int i = 0; i < _evmDots.Length; i++)
+                _evmDots[i]?.EnableInClassList("auth-step2-dot--on", i == _evmDotIndex);
+            _evmDotIndex = (_evmDotIndex + 1) % _evmDots.Length;
+        }
+
+        private void CancelEvmConnectDelay()
+        {
+            if (_evmConnectDelayCoroutine != null) { StopCoroutine(_evmConnectDelayCoroutine); _evmConnectDelayCoroutine = null; }
+        }
+
+        private void ClearEvmWalletState()
+        {
+            CancelEvmConnectDelay();
+            StopEvmDots();
+            _evmWallets.Clear();
+            _evmSelectedWallet = null;
+            _evmHasList        = false;
+            _evmFlowSeq++;
+            _evmWalletList?.Clear();
+            if (_evmConnectIcon != null) _evmConnectIcon.style.backgroundImage = StyleKeyword.None;
+            foreach (var tex in _evmIconTextures)
+                if (tex != null) Destroy(tex);
+            _evmIconTextures.Clear();
+        }
+
+        /// <summary>
+        /// The pre-picker EVM connect (auto-pick, no wallet list) — still the right
+        /// path for native builds (Reown QR) and legacy-only window.ethereum pages.
+        /// </summary>
+        private void BeginEvmConnectFallback()
         {
             if (BlockmakerAuth.Instance == null) { SetStatus("Unable to connect right now. Please restart the game.", isError: true); return; }
             if (_peraCtrl != null)
@@ -682,8 +1259,9 @@ namespace Blockmaker
             // flow (a background reconnect must not hijack the email page).
             bool inWalletFlow =
                 (_peraCtrl != null && _peraCtrl.IsOpen) ||
-                (_pageQr    != null && _pageQr.style.display    == DisplayStyle.Flex) ||
-                (_pageStep2 != null && _pageStep2.style.display == DisplayStyle.Flex);
+                (_pageQr         != null && _pageQr.style.display         == DisplayStyle.Flex) ||
+                (_pageEvmWallets != null && _pageEvmWallets.style.display == DisplayStyle.Flex) ||
+                (_pageStep2      != null && _pageStep2.style.display      == DisplayStyle.Flex);
 
             // Preferred: the unmissable "STEP 2 OF 2" state in whichever skin is showing.
             if (inWalletFlow && EnterStepTwoState(CurrentWalletProviderName())) return;
@@ -902,7 +1480,7 @@ namespace Blockmaker
             // the "STEP 2 OF 2" state instead of closing — closing here is exactly how
             // players ended up missing the second request. OnAuthSucceeded still fires now,
             // at the same moment it always has.
-            if (NeedsLoginSignature(identity) && EnterStepTwoState(FriendlyWalletName(identity.ProviderName)))
+            if (NeedsLoginSignature(identity) && EnterStepTwoState(FriendlyWalletNameFor(identity)))
             {
                 if (!_authAnnounced)
                 {
@@ -983,6 +1561,7 @@ namespace Blockmaker
             _authAnnounced   = false;
             StopStepTwoDots();
             ResetStepTwoResend();
+            ClearEvmWalletState();
             if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
             StopResendCountdown();
             StopConnectTimeout();

@@ -83,6 +83,48 @@
 
             </ui:VisualElement>
 
+            <!-- PAGE: EVM wallet picker (EIP-6963 discovered wallets) -->
+            <ui:VisualElement name="page-evm-wallets" class="auth-page">
+
+                <ui:VisualElement class="auth-page-nav">
+                    <ui:Button name="btn-back-from-evm" class="auth-back-btn" text="&lt;" />
+                    <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="Choose Wallet" />
+                </ui:VisualElement>
+
+                <!-- STATE: loading (discovery in flight) -->
+                <ui:VisualElement name="evm-state-loading" class="evm-state evm-state--center">
+                    <ui:VisualElement class="auth-qr-spinner evm-spinner" />
+                    <ui:Label class="evm-loading-text" text="Looking for wallets..." />
+                </ui:VisualElement>
+
+                <!-- STATE: no wallet detected -->
+                <ui:VisualElement name="evm-state-empty" class="evm-state evm-state--center">
+                    <ui:Label class="evm-empty-title" text="No EVM wallet detected." />
+                    <ui:Button name="btn-evm-find-wallet" class="auth-cta-btn evm-find-btn" text="Find a Wallet" />
+                    <ui:Label class="evm-empty-hint" text="On a phone? Open this page in your wallet's built-in browser." />
+                </ui:VisualElement>
+
+                <!-- STATE: wallet list (rows are built in code, one per discovered wallet) -->
+                <ui:ScrollView name="evm-wallet-list" class="evm-state evm-wallet-list" />
+
+                <!-- STATE: connecting to one wallet (also hosts the error states) -->
+                <ui:VisualElement name="evm-state-connecting" class="evm-state evm-state--center">
+                    <ui:VisualElement name="evm-connect-icon" class="evm-connect-icon">
+                        <ui:Label name="lbl-evm-connect-glyph" class="evm-connect-glyph" text="" />
+                    </ui:VisualElement>
+                    <ui:Label name="lbl-evm-connect-title" class="evm-connect-title" text="Requesting connection..." />
+                    <ui:Label name="lbl-evm-connect-body" class="evm-connect-body" text="" />
+                    <ui:VisualElement name="evm-connect-dots" class="auth-step2-dots">
+                        <ui:VisualElement name="evm-dot-1" class="auth-step2-dot" />
+                        <ui:VisualElement name="evm-dot-2" class="auth-step2-dot" />
+                        <ui:VisualElement name="evm-dot-3" class="auth-step2-dot" />
+                    </ui:VisualElement>
+                    <ui:Button name="btn-evm-retry" class="auth-step2-resend-btn evm-retry-btn" text="TRY AGAIN" />
+                    <ui:Button name="btn-evm-cancel" class="auth-link-btn auth-step2-cancel-btn" text="CANCEL" />
+                </ui:VisualElement>
+
+            </ui:VisualElement>
+
             <!-- PAGE: OTP -->
             <ui:VisualElement name="page-otp" class="auth-page">
 
