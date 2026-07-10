@@ -1469,12 +1469,13 @@ namespace Blockmaker
         public void OnEvmRestoreSuccess(string payload)
         {
             _evmRestoreCapturedIdentity = null;
-            var parts = payload.Split('|');
-            if (parts.Length < 3) return;
-            BlockmakerLog.Info($"[BlockmakerAuth] xChain SDK loaded, EVM wallet reconnected: {parts[2]}");
-            // Relay confirmed live. If the restored EVM identity still has no JWT, run a fresh
-            // wallet-signature login now (the gated, connection-ready moment). No-ops if a token
-            // already exists (VerifyRestoredSession refreshes/verifies any existing one).
+            // payload is the raw EVM address ("0x…") — the jslib already verified it
+            // matches the expected address passed to EvmTryRestore.
+            if (string.IsNullOrEmpty(payload)) return;
+            BlockmakerLog.Info($"[BlockmakerAuth] EVM wallet reconnected: {payload}");
+            // Provider confirmed live. If the restored EVM identity still has no JWT, run a
+            // fresh wallet-signature login now (the gated, connection-ready moment). No-ops if
+            // a token already exists (VerifyRestoredSession refreshes/verifies any existing one).
             if (Identity is EvmXChainIdentity evm && string.IsNullOrEmpty(evm.SessionToken))
                 TriggerWalletLogin(evm);
         }
@@ -1495,7 +1496,13 @@ namespace Blockmaker
 
         // ── EVM xChain ─────────────────────────────────────────────────────────────
 
-        /// <summary>Connect an EVM wallet via xChain Accounts. Derives an Algorand LogicSig address.</summary>
+        /// <summary>
+        /// Connect an EVM wallet via xChain Accounts. Derives an Algorand LogicSig address.
+        /// This is the NO-PICKER path (auto-pick: last-used wallet → first announced →
+        /// window.ethereum) — the wallet-picker UI uses <see cref="DiscoverEvmWallets"/> +
+        /// <see cref="ConnectEvmWallet"/> instead. onError receives a bare message here
+        /// (unchanged legacy shape).
+        /// </summary>
         public void ConnectEvm(
             Action<IBlockmakerIdentity> onSuccess = null,
             Action<string>              onError   = null)
@@ -1509,12 +1516,21 @@ namespace Blockmaker
             IsAuthenticating = true;
             _pendingEvmSuccess = onSuccess;
             _pendingEvmError   = onError;
+            _evmConnectErrorsIncludeCode = false;   // legacy path: bare-message errors
+            _evmExpectedRdns = null;                // auto-pick: accept whichever wallet connects
 
     #if UNITY_WEBGL && !UNITY_EDITOR
-            BlockmakerWalletBridge.EvmConnect(
+            // Zero-bundle browser path: discover the installed EVM wallets first
+            // (EIP-6963), then connect. OnEvmWalletsDiscovered picks the wallet and
+            // calls EvmConnect; the timeout below covers the whole chain.
+            // _evmConnectDispatched guards the discover→connect hop: a cancel +
+            // immediate reconnect can leave a STALE discovery callback in flight,
+            // and without the guard both callbacks would call EvmConnect → duplicate
+            // eth_requestAccounts popups.
+            _evmConnectDispatched = false;
+            BlockmakerWalletBridge.EvmDiscoverWallets(
                 gameObject.name,
-                nameof(OnEvmConnected),
-                nameof(OnEvmError)
+                nameof(OnEvmWalletsDiscovered)
             );
             StartWebGLTimeout(WalletSignTimeout, () =>
             {
@@ -1531,21 +1547,174 @@ namespace Blockmaker
                 return;
             }
 
+            // OnEvmConnected receives the raw EVM address and derives the Algorand
+            // LogicSig address in C# — the same funnel the WebGL bridge feeds.
             _connector.ConnectEvm(
-                evmAddr =>
-                {
-                    try
-                    {
-                        var algoAddr = XChainAddressDeriver.DeriveAlgorandAddress(evmAddr);
-                        OnEvmConnected($"EvmXChain|{algoAddr}|{evmAddr}");
-                    }
-                    catch (Exception ex)
-                    {
-                        BlockmakerLog.Error($"[BlockmakerAuth] Failed to derive Algorand address: {ex.Message}");
-                        OnEvmError("Something went wrong while setting up your wallet. Please try again.");
-                    }
-                },
-                err => OnEvmError(err)
+                evmAddr => OnEvmConnected(evmAddr),
+                err     => OnEvmError(err)
+            );
+    #endif
+        }
+
+        /// <summary>
+        /// Callback for BlockmakerWalletBridge.EvmDiscoverWallets on the ConnectEvm
+        /// AUTO-CONNECT path (WebGL only). Payload: JSON
+        /// {"wallets":[{"rdns","name","icon","lastUsed"},…],"legacy":bool} — or the
+        /// sentinel "!none" when no EVM provider is installed at all. This path
+        /// ignores the wallet list and auto-picks via EvmConnect(""); the picker UI
+        /// uses the separate DiscoverEvmWallets / OnEvmWalletsDiscoveredForUi /
+        /// ConnectEvmWallet API below instead.
+        /// </summary>
+        // True once the current connect attempt has dispatched EvmConnect — stale
+        // discovery callbacks (from a cancelled attempt) must not dispatch a second.
+        private bool _evmConnectDispatched;
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnEvmWalletsDiscovered(string payload)
+        {
+            if (_pendingEvmSuccess == null && _pendingEvmError == null)
+                return; // the connect was cancelled while discovery ran
+
+            if (_evmConnectDispatched)
+                return; // a discovery callback already advanced this attempt to connect
+
+            if (payload == "!none")
+            {
+                OnEvmError("No EVM wallet found. Please install one to continue.");
+                return;
+            }
+
+            // Do NOT log the payload itself — it now carries base64 icon bytes.
+            BlockmakerLog.Info($"[BlockmakerAuth] EVM wallets discovered ({(payload?.Length ?? 0)} chars) — auto-connecting.");
+
+            _evmConnectDispatched = true;
+            BlockmakerWalletBridge.EvmConnect(
+                "",   // auto-pick: last-used rdns (localStorage) → first announced → window.ethereum
+                gameObject.name,
+                nameof(OnEvmConnected),
+                nameof(OnEvmError)
+            );
+        }
+
+        // ── EVM wallet picker (discover / connect split) ───────────────────────────
+        // The picker UI drives these two calls: DiscoverEvmWallets → show the list →
+        // ConnectEvmWallet(chosen rdns). ConnectEvm above stays the no-picker
+        // auto-pick path for API compatibility.
+
+        // Single pending slot for the UI discovery callback (last-wins): a newer
+        // DiscoverEvmWallets call replaces the callback; the first jslib response
+        // consumes the slot and any later stale response finds it empty and is dropped.
+        private Action<string> _pendingEvmDiscoverForUi;
+
+        // True while the CURRENT EVM connect attempt came from ConnectEvmWallet (the
+        // picker path): OnEvmError then forwards "code|message" to the pending error
+        // callback so the UI can branch on EIP-1193 codes. ConnectEvm (the legacy
+        // auto-pick path) resets it so its callers keep receiving the bare message.
+        private bool _evmConnectErrorsIncludeCode;
+
+        /// <summary>
+        /// Discover installed EVM wallets for a picker UI. onResult receives the RAW
+        /// jslib payload:
+        ///   JSON — {"wallets":[{"rdns","name","icon","lastUsed"},…],"legacy":bool}
+        ///   (icon = base64 96x96 PNG, no data: prefix, "" if unavailable; lastUsed
+        ///   marks the last-used wallet; legacy = a window.ethereum provider exists)
+        ///   — or the sentinel "!none" when no EVM provider is available at all.
+        /// On non-WebGL platforms onResult fires immediately with
+        /// {"wallets":[],"legacy":false,"native":true} — the UI should skip the
+        /// picker and connect via the native (Reown) flow.
+        /// Discovery is passive (no wallet popup) and does not touch IsAuthenticating.
+        /// </summary>
+        public void DiscoverEvmWallets(Action<string> onResult)
+        {
+    #if UNITY_WEBGL && !UNITY_EDITOR
+            _pendingEvmDiscoverForUi = onResult;   // single slot, last-wins
+            BlockmakerWalletBridge.EvmDiscoverWallets(
+                gameObject.name,
+                nameof(OnEvmWalletsDiscoveredForUi)
+            );
+    #else
+            onResult?.Invoke("{\"wallets\":[],\"legacy\":false,\"native\":true}");
+    #endif
+        }
+
+        /// <summary>
+        /// Receiver for DiscoverEvmWallets (picker path) — deliberately separate from
+        /// OnEvmWalletsDiscovered, which belongs to the ConnectEvm auto-connect flow
+        /// and dispatches a connect on arrival. This one only relays the payload.
+        /// </summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnEvmWalletsDiscoveredForUi(string payload)
+        {
+            var cb = _pendingEvmDiscoverForUi;
+            _pendingEvmDiscoverForUi = null;
+            cb?.Invoke(payload);
+        }
+
+        /// <summary>
+        /// Connect the SPECIFIC EVM wallet chosen in the picker — like ConnectEvm but
+        /// skips discovery and passes rdns straight to the bridge ("" = auto-pick).
+        /// A picked rdns that is no longer available FAILS (no silent fallback).
+        /// onError always receives "code|message": code is the wallet's numeric
+        /// EIP-1193 / JSON-RPC error code when it supplied one (e.g.
+        /// "4001|User rejected the request.") and "" otherwise — including timeouts,
+        /// busy-guard rejections and native-path errors, e.g. "|Connection timed out.
+        /// Please try again.". On non-WebGL platforms this falls back to the
+        /// ConnectEvm (Reown) behavior and rdns is ignored.
+        /// </summary>
+        public void ConnectEvmWallet(
+            string rdns,
+            Action<IBlockmakerIdentity> onSuccess = null,
+            Action<string>              onError   = null)
+        {
+            if (IsAuthenticating || _pendingEvmSuccess != null || _pendingEvmError != null)
+            {
+                onError?.Invoke("|Another sign-in is already in progress. Please wait.");
+                return;
+            }
+
+            IsAuthenticating   = true;
+            _pendingEvmSuccess = onSuccess;
+            _pendingEvmError   = onError;
+            _evmConnectErrorsIncludeCode = true;   // picker path: "code|message" errors
+            // The user picked THIS wallet — a stale success echoing any other rdns
+            // (an earlier cancelled attempt's still-open popup getting approved)
+            // must be dropped, not logged in. Null = accept any (auto-pick paths).
+            _evmExpectedRdns = string.IsNullOrEmpty(rdns) ? null : rdns;
+
+    #if UNITY_WEBGL && !UNITY_EDITOR
+            // Straight to connect — discovery already ran for the picker. Mark the
+            // discover→connect hop as already done so a STALE discovery callback
+            // (from an earlier cancelled ConnectEvm) can't dispatch a second
+            // EvmConnect and race this one with a duplicate eth_requestAccounts popup.
+            _evmConnectDispatched = true;
+            BlockmakerWalletBridge.EvmConnect(
+                rdns ?? "",
+                gameObject.name,
+                nameof(OnEvmConnected),
+                nameof(OnEvmError)
+            );
+            StartWebGLTimeout(WalletSignTimeout, () =>
+            {
+                if (_pendingEvmSuccess != null || _pendingEvmError != null)
+                    OnEvmError("Connection timed out. Please try again.");
+            });
+    #else
+            if (_connector == null || !_connector.IsInitialized)
+            {
+                IsAuthenticating   = false;
+                _pendingEvmSuccess = null;
+                _pendingEvmError   = null;
+                onError?.Invoke("|Wallet connection is not ready yet. Please try again in a moment.");
+                return;
+            }
+
+            // Native fallback = ConnectEvm behavior: Reown has no rdns concept, so the
+            // chosen rdns is ignored and the same OnEvmConnected/OnEvmError funnel runs.
+            _connector.ConnectEvm(
+                evmAddr => OnEvmConnected(evmAddr),
+                err     => OnEvmError(err)
             );
     #endif
         }
@@ -1562,26 +1731,55 @@ namespace Blockmaker
     #endif
         }
 
+        // rdns the CURRENT connect attempt expects the bridge to echo back; null =
+        // accept any (auto-pick / native). Guards the cancel-then-repick race: wallet
+        // A's still-open popup approved during attempt B must not become identity A.
+        private string _evmExpectedRdns;
+
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Preserve]
         public void OnEvmConnected(string payload)
         {
-            CancelWebGLTimeout();
             if (_pendingEvmSuccess == null && _pendingEvmError == null)
                 return;
 
-            var parts = payload.Split('|');
-            if (parts.Length < 3)
+            // WebGL bridge payload is "rdns|0xEvmAddress" (rdns '' for the legacy
+            // window.ethereum fallback); the native Reown connector sends a bare
+            // "0x…" address. Split on the first '|' when present.
+            string echoedRdns = null;
+            var evmAddress = payload;
+            int sep = payload?.IndexOf('|') ?? -1;
+            if (sep >= 0)
+            {
+                echoedRdns = payload.Substring(0, sep);
+                evmAddress = payload.Substring(sep + 1);
+            }
+
+            // Stale-success guard: this success is for a DIFFERENT wallet than the
+            // current attempt picked — an earlier cancelled attempt's popup was
+            // approved late. Ignore it (the current attempt keeps waiting on its own
+            // callback); consuming it would log the player into the wrong wallet.
+            if (_evmExpectedRdns != null && echoedRdns != null && echoedRdns != _evmExpectedRdns)
+            {
+                BlockmakerLog.Warning(
+                    $"[BlockmakerAuth] Ignoring stale EVM connect success from '{echoedRdns}' — the current attempt expects '{_evmExpectedRdns}'.");
+                return;
+            }
+
+            CancelWebGLTimeout();
+
+            // The Algorand LogicSig address is derived here in C# (byte-proven
+            // against the on-chain LogicSig derivation).
+            if (string.IsNullOrEmpty(evmAddress) ||
+                !evmAddress.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             {
                 OnEvmError("Something went wrong during wallet connection. Please try again.");
                 return;
             }
 
-            var algoAddr   = parts[1];
-            var evmAddress = parts[2];
-
             try
             {
+                var algoAddr = XChainAddressDeriver.DeriveAlgorandAddress(evmAddress);
                 var prevTier = Tier;
                 var identity = new EvmXChainIdentity(algoAddr, evmAddress);
                 SetIdentity(identity);
@@ -1611,12 +1809,46 @@ namespace Blockmaker
             if (_pendingEvmSuccess == null && _pendingEvmError == null)
                 return;
 
-            BlockmakerLog.Error($"[BlockmakerAuth] EVM connect error: {error}");
-            SafeInvoke(OnAuthError, error);
-            _pendingEvmError?.Invoke(error);
+            // The jslib's EvmConnect errors arrive as "code|message" (numeric EIP-1193
+            // code, or empty). Internal, timeout and native-connector errors are bare
+            // messages. Normalize: humans (log + OnAuthError) always get the message
+            // alone; the pending callback gets "code|message" on the picker path
+            // (ConnectEvmWallet) and the bare message on the legacy ConnectEvm path.
+            ParseEvmConnectError(error, out var code, out var message);
+            BlockmakerLog.Error($"[BlockmakerAuth] EVM connect error: {(string.IsNullOrEmpty(code) ? message : code + " " + message)}");
+            SafeInvoke(OnAuthError, message);
+            _pendingEvmError?.Invoke(_evmConnectErrorsIncludeCode ? code + "|" + message : message);
             _pendingEvmError   = null;
             _pendingEvmSuccess = null;
             IsAuthenticating   = false;
+        }
+
+        /// <summary>
+        /// Split a "code|message" EVM connect-error payload (the jslib EvmConnect
+        /// error shape). The prefix before the FIRST '|' is accepted as the code only
+        /// when it is empty or an integer (optionally negative — JSON-RPC codes like
+        /// -32002); otherwise the '|' belonged to a bare message, which is returned
+        /// whole with code "". Payloads without any '|' are bare messages too.
+        /// </summary>
+        private static void ParseEvmConnectError(string payload, out string code, out string message)
+        {
+            code    = "";
+            message = payload ?? "";
+            if (string.IsNullOrEmpty(payload)) return;
+
+            int pipe = payload.IndexOf('|');
+            if (pipe < 0) return;
+
+            var prefix = payload.Substring(0, pipe);
+            if (prefix == "-") return; // a lone minus is not a code
+            for (int i = 0; i < prefix.Length; i++)
+            {
+                char c = prefix[i];
+                if (!(char.IsDigit(c) || (c == '-' && i == 0))) return;
+            }
+
+            code    = prefix;
+            message = payload.Substring(pipe + 1);
         }
 
         // ── Legacy email login (server-managed wallet) ────────────────────────────
@@ -1784,6 +2016,7 @@ namespace Blockmaker
             _pendingConnectError   = null;
             _pendingEvmSuccess     = null;
             _pendingEvmError       = null;
+            _pendingEvmDiscoverForUi = null;
             _pendingMagicSuccess   = null;
             _pendingMagicError     = null;
             _isWalletConnecting    = false;

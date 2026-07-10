@@ -17,7 +17,7 @@
                     </ui:VisualElement>
                     <ui:Label class="auth-btn-label" text="Continue with Email" />
                     <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                        <ui:VisualElement class="auth-chevron" />
                     </ui:VisualElement>
                 </ui:Button>
 
@@ -28,58 +28,61 @@
                 </ui:VisualElement>
 
                 <ui:Button name="btn-algorand" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--algo">
-                        <ui:Label class="auth-btn-icon-glyph" text="A" />
-                    </ui:VisualElement>
-                    <ui:Label class="auth-btn-label" text="Algorand" />
-                    <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                    </ui:VisualElement>
-                </ui:Button>
-
-                <ui:Button name="btn-metamask" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--evm">
-                        <ui:Label class="auth-btn-icon-glyph" text="X" />
+                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--wallets">
+                        <ui:Label class="auth-btn-icon-glyph" text="W" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
-                        <ui:Label class="auth-btn-label" text="X-Chain" />
-                        <ui:Label class="auth-btn-sub" text="Any EVM wallet" />
+                        <ui:Label class="auth-btn-label" text="EVM / AVM Wallets" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
+                        <ui:VisualElement class="auth-chevron" />
                     </ui:VisualElement>
                 </ui:Button>
 
             </ui:VisualElement>
 
-            <!-- PAGE: Algorand wallet picker -->
-            <ui:VisualElement name="page-algo-wallets" class="auth-page">
+            <!-- PAGE: unified wallet picker (Pera/Defly + EIP-6963 discovered EVM wallets) -->
+            <ui:VisualElement name="page-evm-wallets" class="auth-page">
 
                 <ui:VisualElement class="auth-page-nav">
-                    <ui:Button name="btn-back-from-wallets" class="auth-back-btn" text="&lt;" />
-                    <ui:Label class="auth-page-heading" text="Choose Wallet" />
+                    <ui:VisualElement class="auth-page-heading-wrap">
+                        <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="EVM / AVM Wallets" />
+                    </ui:VisualElement>
                 </ui:VisualElement>
 
-                <ui:Button name="btn-pera" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--pera">
-                        <ui:Label class="auth-btn-icon-glyph" text="P" />
-                    </ui:VisualElement>
-                    <ui:Label class="auth-btn-label" text="Pera Wallet" />
-                    <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                    </ui:VisualElement>
-                </ui:Button>
+                <!-- STATE: the unified list — every row (Pera/Defly/EVM) is built in
+                     code inside the ScrollView; the quiet "none found" row shows
+                     below it when discovery comes back empty -->
+                <ui:VisualElement name="evm-state-list" class="evm-state">
 
-                <ui:Button name="btn-defly" class="auth-btn auth-btn--wallet" text="">
-                    <ui:VisualElement class="auth-btn-icon auth-btn-icon--defly">
-                        <ui:Label class="auth-btn-icon-glyph" text="D" />
-                    </ui:VisualElement>
-                    <ui:Label class="auth-btn-label" text="Defly Wallet" />
-                    <ui:VisualElement class="auth-btn-chevron">
-                        <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                    </ui:VisualElement>
-                </ui:Button>
+                    <ui:ScrollView name="evm-wallet-list" class="evm-wallet-list" />
 
+                    <ui:VisualElement name="evm-sub-none" class="evm-substate evm-none-row">
+                        <ui:Label class="evm-none-text" text="No browser wallet found" />
+                        <ui:Button name="btn-evm-find-wallet" class="auth-link-btn evm-find-link" text="Find one" />
+                    </ui:VisualElement>
+
+                    <!-- "more below" fade; picking-mode Ignore so it never eats row clicks.
+                         Controller shows it only when the list overflows. -->
+                    <ui:VisualElement name="evm-list-fade" class="evm-list-fade" picking-mode="Ignore" />
+
+                </ui:VisualElement>
+
+                <!-- STATE: connecting to one wallet (also hosts the error states) -->
+                <ui:VisualElement name="evm-state-connecting" class="evm-state evm-state--center">
+                    <ui:VisualElement name="evm-connect-icon" class="evm-connect-icon">
+                        <ui:Label name="lbl-evm-connect-glyph" class="evm-connect-glyph" text="" />
+                    </ui:VisualElement>
+                    <ui:Label name="lbl-evm-connect-title" class="evm-connect-title" text="Requesting connection&#8230;" />
+                    <ui:Label name="lbl-evm-connect-body" class="evm-connect-body" text="" />
+                    <ui:VisualElement name="evm-connect-dots" class="auth-step2-dots">
+                        <ui:VisualElement name="evm-dot-1" class="auth-step2-dot" />
+                        <ui:VisualElement name="evm-dot-2" class="auth-step2-dot" />
+                        <ui:VisualElement name="evm-dot-3" class="auth-step2-dot" />
+                    </ui:VisualElement>
+                    <ui:Button name="btn-evm-retry" class="auth-step2-resend-btn evm-retry-btn" text="TRY AGAIN" />
+                    <ui:Button name="btn-evm-cancel" class="auth-link-btn auth-step2-cancel-btn" text="CANCEL" />
+                </ui:VisualElement>
 
             </ui:VisualElement>
 
@@ -88,7 +91,6 @@
 
                 <ui:VisualElement name="otp-step1" class="auth-step">
                     <ui:VisualElement class="auth-page-nav">
-                        <ui:Button name="btn-back-options" class="auth-back-btn" text="&lt;" />
                         <ui:Label class="auth-page-heading" text="Enter your email" />
                     </ui:VisualElement>
                     <ui:Label class="auth-field-label" text="EMAIL ADDRESS" />
@@ -111,7 +113,6 @@
             <ui:VisualElement name="page-qr" class="auth-page auth-page--center">
 
                 <ui:VisualElement class="auth-page-nav">
-                    <ui:Button name="btn-cancel-connect" class="auth-back-btn" text="&lt;" />
                     <ui:Label name="lbl-qr-provider" class="auth-page-heading" text="Scan with Pera Wallet" />
                 </ui:VisualElement>
 
@@ -155,8 +156,19 @@
             <!-- Status / error -->
             <ui:Label name="lbl-auth-status" class="auth-status" text="" />
 
+            <!-- Card-level back button — top-left corner, mirrors the close button.
+                 Shown only on sub-pages; the controller routes its action per page. -->
+            <ui:Button name="btn-back-corner" class="auth-back-btn" text="">
+                <ui:VisualElement class="auth-chevron auth-chevron--left" />
+            </ui:Button>
+
             <!-- Close button (last child so it renders above all pages) -->
-            <ui:Button name="btn-close" class="auth-close-btn" text="&#215;" />
+            <ui:Button name="btn-close" class="auth-close-btn" text="">
+                <ui:VisualElement class="auth-close-x">
+                    <ui:VisualElement class="auth-close-bar auth-close-bar--a" />
+                    <ui:VisualElement class="auth-close-bar auth-close-bar--b" />
+                </ui:VisualElement>
+            </ui:Button>
 
         </ui:VisualElement>
     </ui:VisualElement>

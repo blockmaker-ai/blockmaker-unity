@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.2.0] - 2026-07-10
+
+### Added
+- EVM wallets on WebGL (beta): full zero-bundle browser path — no CDN downloads,
+  no self-hosted bundle. The browser layer is a thin EIP-1193 transport; address
+  derivation, EIP-712 payloads and LogicSig transaction assembly all happen in C#
+  (proven against the on-chain xChain LogicSig via mainnet simulation, including
+  atomic group signing with a single wallet approval)
+- Wallet picker in the built-in auth prompt: one flat list with Pera and Defly on
+  top, then every EVM wallet installed in the player's browser (EIP-6963 discovery,
+  real wallet icons rasterized in-browser); curated MetaMask / Rainbow /
+  Coinbase Wallet / Trust rows on native builds (WalletConnect QR); skeleton row
+  while discovery runs, "Find one" link when no wallet is installed
+- `BlockmakerAuth.DiscoverEvmWallets(Action<string>)` and
+  `ConnectEvmWallet(rdns, onSuccess, onError)` — the discover/connect split behind
+  the picker, usable from custom UIs; `CancelEvmConnect()` aborts cleanly
+- Per-wallet connect errors: EIP-1193 codes surface as "code|message" on the picker
+  path — 4001 (declined, retry offered) and -32002 (request already pending in the
+  wallet, no duplicate popup) get dedicated player-friendly states
+- EVM session restore on WebGL: silent re-attach after a page reload (eth_accounts,
+  no popup), remembered last-used wallet
+- `BlockmakerWalletBridge.OpenUrlInNewTab` — informational links open a new tab on
+  WebGL instead of navigating the game away
+
+### Changed
+- Auth modal redesign: unified wallet list, corner back button, real brand logos,
+  crisp font-free chevron/close geometry shared via BlockmakerTheme.uss, hidden
+  scrollbar with an overflow fade (wheel/touch scrolling unaffected)
+- Wallet-picker safety: a picked wallet that disappears fails cleanly (no silent
+  fallback to another wallet), and a stale approval from a cancelled attempt can
+  never log the player into the wrong wallet (rdns echo guard); wallet names from
+  discovery are length-clamped and rendered with rich text off
+- The `OnEvmConnected` bridge callback (public on `BlockmakerAuth`, but
+  bridge-internal in practice) now receives "rdns|0xEvmAddress" instead of a
+  bare address
+
 ## [1.1.0] - 2026-07-09
 
 ### Added

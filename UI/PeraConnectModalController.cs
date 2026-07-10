@@ -75,6 +75,11 @@ namespace Blockmaker
         private string _pendingProvider;
         private string _pendingWcUri;
 
+        // The display name Open() was called with. The Reown QR event's provider
+        // argument is only a transport-level hint (e.g. "EVM Wallet") — the status
+        // line must keep showing this name instead.
+        private string _openProviderName;
+
         public Action OnBackClicked { get; set; }
         public Action OnCloseClicked { get; set; }
 
@@ -150,8 +155,9 @@ namespace Blockmaker
             ShowConnectPanel();
 
             // Reset the deep-link state until a fresh WC URI arrives via HandleQRReady.
-            _pendingProvider = provider;
-            _pendingWcUri    = null;
+            _openProviderName = provider;
+            _pendingProvider  = provider;
+            _pendingWcUri     = null;
             if (_btnOpenWallet != null) _btnOpenWallet.style.display = DisplayStyle.None;
 
             switch (provider)
@@ -165,6 +171,21 @@ namespace Blockmaker
                     _downloadUrl = "https://metamask.io";
                     _iosUrl      = "https://apps.apple.com/app/metamask/id1438144202";
                     _androidUrl  = "https://play.google.com/store/apps/details?id=io.metamask";
+                    break;
+                case "Rainbow":
+                    _downloadUrl = "https://rainbow.me";
+                    _iosUrl      = "https://apps.apple.com/app/rainbow-ethereum-wallet/id1457119021";
+                    _androidUrl  = "https://play.google.com/store/apps/details?id=me.rainbow";
+                    break;
+                case "Coinbase Wallet":
+                    _downloadUrl = "https://wallet.coinbase.com";
+                    _iosUrl      = "https://apps.apple.com/app/coinbase-wallet-nfts-crypto/id1278383455";
+                    _androidUrl  = "https://play.google.com/store/apps/details?id=org.toshi";
+                    break;
+                case "Trust Wallet":
+                    _downloadUrl = "https://trustwallet.com";
+                    _iosUrl      = "https://apps.apple.com/app/trust-crypto-bitcoin-wallet/id1288339409";
+                    _androidUrl  = "https://play.google.com/store/apps/details?id=com.wallet.crypto.trustapp";
                     break;
                 default:
                     _downloadUrl = "https://perawallet.app";
@@ -180,23 +201,18 @@ namespace Blockmaker
                 if (_logoEl2 != null) _logoEl2.style.backgroundImage = bg;
             }
 
-            bool showDownload = provider != "MetaMask";
+            // Curated EVM wallets get a footer reminder that any EVM wallet works;
+            // every provider keeps the Download flow ("Get {name}" panel).
+            bool curatedEvm = provider == "MetaMask" || provider == "Rainbow" ||
+                              provider == "Coinbase Wallet" || provider == "Trust Wallet";
 
-            if (_connectDivider != null)
-                _connectDivider.style.display = showDownload ? DisplayStyle.Flex : DisplayStyle.None;
-
-            if (provider == "MetaMask")
-            {
-                if (_connectFooter != null) _connectFooter.style.display = DisplayStyle.Flex;
-                if (_lblFooterHint != null) _lblFooterHint.text = "Any EVM wallet — MetaMask, Rainbow + more";
-                if (_btnShowDownload != null) _btnShowDownload.style.display = DisplayStyle.None;
-            }
-            else
-            {
-                if (_connectFooter != null) _connectFooter.style.display = DisplayStyle.Flex;
-                if (_lblFooterHint != null) _lblFooterHint.text = $"Don’t have {provider}?";
-                if (_btnShowDownload != null) _btnShowDownload.style.display = DisplayStyle.Flex;
-            }
+            if (_connectDivider  != null) _connectDivider.style.display  = DisplayStyle.Flex;
+            if (_connectFooter   != null) _connectFooter.style.display   = DisplayStyle.Flex;
+            if (_lblFooterHint   != null)
+                _lblFooterHint.text = curatedEvm
+                    ? $"Don’t have {provider}? Any EVM wallet works"
+                    : $"Don’t have {provider}?";
+            if (_btnShowDownload != null) _btnShowDownload.style.display = DisplayStyle.Flex;
 
             if (_lblDlTitle  != null) _lblDlTitle.text  = $"Get {provider}";
             if (_lblDlStatus != null) _lblDlStatus.text = $"Scan to visit {_downloadUrl.Replace("https://", "")}";
@@ -424,7 +440,11 @@ namespace Blockmaker
             if (_qrConnect != null && _connectQrTexture != null)
                 _qrConnect.style.backgroundImage = new StyleBackground(_connectQrTexture);
 
-            SetStatus($"Scan with {provider}");
+            // Status shows the display name the modal was opened with — the event's
+            // provider argument is a transport hint ("EVM Wallet") and only fills in
+            // when Open() got an empty name.
+            string displayName = string.IsNullOrEmpty(_openProviderName) ? provider : _openProviderName;
+            SetStatus($"Scan with {displayName}");
 
             // On mobile (native or mobile browser) offer a one-tap deep link into the
             // wallet app; the QR code stays visible as a fallback.

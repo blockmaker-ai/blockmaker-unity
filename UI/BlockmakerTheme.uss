@@ -62,3 +62,55 @@
     --bm-space-xl:         32px;
     --bm-space-2xl:        48px;
 }
+
+/* =========================================================================
+   Shared crisp geometry (font-free, WebGL-safe)
+   Imported by every modal USS via @import url("BlockmakerTheme.uss").
+   ========================================================================= */
+
+/* ── Chevron: an L-corner (right + bottom borders) rotated to a caret ───── */
+/* transform-origin defaults to center; if a chevron points the wrong way in
+   a build, negate its rotate angle (the two variants below are mirror pairs). */
+.auth-chevron {
+    width:                      9px;
+    height:                     9px;
+    border-top-width:           0;
+    border-left-width:          0;
+    border-right-width:         2.75px;
+    border-bottom-width:        2.75px;
+    border-right-color:         rgba(255, 255, 255, 0.10);
+    border-bottom-color:        rgba(255, 255, 255, 0.10);
+    rotate:                     -45deg;   /* points right › */
+    transition-property:        border-right-color, border-bottom-color, translate;
+    transition-duration:        0.18s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-chevron--left {
+    rotate: 135deg;   /* points left ‹ */
+}
+
+/* ── Close cross: two bars crossing at center inside a 14x14 box ────────── */
+.auth-close-x {
+    width:  14px;
+    height: 14px;
+}
+
+.auth-close-bar {
+    position:                   absolute;
+    top:                        6px;   /* (14 - 2) / 2 → vertically centered */
+    left:                       0;
+    right:                      0;
+    height:                     2px;
+    border-top-left-radius:     1px;
+    border-top-right-radius:    1px;
+    border-bottom-left-radius:  1px;
+    border-bottom-right-radius: 1px;
+    background-color:           rgba(238, 238, 246, 0.55);
+    transition-property:        background-color;
+    transition-duration:        0.15s;
+    transition-timing-function: ease-in-out;
+}
+
+.auth-close-bar--a { rotate: 45deg; }
+.auth-close-bar--b { rotate: -45deg; }

@@ -81,6 +81,8 @@
     font-size:           18px;
     width:               40px;
     height:              40px;
+    align-items:         center;
+    justify-content:     center;
     padding-left:        0;
     padding-right:       0;
     padding-top:         0;
@@ -467,4 +469,22 @@
 .pera-store-btn:active {
     background-color: rgba(255, 255, 255, 0.04);
     color:            rgba(240, 240, 248, 0.50);
+}
+
+
+/* ── Crisp geometry (chevron + close cross live in BlockmakerTheme.uss) ──── */
+
+/* Back arrows read too faint at the shared 0.10 idle — bump their rest state. */
+.pera-back-btn .auth-chevron {
+    border-right-color:  rgba(238, 238, 246, 0.45);
+    border-bottom-color: rgba(238, 238, 246, 0.45);
+}
+
+.pera-back-btn:hover .auth-chevron {
+    border-right-color:  rgba(240, 240, 248, 0.85);
+    border-bottom-color: rgba(240, 240, 248, 0.85);
+}
+
+.pera-close-btn:hover .auth-close-bar {
+    background-color: rgba(238, 238, 246, 0.90);
 }
