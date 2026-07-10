@@ -33,7 +33,6 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
                         <ui:Label class="auth-btn-label" text="EVM / AVM Wallets" />
-                        <ui:Label class="auth-btn-sub" text="AVM &#183; EVM" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:VisualElement class="auth-chevron" />
@@ -51,7 +50,6 @@
                     </ui:Button>
                     <ui:VisualElement class="auth-page-heading-wrap">
                         <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="EVM / AVM Wallets" />
-                        <ui:Label name="lbl-evm-subheading" class="auth-page-subheading" text="AVM &#183; EVM" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 

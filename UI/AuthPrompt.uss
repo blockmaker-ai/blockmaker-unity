@@ -286,6 +286,8 @@
 }
 
 .auth-btn-icon-glyph {
+    width:             100%;
+    height:            100%;
     font-size:         18px;
     -unity-text-align: middle-center;
     -unity-font-style: bold;
@@ -347,10 +349,11 @@
 /* ── Button body (two-line labels) ────────────────────────────────────── */
 
 .auth-btn-body {
-    flex-direction: column;
-    flex-grow:      1;
-    align-items:    flex-start;
-    padding-left:   16px;
+    flex-direction:  column;
+    flex-grow:       1;
+    align-items:     flex-start;
+    justify-content: center;
+    padding-left:    16px;
 }
 
 .auth-btn-body .auth-btn-label {
@@ -1054,11 +1057,14 @@
     align-self:                 center;
 }
 
-/* RECOMMENDED — solid accent take on the shared badge geometry */
+/* RECOMMENDED — deliberately subtle: a quiet muted pill, not a loud accent chip.
+   Just a soft hint that Pera is the smoothest choice, never shouting over the row. */
 .evm-badge--recommended {
-    background-color: rgb(109, 40, 217);
-    color:            rgb(255, 255, 255);
-    border-color:     rgba(167, 139, 250, 0.55);
+    font-size:        9px;
+    letter-spacing:   0.4px;
+    color:            rgba(238, 238, 246, 0.50);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color:     rgba(255, 255, 255, 0.10);
 }
 
 /* ── Connecting pane (one wallet) ─────────────────────────────────────── */
