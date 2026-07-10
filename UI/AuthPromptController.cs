@@ -953,7 +953,7 @@ namespace Blockmaker
             if (_evmWalletList == null) return;
 
             _evmWalletList.Add(BuildWalletRow(
-                "Pera Wallet", null, WalletBadge.Recommended,
+                "Pera Wallet", null, WalletBadge.None,
                 (icon, glyph) => icon.AddToClassList("auth-btn-icon--pera"),
                 () => BeginWalletConnect("Pera")));
 
@@ -1060,14 +1060,12 @@ namespace Blockmaker
                 row.Add(nameLbl);
             }
 
-            // One badge slot between name and chevron — max one badge,
-            // priority RECOMMENDED > RECENT.
+            // One badge slot between name and chevron. Only RECENT ships today
+            // (RECOMMENDED was dropped); the enum keeps the slot extensible.
             if (badge != WalletBadge.None)
             {
-                var badgeLbl = new Label(badge == WalletBadge.Recommended ? "RECOMMENDED" : "RECENT");
+                var badgeLbl = new Label("RECENT");
                 badgeLbl.AddToClassList("evm-badge");
-                if (badge == WalletBadge.Recommended)
-                    badgeLbl.AddToClassList("evm-badge--recommended");
                 row.Add(badgeLbl);
             }
 

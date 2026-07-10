@@ -144,9 +144,12 @@
     border-right-width:         1px;
     border-bottom-width:        1px;
     border-left-width:          1px;
-    border-color:               rgba(255, 255, 255, 0.08);
-    background-color:           rgba(255, 255, 255, 0.04);
-    color:                      rgba(238, 238, 246, 0.45);
+    border-top-color:           rgba(167, 139, 250, 0.45);
+    border-right-color:         rgba(167, 139, 250, 0.20);
+    border-left-color:          rgba(167, 139, 250, 0.20);
+    border-bottom-color:        rgba(75, 25, 160, 0.70);
+    background-color:           rgb(109, 40, 217);
+    color:                      rgba(255, 255, 255, 0.90);
     font-size:                  22px;
     -unity-text-align:          middle-center;
     align-items:                center;
@@ -164,9 +167,9 @@
 }
 
 .auth-back-btn:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-color:     rgba(255, 255, 255, 0.14);
-    color:            rgba(238, 238, 246, 0.80);
+    background-color: rgb(124, 58, 237);
+    border-top-color: rgba(167, 139, 250, 0.60);
+    color:            rgba(255, 255, 255, 1);
 }
 
 .auth-back-btn:active {
@@ -408,14 +411,14 @@
 }
 
 .auth-back-btn:hover .auth-chevron {
-    border-right-color:  rgba(238, 238, 246, 0.80);
-    border-bottom-color: rgba(238, 238, 246, 0.80);
+    border-right-color:  rgb(255, 255, 255);
+    border-bottom-color: rgb(255, 255, 255);
 }
 
-/* Back arrows read too faint at the shared 0.10 idle — bump their rest state. */
+/* White chevron on the purple back button (matches the primary email button). */
 .auth-back-btn .auth-chevron {
-    border-right-color:  rgba(238, 238, 246, 0.45);
-    border-bottom-color: rgba(238, 238, 246, 0.45);
+    border-right-color:  rgba(255, 255, 255, 0.90);
+    border-bottom-color: rgba(255, 255, 255, 0.90);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1055,16 +1058,6 @@
     margin-right:               8px;
     flex-shrink:                0;
     align-self:                 center;
-}
-
-/* RECOMMENDED — deliberately subtle: a quiet muted pill, not a loud accent chip.
-   Just a soft hint that Pera is the smoothest choice, never shouting over the row. */
-.evm-badge--recommended {
-    font-size:        9px;
-    letter-spacing:   0.4px;
-    color:            rgba(238, 238, 246, 0.50);
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color:     rgba(255, 255, 255, 0.10);
 }
 
 /* ── Connecting pane (one wallet) ─────────────────────────────────────── */
