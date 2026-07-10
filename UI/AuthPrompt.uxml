@@ -33,7 +33,7 @@
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
                         <ui:Label class="auth-btn-label" text="EVM / AVM Wallets" />
-                        <ui:Label class="auth-btn-sub" text="Algorand &amp; Ethereum-compatible" />
+                        <ui:Label class="auth-btn-sub" text="AVM &#183; EVM" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:Label class="auth-btn-chevron-glyph" text=">" />
@@ -49,57 +49,20 @@
                     <ui:Button name="btn-back-from-evm" class="auth-back-btn" text="&lt;" />
                     <ui:VisualElement class="auth-page-heading-wrap">
                         <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="EVM / AVM Wallets" />
-                        <ui:Label name="lbl-evm-subheading" class="auth-page-subheading" text="Algorand &amp; Ethereum-compatible" />
+                        <ui:Label name="lbl-evm-subheading" class="auth-page-subheading" text="AVM &#183; EVM" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
-                <!-- STATE: the unified list — Pera/Defly always, the EVM portion below -->
+                <!-- STATE: the unified list — every row (Pera/Defly/EVM) is built in
+                     code inside the ScrollView; the quiet "none found" row shows
+                     below it when discovery comes back empty -->
                 <ui:VisualElement name="evm-state-list" class="evm-state">
 
-                    <ui:Button name="btn-pera" class="auth-btn auth-btn--wallet" text="">
-                        <ui:VisualElement class="auth-btn-icon auth-btn-icon--pera">
-                            <ui:Label class="auth-btn-icon-glyph" text="P" />
-                        </ui:VisualElement>
-                        <ui:Label class="auth-btn-label" text="Pera Wallet" />
-                        <ui:VisualElement class="auth-btn-chevron">
-                            <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                        </ui:VisualElement>
-                    </ui:Button>
+                    <ui:ScrollView name="evm-wallet-list" class="evm-wallet-list" />
 
-                    <ui:Button name="btn-defly" class="auth-btn auth-btn--wallet" text="">
-                        <ui:VisualElement class="auth-btn-icon auth-btn-icon--defly">
-                            <ui:Label class="auth-btn-icon-glyph" text="D" />
-                        </ui:VisualElement>
-                        <ui:Label class="auth-btn-label" text="Defly Wallet" />
-                        <ui:VisualElement class="auth-btn-chevron">
-                            <ui:Label class="auth-btn-chevron-glyph" text=">" />
-                        </ui:VisualElement>
-                    </ui:Button>
-
-                    <!-- EVM portion — hidden entirely when config.enableEvmXChain is off -->
-                    <ui:VisualElement name="evm-section" class="evm-section">
-
-                        <ui:VisualElement class="auth-divider evm-section-divider">
-                            <ui:VisualElement class="auth-divider-line" />
-                            <ui:Label class="auth-divider-text" text="EVM WALLETS" />
-                            <ui:VisualElement class="auth-divider-line" />
-                        </ui:VisualElement>
-
-                        <!-- SUB-STATE: discovery in flight -->
-                        <ui:VisualElement name="evm-sub-loading" class="evm-substate evm-sub-loading">
-                            <ui:VisualElement class="auth-qr-spinner evm-sub-spinner" />
-                            <ui:Label class="evm-sub-loading-text" text="Looking for wallets..." />
-                        </ui:VisualElement>
-
-                        <!-- SUB-STATE: wallet rows (built in code: discovered / legacy / native) -->
-                        <ui:ScrollView name="evm-wallet-list" class="evm-substate evm-wallet-list" />
-
-                        <!-- SUB-STATE: nothing discovered -->
-                        <ui:VisualElement name="evm-sub-none" class="evm-substate evm-none-row">
-                            <ui:Label class="evm-none-text" text="Other EVM wallets &#8212; none found" />
-                            <ui:Button name="btn-evm-find-wallet" class="auth-link-btn evm-find-link" text="Find one" />
-                        </ui:VisualElement>
-
+                    <ui:VisualElement name="evm-sub-none" class="evm-substate evm-none-row">
+                        <ui:Label class="evm-none-text" text="No browser wallet found" />
+                        <ui:Button name="btn-evm-find-wallet" class="auth-link-btn evm-find-link" text="Find one" />
                     </ui:VisualElement>
 
                 </ui:VisualElement>

@@ -853,53 +853,10 @@
     padding-bottom: 6px;
 }
 
-/* ── EVM portion of the list (below the Pera/Defly rows) ──────────────── */
-
-.evm-section {
-    flex-direction: column;
-}
-
-.evm-section-divider {
-    margin-top:    4px;
-    margin-bottom: 16px;
-}
-
-/* EVM sub-state containers — hidden by default; the controller shows one
-   (LOADING row / wallet rows / "none found" row). */
+/* Hidden by default — the controller shows the "none found" row only when
+   discovery came back empty. */
 .evm-substate {
     display: none;
-}
-
-/* ── Loading row (discovery in flight) ────────────────────────────────── */
-
-.evm-sub-loading {
-    flex-direction: row;
-    align-items:    center;
-    height:         48px;
-    padding-left:   14px;
-}
-
-.evm-sub-spinner {
-    width:                      20px;
-    height:                     20px;
-    border-top-left-radius:     10px;
-    border-top-right-radius:    10px;
-    border-bottom-left-radius:  10px;
-    border-bottom-right-radius: 10px;
-    border-top-width:           2px;
-    border-right-width:         2px;
-    border-bottom-width:        2px;
-    border-left-width:          2px;
-    margin-right:               12px;
-    margin-top:                 0;
-    margin-bottom:              0;
-    flex-shrink:                0;
-}
-
-.evm-sub-loading-text {
-    font-size:         13px;
-    color:             rgba(238, 238, 246, 0.32);
-    -unity-text-align: middle-left;
 }
 
 /* ── "None found" row (quiet) ─────────────────────────────────────────── */
@@ -929,46 +886,124 @@
     color: rgba(167, 139, 250, 0.90);
 }
 
-/* ── Wallet list ──────────────────────────────────────────────────────── */
+/* ── Unified wallet list ──────────────────────────────────────────────── */
 
-/* Caps at ~5 rows (5 x 66px incl. margin) — taller lists scroll. */
+/* Caps at 5 rows + half of the 6th (70px each incl. margin) — the cut row
+   is the scroll affordance; longer lists scroll. */
 .evm-wallet-list {
-    max-height: 336px;
+    max-height: 385px;
     flex-grow:  0;
 }
 
-.evm-wallet-row {
-    height:        56px;
-    margin-bottom: 10px;
+/* ONE row class for every wallet — Pera, Defly, discovered EVM, curated EVM,
+   legacy browser. opacity/translate drive the --enter pop-in; scale/colors
+   keep the auth-btn hover/press feel. */
+.wallet-row {
+    height:                     60px;
+    margin-bottom:              10px;
+    transition-property:        opacity, translate, scale, background-color, border-color;
+    transition-duration:        0.16s, 0.16s, 0.18s, 0.18s, 0.18s;
+    transition-timing-function: ease-out, ease-out, ease-in-out, ease-in-out, ease-in-out;
 }
 
-/* Rows with a second line (e.g. the native "scan QR" row) need more height */
-.evm-wallet-row--two-line {
+/* Rows with a second line need more height */
+.wallet-row--two-line {
     height: 64px;
 }
 
-.evm-wallet-icon {
-    width:                      32px;
-    height:                     32px;
-    border-top-left-radius:     8px;
-    border-top-right-radius:    8px;
-    border-bottom-left-radius:  8px;
-    border-bottom-right-radius: 8px;
-    margin-left:                14px;
+/* Pop-in start state for rows added after discovery (never on Pera/Defly) */
+.wallet-row--enter {
+    opacity:   0;
+    translate: 0 6px;
+}
+
+.wallet-row-icon {
+    width:                      40px;
+    height:                     40px;
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    margin-left:                12px;
     overflow:                   hidden;
     -unity-background-scale-mode: scale-to-fit;
     background-size:            100% 100%;
     background-position:        center;
 }
 
-.evm-wallet-glyph {
-    font-size: 14px;
+.wallet-row-glyph {
+    font-size: 16px;
     color:     rgba(255, 255, 255, 0.90);
 }
 
-.evm-wallet-name {
-    font-size: 15px;
+.wallet-row-name {
+    font-size:    15px;
+    color:        rgba(238, 238, 246, 0.88);
+    padding-left: 14px;
+    flex-grow:    1;
 }
+
+.wallet-row .auth-btn-chevron {
+    width: 48px;
+}
+
+/* ── Discovery skeleton (one ghost row while DiscoverEvmWallets runs) ──── */
+
+.wallet-skeleton {
+    height:                     60px;
+    margin-bottom:              10px;
+    flex-direction:             row;
+    align-items:                center;
+    background-color:           rgba(255, 255, 255, 0.03);
+    border-top-left-radius:     14px;
+    border-top-right-radius:    14px;
+    border-bottom-left-radius:  14px;
+    border-bottom-right-radius: 14px;
+    opacity:                    1;
+    transition-property:        opacity;
+    transition-duration:        0.6s;
+    transition-timing-function: ease-in-out;
+}
+
+/* Toggled by the controller every 600ms — the transition does the pulse */
+.wallet-skeleton--pulse {
+    opacity: 0.55;
+}
+
+.wallet-skeleton-chip {
+    width:                      40px;
+    height:                     40px;
+    border-top-left-radius:     10px;
+    border-top-right-radius:    10px;
+    border-bottom-left-radius:  10px;
+    border-bottom-right-radius: 10px;
+    margin-left:                12px;
+    background-color:           rgba(255, 255, 255, 0.05);
+    flex-shrink:                0;
+}
+
+.wallet-skeleton-bar {
+    width:                      96px;
+    height:                     12px;
+    border-top-left-radius:     6px;
+    border-top-right-radius:    6px;
+    border-bottom-left-radius:  6px;
+    border-bottom-right-radius: 6px;
+    margin-left:                14px;
+    background-color:           rgba(255, 255, 255, 0.05);
+}
+
+/* ── Native caption (curated rows connect via QR) ─────────────────────── */
+
+.evm-native-caption {
+    font-size:         11px;
+    color:             rgba(238, 238, 246, 0.28);
+    -unity-text-align: middle-center;
+    white-space:       normal;
+    margin-top:        2px;
+}
+
+/* ── Badges (one slot per row, between name and chevron) ──────────────── */
 
 .evm-badge {
     font-size:                  10px;
@@ -990,8 +1025,15 @@
     padding-bottom:             3px;
     padding-left:               9px;
     padding-right:              9px;
-    margin-right:               2px;
+    margin-right:               8px;
     flex-shrink:                0;
+}
+
+/* RECOMMENDED — solid accent take on the shared badge geometry */
+.evm-badge--recommended {
+    background-color: rgb(109, 40, 217);
+    color:            rgb(255, 255, 255);
+    border-color:     rgba(167, 139, 250, 0.55);
 }
 
 /* ── Connecting pane (one wallet) ─────────────────────────────────────── */

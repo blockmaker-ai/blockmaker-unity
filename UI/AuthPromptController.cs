@@ -19,11 +19,12 @@ namespace Blockmaker
     ///
     /// The prompt manages five pages:
     ///   page-options       — Email / Wallets buttons
-    ///   page-evm-wallets   — unified "EVM / AVM Wallets" picker: Pera + Defly rows
-    ///                        always, then the discovered-EVM (EIP-6963) portion
-    ///                        (LOADING → rows / none-found) plus the CONNECTING
-    ///                        (+ error states) pane — see the "unified wallet picker"
-    ///                        region for the state machine
+    ///   page-evm-wallets   — unified "EVM / AVM Wallets" picker: ONE code-built
+    ///                        flat list (Pera + Defly rows always, then the
+    ///                        discovered/curated EVM rows below — skeleton row while
+    ///                        discovery runs, quiet none-found row when empty) plus
+    ///                        the CONNECTING (+ error states) pane — see the
+    ///                        "unified wallet picker" region for the state machine
     ///   page-otp           — step1 (email entry) → step2 (6-digit code)
     ///   page-qr            — WalletConnect QR code display
     ///   page-step2         — "STEP 2 OF 2" wait state: the wallet is connected and
@@ -117,11 +118,9 @@ namespace Blockmaker
         private VisualElement _pageEvmWallets;
         private Label         _lblEvmHeading;
         private Label         _lblEvmSubheading;
-        private VisualElement _evmStateList;    // list pane: Pera/Defly + EVM portion
-        private VisualElement _evmSection;      // EVM portion (divider + sub-states)
-        private VisualElement _evmSubLoading;
-        private VisualElement _evmSubNone;
-        private ScrollView    _evmWalletList;
+        private VisualElement _evmStateList;    // list pane: the unified row list
+        private VisualElement _evmSubNone;      // quiet "none found" row below the list
+        private ScrollView    _evmWalletList;   // ONE flat list: Pera/Defly + EVM rows
         private VisualElement _evmStateConnecting;
         private VisualElement _evmConnectIcon;
         private Label         _lblEvmConnectGlyph;
@@ -133,10 +132,21 @@ namespace Blockmaker
         private IVisualElementScheduledItem _evmDotAnim;
         private int _evmDotIndex;
 
-        // Loading / None / List describe the EVM portion of the list pane;
-        // Connecting / Error swap the whole list pane for the connecting pane.
+        // Loading / None / List describe the EVM portion of the unified list
+        // (Loading = the skeleton row is still in the list, None = the quiet
+        // "none found" row shows below it); Connecting / Error swap the whole
+        // list pane for the connecting pane.
         private enum EvmPageState { Loading, None, List, Connecting, Error }
         private EvmPageState _evmState = EvmPageState.Loading;
+
+        // One badge slot per row (between name and chevron), max one badge —
+        // priority RECOMMENDED > RECENT.
+        private enum WalletBadge { None, Recommended, Recent }
+
+        // Discovery-in-flight skeleton row (one, below Pera/Defly) + its pulse timer.
+        private VisualElement _evmSkeletonRow;
+        private IVisualElementScheduledItem _evmSkeletonPulse;
+        private const long EvmSkeletonPulseMs = 600;
 
         // Discovered wallets (lastUsed first, then announced order) + textures we
         // decoded for their icons (destroyed when the list is rebuilt / prompt reset).
@@ -254,10 +264,15 @@ namespace Blockmaker
             _lblEvmHeading      = root.Q<Label>("lbl-evm-heading");
             _lblEvmSubheading   = root.Q<Label>("lbl-evm-subheading");
             _evmStateList       = root.Q("evm-state-list");
-            _evmSection         = root.Q("evm-section");
-            _evmSubLoading      = root.Q("evm-sub-loading");
             _evmSubNone         = root.Q("evm-sub-none");
             _evmWalletList      = root.Q<ScrollView>("evm-wallet-list");
+            if (_evmWalletList != null)
+            {
+                // Default scroller styling; the vertical bar appears only when the
+                // list overflows its max-height.
+                _evmWalletList.verticalScrollerVisibility   = ScrollerVisibility.Auto;
+                _evmWalletList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+            }
             _evmStateConnecting = root.Q("evm-state-connecting");
             _evmConnectIcon     = root.Q("evm-connect-icon");
             _lblEvmConnectGlyph = root.Q<Label>("lbl-evm-connect-glyph");
@@ -286,8 +301,8 @@ namespace Blockmaker
             // btn-algorand is the single wallet entry now — it opens the unified
             // "EVM / AVM Wallets" page (name kept for back-compat with older UXML).
             root.Q<Button>("btn-algorand")?.RegisterCallback<ClickEvent>(_     => BeginUnifiedWalletFlow());
-            root.Q<Button>("btn-pera")?.RegisterCallback<ClickEvent>(_         => BeginWalletConnect("Pera"));
-            root.Q<Button>("btn-defly")?.RegisterCallback<ClickEvent>(_        => BeginWalletConnect("Defly"));
+            // Pera/Defly rows are no longer static UXML — BuildBaseWalletRows adds
+            // them to the unified list when the picker page opens.
             root.Q<Button>("btn-back-options")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
 
             root.Q<Button>("btn-cancel-connect")?.RegisterCallback<ClickEvent>(_ => ShowOptionsPage());
@@ -475,6 +490,7 @@ namespace Blockmaker
             {
                 StopEvmDots();
                 CancelEvmConnectDelay();
+                RemoveEvmSkeletonRow();   // discovery is void — don't leave it pulsing
                 _evmFlowSeq++;   // invalidate any in-flight discovery callback
             }
 
@@ -696,17 +712,21 @@ namespace Blockmaker
 
         // ── Unified wallet picker (page-evm-wallets) ──────────────────────────────
         //
-        // One page for every wallet: the Pera + Defly rows are static UXML and always
-        // visible; the EVM portion below the "EVM WALLETS" divider is discovered when
-        // the page opens (EIP-6963) and hidden entirely when config.enableEvmXChain
-        // is off. Two panes, one active at a time:
+        // One page, ONE code-built flat list: the Pera (RECOMMENDED) + Defly rows are
+        // added immediately when the page opens, a single skeleton row pulses below
+        // them while EVM discovery (EIP-6963) runs, and the resolved EVM rows replace
+        // the skeleton. When config.enableEvmXChain is off the skeleton + discovery
+        // are skipped entirely (list = Pera + Defly). Two panes, one active at a time:
         //
-        //   ENTRY (options wallet button) → LIST pane, EVM portion LOADING →
+        //   ENTRY (options wallet button) → LIST pane (Pera/Defly + skeleton) →
         //   DiscoverEvmWallets →
         //     '!none' / 0 wallets, no legacy → quiet "none found" row (+ Find one)
-        //     native:true (non-WebGL)        → one "EVM wallet" QR row → BeginEvmConnectFallback
+        //     native:true (non-WebGL)        → curated rows (MetaMask / Rainbow /
+        //                                      Coinbase Wallet / Trust Wallet) →
+        //                                      BeginEvmConnectFallback(name) (Reown QR)
         //     legacy-only (0 announced)      → one "Browser wallet" row → ConnectEvmWallet("")
-        //     1+ wallets                     → rows (lastUsed first, then announced order)
+        //     1+ wallets                     → rows (lastUsed first w/ RECENT badge,
+        //                                      then announced order)
         //   EVM row click → CONNECTING pane → (0.6s registration delay) → ConnectEvmWallet →
         //     success → HandleIdentityChanged (step-2 page or close, as with other wallets)
         //     error   → ERROR on the same pane ("code|message": 4001 / -32002 / generic)
@@ -732,19 +752,20 @@ namespace Blockmaker
             ClearStatus();
             ClearEvmWalletState();   // drop rows/textures from a previous pass
 
-            // The Pera/Defly rows show immediately; the EVM portion is gated by config
-            // (the same gate that used to hide the options-page X-Chain button).
+            // The Pera/Defly rows show immediately (never animated); the EVM portion
+            // is gated by config (the same gate that used to hide the options-page
+            // X-Chain button).
+            BuildBaseWalletRows();
+
             var cfg = BlockmakerClient.Instance?.config;
             bool evmEnabled = cfg == null || cfg.enableEvmXChain;
-            if (_evmSection != null)
-                _evmSection.style.display = evmEnabled ? DisplayStyle.Flex : DisplayStyle.None;
-
             if (!evmEnabled)
             {
-                ShowEvmState(EvmPageState.List);   // Pera/Defly only
+                ShowEvmState(EvmPageState.List);   // Pera/Defly only — no skeleton, no discovery
                 return;
             }
 
+            AddEvmSkeletonRow();
             ShowEvmState(EvmPageState.Loading);
 
             int seq = ++_evmFlowSeq;
@@ -797,15 +818,12 @@ namespace Blockmaker
                 return;
             }
 
-            // Native (non-WebGL) → no in-page wallets to pick from; one row into the
-            // existing Reown QR flow.
+            // Native (non-WebGL) → no in-page wallets to pick from; the curated set,
+            // each row into the existing Reown QR flow.
             if (discovery.native)
             {
                 if (_evmWalletList == null) { ShowEvmState(EvmPageState.None); return; }
-                _evmWalletList.Clear();
-                var qrEntry = new EvmWalletEntry { rdns = string.Empty, name = "EVM wallet", icon = string.Empty };
-                _evmWalletList.Add(BuildEvmWalletRow(qrEntry, "Scan QR with any mobile EVM wallet",
-                                                     () => BeginEvmConnectFallback()));
+                AppendCuratedEvmRows();
                 ShowEvmState(EvmPageState.List);
                 return;
             }
@@ -821,14 +839,15 @@ namespace Blockmaker
                 return;
             }
 
-            // Order: lastUsed first, then announced order (stable). The unified list
-            // always shows Pera/Defly above, so even a single EVM wallet is listed —
-            // no auto-advance into its connect pane.
+            // Order: lastUsed first (RECENT badge), then announced order (stable).
+            // The unified list always shows Pera/Defly above — recent never rises
+            // above Defly — so even a single EVM wallet is listed; no auto-advance
+            // into its connect pane.
             _evmWallets.Clear();
             foreach (var w in discovery.wallets) if (w != null &&  w.lastUsed) _evmWallets.Add(w);
             foreach (var w in discovery.wallets) if (w != null && !w.lastUsed) _evmWallets.Add(w);
 
-            BuildEvmWalletList();
+            AppendDiscoveredEvmRows();
             ShowEvmState(EvmPageState.List);
         }
 
@@ -837,9 +856,13 @@ namespace Blockmaker
         private void ShowBrowserWalletRow()
         {
             if (_evmWalletList == null) { ShowEvmState(EvmPageState.None); return; }
-            _evmWalletList.Clear();
+            RemoveEvmSkeletonRow();
             var legacyEntry = new EvmWalletEntry { rdns = string.Empty, name = "Browser wallet", icon = string.Empty };
-            _evmWalletList.Add(BuildEvmWalletRow(legacyEntry, null, () => BeginEvmWalletConnect(legacyEntry)));
+            var row = BuildWalletRow(legacyEntry.name, null, WalletBadge.None,
+                                     (icon, glyph) => ApplyEvmWalletIcon(icon, glyph, legacyEntry),
+                                     () => BeginEvmWalletConnect(legacyEntry));
+            AnimateRowEnter(row, 0);
+            _evmWalletList.Add(row);
             ShowEvmState(EvmPageState.List);
         }
 
@@ -851,15 +874,17 @@ namespace Blockmaker
 
             bool connectingPane = state == EvmPageState.Connecting || state == EvmPageState.Error;
 
-            // The list pane (Pera/Defly + EVM portion) backs every non-connecting state.
+            // The list pane (the unified row list) backs every non-connecting state.
             if (_evmStateList       != null) _evmStateList.style.display       = connectingPane ? DisplayStyle.None : DisplayStyle.Flex;
             if (_evmStateConnecting != null) _evmStateConnecting.style.display = connectingPane ? DisplayStyle.Flex : DisplayStyle.None;
 
-            // EVM sub-states inside the list pane (all within evm-section, which
-            // BeginUnifiedWalletFlow hides wholesale when EVM is config-disabled).
-            if (_evmSubLoading != null) _evmSubLoading.style.display = state == EvmPageState.Loading ? DisplayStyle.Flex : DisplayStyle.None;
-            if (_evmSubNone    != null) _evmSubNone.style.display    = state == EvmPageState.None    ? DisplayStyle.Flex : DisplayStyle.None;
-            if (_evmWalletList != null) _evmWalletList.style.display = state == EvmPageState.List    ? DisplayStyle.Flex : DisplayStyle.None;
+            // The unified list stays visible with the list pane (it holds Pera/Defly);
+            // Loading just means the skeleton row is still in it. The quiet "none
+            // found" row shows below the list only when discovery came back empty.
+            if (_evmWalletList != null) _evmWalletList.style.display = connectingPane ? DisplayStyle.None : DisplayStyle.Flex;
+            if (_evmSubNone    != null) _evmSubNone.style.display    = state == EvmPageState.None ? DisplayStyle.Flex : DisplayStyle.None;
+
+            if (state != EvmPageState.Loading) RemoveEvmSkeletonRow();
 
             if (_lblEvmHeading != null)
                 _lblEvmHeading.text = connectingPane ? "Connect Wallet" : "EVM / AVM Wallets";
@@ -870,50 +895,118 @@ namespace Blockmaker
             else                                  StopEvmDots();
         }
 
-        // ── EVM wallet list ────────────────────────────────────────────────────────
+        // ── Unified wallet list (rows built in code) ──────────────────────────────
 
-        private void BuildEvmWalletList()
+        // Curated wallets for native/editor builds (replaces the single "scan QR"
+        // row) — each connects via the existing Reown QR fallback flow. Letter-glyph
+        // chips with FIXED hues (same S/V as WalletFallbackColor).
+        private static readonly (string name, string letter, float hue)[] CuratedEvmWallets =
+        {
+            ("MetaMask",        "M",  30f),
+            ("Rainbow",         "R", 260f),
+            ("Coinbase Wallet", "C", 220f),
+            ("Trust Wallet",    "T", 160f),
+        };
+
+        /// The Pera (RECOMMENDED) + Defly rows that top the unified list on every
+        /// platform. Added immediately on page open — never animated, never rebuilt
+        /// by discovery.
+        private void BuildBaseWalletRows()
         {
             if (_evmWalletList == null) return;
-            _evmWalletList.Clear();
 
+            _evmWalletList.Add(BuildWalletRow(
+                "Pera Wallet", null, WalletBadge.Recommended,
+                (icon, glyph) => icon.AddToClassList("auth-btn-icon--pera"),
+                () => BeginWalletConnect("Pera")));
+
+            _evmWalletList.Add(BuildWalletRow(
+                "Defly Wallet", null, WalletBadge.None,
+                (icon, glyph) => icon.AddToClassList("auth-btn-icon--defly"),
+                () => BeginWalletConnect("Defly")));
+        }
+
+        /// Discovered (EIP-6963) rows, appended below Pera/Defly in _evmWallets
+        /// order (lastUsed first → RECENT badge, then announced order).
+        private void AppendDiscoveredEvmRows()
+        {
+            if (_evmWalletList == null) return;
+            RemoveEvmSkeletonRow();
+
+            int index = 0;
             foreach (var wallet in _evmWallets)
             {
                 var entry = wallet; // capture per-row
-                _evmWalletList.Add(BuildEvmWalletRow(entry, null, () => BeginEvmWalletConnect(entry)));
+                var row = BuildWalletRow(
+                    entry.name, null,
+                    entry.lastUsed ? WalletBadge.Recent : WalletBadge.None,
+                    (icon, glyph) => ApplyEvmWalletIcon(icon, glyph, entry),
+                    () => BeginEvmWalletConnect(entry));
+                AnimateRowEnter(row, index++);
+                _evmWalletList.Add(row);
             }
         }
 
+        /// The curated rows for native/editor builds, plus the muted "these connect
+        /// by QR" caption below the last row.
+        private void AppendCuratedEvmRows()
+        {
+            if (_evmWalletList == null) return;
+            RemoveEvmSkeletonRow();
+
+            int index = 0;
+            foreach (var (name, letter, hue) in CuratedEvmWallets)
+            {
+                string walletName  = name;   // capture per-row
+                string chipLetter  = letter;
+                float  chipHue     = hue;
+                var row = BuildWalletRow(
+                    walletName, null, WalletBadge.None,
+                    (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, chipLetter, chipHue),
+                    () => BeginEvmConnectFallback(walletName));
+                AnimateRowEnter(row, index++);
+                _evmWalletList.Add(row);
+            }
+
+            var caption = new Label("These connect by QR — scan with the wallet's mobile app");
+            caption.AddToClassList("evm-native-caption");
+            _evmWalletList.Add(caption);
+        }
+
         /// <summary>
-        /// One wallet row in the shared Pera/Defly button grammar: icon (PNG or
-        /// letter-glyph chip) + name (+ optional second line) + RECENT badge + chevron.
+        /// ONE wallet row for the unified list — Pera, Defly, discovered EVM,
+        /// curated EVM and the legacy "Browser wallet" row all come through here:
+        /// icon chip + name (+ optional second line) + one badge slot + chevron.
+        /// paintIcon fills the 40x40 chip (USS logo class, decoded PNG, or
+        /// letter-glyph fallback).
         /// </summary>
-        private Button BuildEvmWalletRow(EvmWalletEntry wallet, string subText, Action onClick)
+        private Button BuildWalletRow(string displayName, string subText, WalletBadge badge,
+                                      Action<VisualElement, Label> paintIcon, Action onClick)
         {
             var row = new Button(() => onClick?.Invoke()) { text = string.Empty };
             row.AddToClassList("auth-btn");
             row.AddToClassList("auth-btn--wallet");
-            row.AddToClassList("evm-wallet-row");
+            row.AddToClassList("wallet-row");
             if (!string.IsNullOrEmpty(subText))
-                row.AddToClassList("evm-wallet-row--two-line");
+                row.AddToClassList("wallet-row--two-line");
 
-            // Icon: decoded PNG, or a letter-glyph chip in the Pera/Defly style
-            // with a deterministic per-wallet hue.
+            // Icon chip: the painter decides — USS logo class (Pera/Defly), decoded
+            // PNG, or a letter-glyph chip with a per-wallet hue.
             var icon = new VisualElement();
             icon.AddToClassList("auth-btn-icon");
-            icon.AddToClassList("evm-wallet-icon");
+            icon.AddToClassList("wallet-row-icon");
             var glyph = new Label();
             glyph.AddToClassList("auth-btn-icon-glyph");
-            glyph.AddToClassList("evm-wallet-glyph");
+            glyph.AddToClassList("wallet-row-glyph");
             icon.Add(glyph);
-            ApplyEvmWalletIcon(icon, glyph, wallet);
+            paintIcon?.Invoke(icon, glyph);
             row.Add(icon);
 
             // Name: untrusted text — rich text off, length-clamped.
-            var nameLbl = new Label(ClampWalletName(wallet.name));
+            var nameLbl = new Label(ClampWalletName(displayName));
             nameLbl.enableRichText = false;
             nameLbl.AddToClassList("auth-btn-label");
-            nameLbl.AddToClassList("evm-wallet-name");
+            nameLbl.AddToClassList("wallet-row-name");
 
             if (!string.IsNullOrEmpty(subText))
             {
@@ -930,11 +1023,15 @@ namespace Blockmaker
                 row.Add(nameLbl);
             }
 
-            if (wallet.lastUsed)
+            // One badge slot between name and chevron — max one badge,
+            // priority RECOMMENDED > RECENT.
+            if (badge != WalletBadge.None)
             {
-                var badge = new Label("RECENT");
-                badge.AddToClassList("evm-badge");
-                row.Add(badge);
+                var badgeLbl = new Label(badge == WalletBadge.Recommended ? "RECOMMENDED" : "RECENT");
+                badgeLbl.AddToClassList("evm-badge");
+                if (badge == WalletBadge.Recommended)
+                    badgeLbl.AddToClassList("evm-badge--recommended");
+                row.Add(badgeLbl);
             }
 
             var chevWrap = new VisualElement();
@@ -945,6 +1042,54 @@ namespace Blockmaker
             row.Add(chevWrap);
 
             return row;
+        }
+
+        /// Pop-in for rows added after discovery resolves: start faded + 6px low
+        /// (.wallet-row--enter), then drop the class on a 40ms-staggered schedule so
+        /// the USS opacity/translate transition (160ms ease-out) runs. Pera/Defly
+        /// are added before discovery and never animate.
+        private static void AnimateRowEnter(VisualElement row, int index)
+        {
+            row.AddToClassList("wallet-row--enter");
+            row.schedule
+               .Execute(() => row.RemoveFromClassList("wallet-row--enter"))
+               .ExecuteLater(16 + index * 40);
+        }
+
+        // ── Discovery skeleton row ─────────────────────────────────────────────────
+
+        /// One ghost row (row-shaped block + chip ghost + name-bar ghost) below
+        /// Pera/Defly while DiscoverEvmWallets runs. Pulses opacity 0.55↔1.0 by
+        /// toggling a --pulse class every 600ms — the USS opacity transition eases it.
+        private void AddEvmSkeletonRow()
+        {
+            if (_evmWalletList == null || _evmSkeletonRow != null) return;
+
+            var row = new VisualElement();
+            row.AddToClassList("wallet-skeleton");
+            var chip = new VisualElement();
+            chip.AddToClassList("wallet-skeleton-chip");
+            row.Add(chip);
+            var bar = new VisualElement();
+            bar.AddToClassList("wallet-skeleton-bar");
+            row.Add(bar);
+
+            _evmWalletList.Add(row);
+            _evmSkeletonRow   = row;
+            _evmSkeletonPulse = row.schedule
+                .Execute(() => row.ToggleInClassList("wallet-skeleton--pulse"))
+                .Every(EvmSkeletonPulseMs);
+        }
+
+        private void RemoveEvmSkeletonRow()
+        {
+            _evmSkeletonPulse?.Pause();
+            _evmSkeletonPulse = null;
+            if (_evmSkeletonRow != null)
+            {
+                _evmSkeletonRow.RemoveFromHierarchy();
+                _evmSkeletonRow = null;
+            }
         }
 
         /// <summary>
@@ -1011,6 +1156,20 @@ namespace Blockmaker
                 foreach (char c in key) { hash ^= c; hash *= 16777619; }
             float hue = (hash % 360u) / 360f;
             return Color.HSVToRGB(hue, 0.42f, 0.38f);
+        }
+
+        /// Letter-glyph chip for a curated wallet: FIXED hue (same S/V as
+        /// WalletFallbackColor) so the four keep stable brand-adjacent colors
+        /// without shipping logo assets.
+        private static void ApplyCuratedWalletIcon(VisualElement icon, Label glyph, string letter, float hue)
+        {
+            icon.style.backgroundImage = StyleKeyword.None;
+            icon.style.backgroundColor = Color.HSVToRGB(hue / 360f, 0.42f, 0.38f);
+            if (glyph != null)
+            {
+                glyph.style.display = DisplayStyle.Flex;
+                glyph.text = letter;
+            }
         }
 
         // ── EVM connecting pane ────────────────────────────────────────────────────
@@ -1207,6 +1366,7 @@ namespace Blockmaker
         {
             CancelEvmConnectDelay();
             StopEvmDots();
+            RemoveEvmSkeletonRow();
             _evmWallets.Clear();
             _evmSelectedWallet = null;
             _evmFlowSeq++;
@@ -1218,15 +1378,17 @@ namespace Blockmaker
         }
 
         /// <summary>
-        /// The pre-picker EVM connect (auto-pick, no wallet list) — still the right
-        /// path for native builds (Reown QR) and legacy-only window.ethereum pages.
+        /// The pre-picker EVM connect (auto-pick via Reown QR) — the path for the
+        /// curated native/editor rows (parameterized with the wallet display name so
+        /// the QR modal labels itself accordingly) and for older UXML without the
+        /// unified page.
         /// </summary>
-        private void BeginEvmConnectFallback()
+        private void BeginEvmConnectFallback(string walletName = "MetaMask")
         {
             if (BlockmakerAuth.Instance == null) { SetStatus("Unable to connect right now. Please restart the game.", isError: true); return; }
             if (_peraCtrl != null)
             {
-                _peraCtrl.Open("MetaMask", evmLogoIcon);
+                _peraCtrl.Open(walletName, evmLogoIcon);
                 StartConnectTimeout(msg => { if (this != null) _peraCtrl.SetStatus(msg); });
 
                 BlockmakerAuth.Instance.ConnectEvm(
