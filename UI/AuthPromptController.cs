@@ -120,6 +120,7 @@ namespace Blockmaker
         private Label         _lblEvmSubheading;
         private VisualElement _evmStateList;    // list pane: the unified row list
         private VisualElement _evmSubNone;      // quiet "none found" row below the list
+        private VisualElement _evmListFade;     // bottom "more below" fade (overflow only)
         private ScrollView    _evmWalletList;   // ONE flat list: Pera/Defly + EVM rows
         private VisualElement _evmStateConnecting;
         private VisualElement _evmConnectIcon;
@@ -265,13 +266,17 @@ namespace Blockmaker
             _lblEvmSubheading   = root.Q<Label>("lbl-evm-subheading");
             _evmStateList       = root.Q("evm-state-list");
             _evmSubNone         = root.Q("evm-sub-none");
+            _evmListFade        = root.Q("evm-list-fade");
             _evmWalletList      = root.Q<ScrollView>("evm-wallet-list");
             if (_evmWalletList != null)
             {
-                // Default scroller styling; the vertical bar appears only when the
-                // list overflows its max-height.
-                _evmWalletList.verticalScrollerVisibility   = ScrollerVisibility.Auto;
+                // No scrollbar chrome — wheel + touch scrolling still work with
+                // Hidden (confirmed) and content is not clipped. A bottom fade
+                // (evm-list-fade) signals "more below" when the list overflows.
+                _evmWalletList.verticalScrollerVisibility   = ScrollerVisibility.Hidden;
                 _evmWalletList.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
+                // Mobile: clamp so overscroll doesn't fight the surrounding canvas.
+                _evmWalletList.touchScrollBehavior = ScrollView.TouchScrollBehavior.Clamped;
             }
             _evmStateConnecting = root.Q("evm-state-connecting");
             _evmConnectIcon     = root.Q("evm-connect-icon");
@@ -884,6 +889,15 @@ namespace Blockmaker
             if (_evmWalletList != null) _evmWalletList.style.display = connectingPane ? DisplayStyle.None : DisplayStyle.Flex;
             if (_evmSubNone    != null) _evmSubNone.style.display    = state == EvmPageState.None ? DisplayStyle.Flex : DisplayStyle.None;
 
+            // Bottom "more below" fade: hidden on the connecting pane; on any list
+            // state re-measure after layout settles and show it only if the list
+            // overflows (a fade over a short list would darken the last real row).
+            if (_evmListFade != null)
+            {
+                if (connectingPane) _evmListFade.style.display = DisplayStyle.None;
+                else                UpdateEvmListFade();
+            }
+
             if (state != EvmPageState.Loading) RemoveEvmSkeletonRow();
 
             if (_lblEvmHeading != null)
@@ -893,6 +907,29 @@ namespace Blockmaker
 
             if (state == EvmPageState.Connecting) StartEvmDots();
             else                                  StopEvmDots();
+        }
+
+        /// Show the bottom fade only when the wallet list actually overflows its
+        /// viewport (max-height 385px). Measured one tick later so the ScrollView
+        /// has laid out its freshly (re)built rows; comparing the content height to
+        /// the viewport height is the "scroll range > 0" test.
+        private void UpdateEvmListFade()
+        {
+            if (_evmListFade == null || _evmWalletList == null) return;
+            _evmWalletList.schedule.Execute(() =>
+            {
+                if (_evmListFade == null || _evmWalletList == null) return;
+                var content  = _evmWalletList.contentContainer;
+                var viewport = _evmWalletList.contentViewport;
+                if (content == null || viewport == null) return;
+                float contentH  = content.layout.height;
+                float viewportH = viewport.layout.height;
+                // NaN before first layout → treat as no overflow (a later state
+                // change re-runs this once real heights exist).
+                bool overflow = !float.IsNaN(contentH) && !float.IsNaN(viewportH)
+                                && contentH > viewportH + 1f;
+                _evmListFade.style.display = overflow ? DisplayStyle.Flex : DisplayStyle.None;
+            }).ExecuteLater(1);
         }
 
         // ── Unified wallet list (rows built in code) ──────────────────────────────
@@ -1036,8 +1073,8 @@ namespace Blockmaker
 
             var chevWrap = new VisualElement();
             chevWrap.AddToClassList("auth-btn-chevron");
-            var chev = new Label(">");
-            chev.AddToClassList("auth-btn-chevron-glyph");
+            var chev = new VisualElement();
+            chev.AddToClassList("auth-chevron");
             chevWrap.Add(chev);
             row.Add(chevWrap);
 
@@ -1371,6 +1408,7 @@ namespace Blockmaker
             _evmSelectedWallet = null;
             _evmFlowSeq++;
             _evmWalletList?.Clear();
+            if (_evmListFade != null) _evmListFade.style.display = DisplayStyle.None;
             if (_evmConnectIcon != null) _evmConnectIcon.style.backgroundImage = StyleKeyword.None;
             foreach (var tex in _evmIconTextures)
                 if (tex != null) Destroy(tex);

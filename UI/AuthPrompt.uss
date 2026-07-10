@@ -85,8 +85,9 @@
     color:            rgba(255, 255, 255, 0.35);
 }
 
-.auth-close-bar {
-    display: none;
+/* Two-bar cross geometry lives in BlockmakerTheme.uss; brighten on hover. */
+.auth-close-btn:hover .auth-close-bar {
+    background-color: rgba(238, 238, 246, 0.90);
 }
 
 /* ── Header ───────────────────────────────────────────────────────────── */
@@ -148,10 +149,12 @@
     color:                      rgba(238, 238, 246, 0.45);
     font-size:                  22px;
     -unity-text-align:          middle-center;
+    align-items:                center;
+    justify-content:            center;
     padding-top:                0;
-    padding-bottom:             2px;
+    padding-bottom:             0;
     padding-left:               0;
-    padding-right:              2px;
+    padding-right:              0;
     margin-right:               16px;
     flex-shrink:                0;
     cursor:                     link;
@@ -388,20 +391,28 @@
     flex-shrink:     0;
 }
 
-.auth-btn-chevron-glyph {
-    font-size:          20px;
-    color:              rgba(255, 255, 255, 0.10);
-    -unity-text-align:  middle-center;
-    transition-property: color;
-    transition-duration: 0.18s;
+/* Chevron geometry lives in BlockmakerTheme.uss (.auth-chevron). Idle stroke
+   is the shared 0.10; these lift the border colours on hover. */
+.auth-btn--primary:hover .auth-chevron {
+    border-right-color:  rgba(255, 255, 255, 0.50);
+    border-bottom-color: rgba(255, 255, 255, 0.50);
 }
 
-.auth-btn--primary:hover .auth-btn-chevron-glyph {
-    color: rgba(255, 255, 255, 0.50);
+.auth-btn--wallet:hover .auth-chevron {
+    border-right-color:  rgba(167, 139, 250, 0.45);
+    border-bottom-color: rgba(167, 139, 250, 0.45);
+    translate:           2px 0;   /* tactile lean-in */
 }
 
-.auth-btn--wallet:hover .auth-btn-chevron-glyph {
-    color: rgba(167, 139, 250, 0.45);
+.auth-back-btn:hover .auth-chevron {
+    border-right-color:  rgba(238, 238, 246, 0.80);
+    border-bottom-color: rgba(238, 238, 246, 0.80);
+}
+
+/* Back arrows read too faint at the shared 0.10 idle — bump their rest state. */
+.auth-back-btn .auth-chevron {
+    border-right-color:  rgba(238, 238, 246, 0.45);
+    border-bottom-color: rgba(238, 238, 246, 0.45);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -895,6 +906,19 @@
     flex-grow:  0;
 }
 
+/* Bottom "more below" fade — transparent → card colour. Overlays the list's
+   lower edge; picking-mode Ignore in UXML keeps it from eating row clicks.
+   Controller toggles display: shown only when the list overflows. */
+.evm-list-fade {
+    position:                     absolute;
+    left:                         0;
+    right:                        0;
+    bottom:                       0;
+    height:                       52px;
+    background-image:             url("list-fade.png");
+    -unity-background-scale-mode: stretch-to-fill;
+}
+
 /* ONE row class for every wallet — Pera, Defly, discovered EVM, curated EVM,
    legacy browser. opacity/translate drive the --enter pop-in; scale/colors
    keep the auth-btn hover/press feel. */
@@ -920,10 +944,10 @@
 .wallet-row-icon {
     width:                      40px;
     height:                     40px;
-    border-top-left-radius:     10px;
-    border-top-right-radius:    10px;
-    border-bottom-left-radius:  10px;
-    border-bottom-right-radius: 10px;
+    border-top-left-radius:     11px;
+    border-top-right-radius:    11px;
+    border-bottom-left-radius:  11px;
+    border-bottom-right-radius: 11px;
     margin-left:                12px;
     overflow:                   hidden;
     -unity-background-scale-mode: scale-to-fit;
@@ -973,10 +997,10 @@
 .wallet-skeleton-chip {
     width:                      40px;
     height:                     40px;
-    border-top-left-radius:     10px;
-    border-top-right-radius:    10px;
-    border-bottom-left-radius:  10px;
-    border-bottom-right-radius: 10px;
+    border-top-left-radius:     11px;
+    border-top-right-radius:    11px;
+    border-bottom-left-radius:  11px;
+    border-bottom-right-radius: 11px;
     margin-left:                12px;
     background-color:           rgba(255, 255, 255, 0.05);
     flex-shrink:                0;
@@ -1027,6 +1051,7 @@
     padding-right:              9px;
     margin-right:               8px;
     flex-shrink:                0;
+    align-self:                 center;
 }
 
 /* RECOMMENDED — solid accent take on the shared badge geometry */
