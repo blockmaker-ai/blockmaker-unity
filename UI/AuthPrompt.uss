@@ -311,7 +311,7 @@
 .auth-btn-icon--email .auth-btn-icon-glyph {
     color:     rgb(255, 255, 255);
     font-size: 22px;
-    translate: 1px 0;   /* optical-centre the @ — its ink sits left of the advance box */
+    translate: 1px -3px;   /* optical-centre the @ — the font seats it low + slightly left */
 }
 
 /* Unified wallet entry (options page) — generic wallet mark, not one brand */
