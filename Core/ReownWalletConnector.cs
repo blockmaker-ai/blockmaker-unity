@@ -595,8 +595,8 @@ namespace Blockmaker
                     }
                 };
 
-                var result = await client.Request<List<List<AlgoSignTxnParam>>, string[]>(
-                    topic, txns, ALGO_CHAIN_MAINNET
+                var result = await client.Request<AlgoSignTxnRequest, string[]>(
+                    topic, new AlgoSignTxnRequest(txns), ALGO_CHAIN_MAINNET
                 );
 
                 if (_signClient == null)
@@ -656,8 +656,8 @@ namespace Blockmaker
 
                 var txns = new List<List<AlgoSignTxnParam>> { txnParams };
 
-                var result = await client.Request<List<List<AlgoSignTxnParam>>, string[]>(
-                    topic, txns, ALGO_CHAIN_MAINNET
+                var result = await client.Request<AlgoSignTxnRequest, string[]>(
+                    topic, new AlgoSignTxnRequest(txns), ALGO_CHAIN_MAINNET
                 );
 
                 if (_signClient == null)
@@ -718,8 +718,8 @@ namespace Blockmaker
                 var client = _signClient;
                 if (client == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); return; }
 
-                var result = await client.Request<string[], string>(
-                    topic, new[] { evmAddress, typedDataJson }, EVM_CHAIN
+                var result = await client.Request<EvmSignTypedDataV4, string>(
+                    topic, new EvmSignTypedDataV4(evmAddress, typedDataJson), EVM_CHAIN
                 );
 
                 if (_signClient == null)
@@ -781,8 +781,8 @@ namespace Blockmaker
                 // it (viem.recoverMessageAddress) when recovering the signer.
                 var hexMessage = "0x" + BytesToHex(System.Text.Encoding.UTF8.GetBytes(messageUtf8));
 
-                var result = await client.Request<string[], string>(
-                    topic, new[] { hexMessage, evmAddress }, EVM_CHAIN
+                var result = await client.Request<EvmPersonalSign, string>(
+                    topic, new EvmPersonalSign(hexMessage, evmAddress), EVM_CHAIN
                 );
 
                 if (_signClient == null)
