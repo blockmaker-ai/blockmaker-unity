@@ -147,9 +147,10 @@ namespace Blockmaker
 
         /// <summary>
         /// Wallet sign timeout sourced from config, with a safe fallback.
-        /// Used by identity classes instead of hardcoded constants.
+        /// Used by identity classes AND game-side sign watchdogs (which set their outer
+        /// deadline to this + a margin) instead of hardcoded constants.
         /// </summary>
-        internal static float WalletSignTimeout =>
+        public static float WalletSignTimeout =>
             Instance?.blockmakerConfig?.walletSignTimeoutSeconds ?? 120f;
 
         // ── Public identity accessors ──────────────────────────────────────────────

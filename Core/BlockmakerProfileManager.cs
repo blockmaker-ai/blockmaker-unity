@@ -348,27 +348,34 @@ namespace Blockmaker
             // ── Step 2: sign group ────────────────────────────────────────────────
             string[] signedTxns = null;
             string   signError  = null;
-            bool     signDone   = false;
+            bool     signDone   = false, signDeadlineHit = false;
 
             var txnsToSign = (prepared.unsignedTxnsBase64 != null && prepared.unsignedTxnsBase64.Length > 0)
                 ? prepared.unsignedTxnsBase64
                 : new[] { prepared.unsignedTxnBase64 };
-            yield return auth.Identity.SignTransactions(
+            // Run the wallet sign as a CHILD coroutine guarded by our own deadline. Using
+            // StartCoroutine (not an inline `yield return`) isolates any exception thrown
+            // inside the sign coroutine: an inline yield-return would let that throw propagate
+            // up and terminate THIS routine, firing neither onSuccess nor onError and leaving
+            // the caller stuck on "Securing…" forever. signDeadlineHit ignores a late callback
+            // that arrives after we've already timed out and stopped the child.
+            var signCo = StartCoroutine(auth.Identity.SignTransactions(
                 txnsToSign,
-                s => { signedTxns = s; signDone = true; },
-                e => { signError  = e; signDone = true; }
-            );
+                s => { if (!signDeadlineHit) { signedTxns = s; signDone = true; } },
+                e => { if (!signDeadlineHit) { signError  = e; signDone = true; } }
+            ));
+            // Sits just above the SDK's own wallet-sign timeout (WalletSignTimeout, default
+            // 120s) so its error surfaces first on a normal timeout; this outer watchdog only
+            // fires if the sign coroutine dies or hangs without ever calling back.
+            float signDeadline = Time.realtimeSinceStartup + BlockmakerAuth.WalletSignTimeout + 15f;
+            yield return new WaitUntil(() => signDone || Time.realtimeSinceStartup >= signDeadline);
 
             if (!signDone)
             {
-                elapsed = 0f;
-                while (!signDone && elapsed < 120f)
-                {
-                    elapsed += Time.unscaledDeltaTime;
-                    yield return null;
-                }
+                signDeadlineHit = true;
+                if (signCo != null) StopCoroutine(signCo);
+                signError = "We didn't get a response from your wallet. Please try again.";
             }
-            if (!signDone) { onError?.Invoke("The request timed out. Please check your connection and try again."); yield break; }
             if (gen != _generation) { onError?.Invoke("Your account changed during this action. Please try again."); yield break; }
 
             if (signError != null || signedTxns == null || signedTxns.Length == 0)
@@ -479,27 +486,34 @@ namespace Blockmaker
             // ── Step 2: sign group ────────────────────────────────────────────────
             string[] signedTxns = null;
             string   signError  = null;
-            bool     signDone   = false;
+            bool     signDone   = false, signDeadlineHit = false;
 
             var txnsToSign = (prepared.unsignedTxnsBase64 != null && prepared.unsignedTxnsBase64.Length > 0)
                 ? prepared.unsignedTxnsBase64
                 : new[] { prepared.unsignedTxnBase64 };
-            yield return auth.Identity.SignTransactions(
+            // Run the wallet sign as a CHILD coroutine guarded by our own deadline. Using
+            // StartCoroutine (not an inline `yield return`) isolates any exception thrown
+            // inside the sign coroutine: an inline yield-return would let that throw propagate
+            // up and terminate THIS routine, firing neither onSuccess nor onError and leaving
+            // the caller stuck on "Securing…" forever. signDeadlineHit ignores a late callback
+            // that arrives after we've already timed out and stopped the child.
+            var signCo = StartCoroutine(auth.Identity.SignTransactions(
                 txnsToSign,
-                s => { signedTxns = s; signDone = true; },
-                e => { signError  = e; signDone = true; }
-            );
+                s => { if (!signDeadlineHit) { signedTxns = s; signDone = true; } },
+                e => { if (!signDeadlineHit) { signError  = e; signDone = true; } }
+            ));
+            // Sits just above the SDK's own wallet-sign timeout (WalletSignTimeout, default
+            // 120s) so its error surfaces first on a normal timeout; this outer watchdog only
+            // fires if the sign coroutine dies or hangs without ever calling back.
+            float signDeadline = Time.realtimeSinceStartup + BlockmakerAuth.WalletSignTimeout + 15f;
+            yield return new WaitUntil(() => signDone || Time.realtimeSinceStartup >= signDeadline);
 
             if (!signDone)
             {
-                elapsed = 0f;
-                while (!signDone && elapsed < 120f)
-                {
-                    elapsed += Time.unscaledDeltaTime;
-                    yield return null;
-                }
+                signDeadlineHit = true;
+                if (signCo != null) StopCoroutine(signCo);
+                signError = "We didn't get a response from your wallet. Please try again.";
             }
-            if (!signDone) { onError?.Invoke("The request timed out. Please check your connection and try again."); yield break; }
             if (gen != _generation) { onError?.Invoke("Your account changed during this action. Please try again."); yield break; }
 
             if (signError != null || signedTxns == null || signedTxns.Length == 0)
