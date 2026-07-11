@@ -530,6 +530,25 @@ namespace Blockmaker
         public string   error;
     }
 
+    // Grouped ASA opt-in (atomic group, one 0-amount opt-in per asset). Built so an
+    // xChain (EVM) LogicSig signs ONE EVM signature over the shared GroupID instead of
+    // one prompt per asset. See /v1/transactions/build-optin-group.
+    [Serializable] public class BuildAssetOptInGroupRequest
+    {
+        public string walletAddress;
+        public long[] assetIds;
+    }
+
+    [Serializable] public class BuildAssetOptInGroupResult
+    {
+        public bool     success;
+        public string[] unsignedTxnsBase64;
+        public string   txType;
+        public string   from;
+        public string   code;
+        public string   error;
+    }
+
     [Serializable] public class SubmitTransactionRequest
     {
         public string   signedTxnBase64;

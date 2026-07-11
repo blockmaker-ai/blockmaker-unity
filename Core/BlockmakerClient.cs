@@ -503,6 +503,30 @@ namespace Blockmaker
                 config.defaultTimeoutSeconds, onSuccess, onError));
         }
 
+        /// <summary>
+        /// Build an ATOMIC GROUP of unsigned 0-amount ASA opt-ins (one per assetId), all
+        /// tied together with a shared Algorand GroupID via the server's assignGroupID.
+        /// Sign the returned array as ONE group so an xChain (EVM) LogicSig produces a
+        /// SINGLE signature over the shared GroupID (instead of one prompt per asset).
+        /// Algorand caps a group at 16 txns — chunk assetIds at 16 before calling.
+        /// onSuccess receives the grouped unsigned txns (base64 msgpack).
+        /// </summary>
+        public void BuildAssetOptInGroup(long[] assetIds, Action<string[]> onSuccess, Action<string> onError)
+        {
+            StartCoroutine(PostJsonAuth<BuildAssetOptInGroupResult>(
+                $"{_baseUrl}/v1/transactions/build-optin-group",
+                new BuildAssetOptInGroupRequest { assetIds = assetIds, walletAddress = BlockmakerAuth.Instance?.Address ?? "" },
+                config.defaultTimeoutSeconds,
+                res =>
+                {
+                    if (res != null && res.success && res.unsignedTxnsBase64 != null)
+                        onSuccess?.Invoke(res.unsignedTxnsBase64);
+                    else
+                        onError?.Invoke(res?.error ?? "Could not build the opt-in group. Please try again.");
+                },
+                onError));
+        }
+
         /// <summary>Submit a signed transaction to the Algorand network via the server.</summary>
         public void SubmitTransaction(
             string signedTxnBase64,
