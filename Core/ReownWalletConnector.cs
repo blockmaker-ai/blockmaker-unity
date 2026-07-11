@@ -169,6 +169,39 @@ namespace Blockmaker
                 _signClient.SessionRejected += OnSessionRejectedHandler;
                 _signClient.SessionApproved += OnSessionApprovedHandler;
 
+#if UNITY_EDITOR
+                // In the Unity editor there is no on-device wallet to foreground, so when a
+                // sign request is sent Reown's Linker calls Application.OpenURL("trust://wc?…")
+                // (or whatever the paired wallet's scheme is), which macOS answers with a
+                // "There is no application set to open the URL" dialog — confusing noise while
+                // testing. The request is still delivered to the paired wallet over the relay,
+                // so the deep-link is pure UX and safe to skip here. Reown's own Linker.Dispose
+                // has a bug (it detaches from SessionRequestSent, not SessionRequestSentUnity),
+                // so we detach the private handler ourselves. Editor-only: real mobile builds
+                // rely on this deep-link to foreground the wallet, so it must stay there.
+                try
+                {
+                    var linker = _signClient.Linker;
+                    if (linker != null)
+                    {
+                        var handlerMethod = typeof(Reown.Sign.Unity.Linker).GetMethod(
+                            "SessionRequestSentHandler",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                        if (handlerMethod != null)
+                        {
+                            var handler = (EventHandler<SessionRequestEvent>)Delegate.CreateDelegate(
+                                typeof(EventHandler<SessionRequestEvent>), linker, handlerMethod);
+                            _signClient.SessionRequestSentUnity -= handler;
+                            BlockmakerLog.Verbose("[ReownWalletConnector] Editor: detached Reown wallet deep-link handler (suppresses trust://wc OS dialog).");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    BlockmakerLog.Verbose($"[ReownWalletConnector] Editor: could not detach deep-link handler (harmless): {ex.Message}");
+                }
+#endif
+
                 _onRelayErrored = (_, ex) =>
                     BlockmakerLog.Error($"[ReownWalletConnector] RELAY ERROR: {ex.Message}");
                 _onRelayDisconnected = (_, _) =>
