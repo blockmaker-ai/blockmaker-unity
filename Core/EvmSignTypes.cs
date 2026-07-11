@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine.Scripting;
-using Reown.Core.Common.Utils;
+// Alias only the Clock type — importing the whole Reown.Core.Common.Utils namespace
+// pulls in a second PreserveAttribute that collides with UnityEngine.Scripting.Preserve.
+using Clock = Reown.Core.Common.Utils.Clock;
 using Reown.Core.Network.Models;
 
 namespace Blockmaker
