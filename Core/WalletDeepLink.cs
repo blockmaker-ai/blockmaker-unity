@@ -70,10 +70,34 @@ namespace Blockmaker
                 case "defly":
                     OpenDefly(wcUri);
                     break;
+                case "metamask":
+                    OpenUniversal("https://metamask.app.link/wc?uri=", wcUri);
+                    break;
+                case "rainbow":
+                    OpenUniversal("https://rnbwapp.com/wc?uri=", wcUri);
+                    break;
+                case "coinbase wallet":
+                case "coinbase":
+                    OpenUniversal("https://go.cb-w.com/wc?uri=", wcUri);
+                    break;
+                case "trust wallet":
+                case "trust":
+                    OpenUniversal("https://link.trustwallet.com/wc?uri=", wcUri);
+                    break;
                 default:
-                    BlockmakerLog.Warning($"[WalletDeepLink] Unknown provider: {providerName}");
+                    // Android can route a raw WalletConnect URI to any registered
+                    // wallet. On iOS this may show the app chooser or no-op, but is
+                    // still a better fallback than a button that does nothing.
+                    OpenGeneric(wcUri);
                     break;
             }
+        }
+
+        private static void OpenUniversal(string prefix, string wcUri)
+        {
+            if (!IsMobilePlatform || string.IsNullOrEmpty(wcUri)) return;
+            string encoded = UnityEngine.Networking.UnityWebRequest.EscapeURL(wcUri);
+            Application.OpenURL(prefix + encoded);
         }
 
         /// <summary>
