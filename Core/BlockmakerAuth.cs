@@ -194,6 +194,19 @@ namespace Blockmaker
 
             if (string.IsNullOrEmpty(token))
             {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                // Browser wallets do not use the native Reown/WCv1 connection state when
+                // signing in WebGL. EVM/xChain signs through the injected EIP-1193 provider
+                // and Algorand wallets through the WebGL bridge; both transports validate
+                // their live provider again when the actual signature is requested. A fresh
+                // browser login has therefore already proved the provider is available, while
+                // checking Reown below would always reject it as "not connected".
+                if (Identity is WalletConnectIdentity || Identity is EvmXChainIdentity)
+                {
+                    onResult?.Invoke(Identity.CanSign);
+                    return;
+                }
+#endif
                 if (Identity is WalletConnectIdentity wc)
                 {
                     var wcv1 = wc.OwnWCv1Client;
