@@ -1690,12 +1690,28 @@ namespace Blockmaker
             // (from an earlier cancelled ConnectEvm) can't dispatch a second
             // EvmConnect and race this one with a duplicate eth_requestAccounts popup.
             _evmConnectDispatched = true;
-            BlockmakerWalletBridge.EvmConnect(
-                rdns ?? "",
-                gameObject.name,
-                nameof(OnEvmConnected),
-                nameof(OnEvmError)
-            );
+            if (!string.IsNullOrEmpty(rdns) && rdns.StartsWith("wc:", StringComparison.Ordinal))
+            {
+                string walletName = rdns.Substring(3);
+                BlockmakerWalletBridge.EvmConnectWalletConnect(
+                    ResolvedWalletConnectProjectId,
+                    walletName,
+                    rdns,
+                    gameObject.name,
+                    nameof(OnWalletQRFromJS),
+                    nameof(OnEvmConnected),
+                    nameof(OnEvmError)
+                );
+            }
+            else
+            {
+                BlockmakerWalletBridge.EvmConnect(
+                    rdns ?? "",
+                    gameObject.name,
+                    nameof(OnEvmConnected),
+                    nameof(OnEvmError)
+                );
+            }
             StartWebGLTimeout(WalletSignTimeout, () =>
             {
                 if (_pendingEvmSuccess != null || _pendingEvmError != null)

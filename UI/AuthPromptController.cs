@@ -828,7 +828,10 @@ namespace Blockmaker
             // No EVM provider at all → the quiet "none found" row (+ Find one).
             if (result == "!none")
             {
-                ShowEvmState(EvmPageState.None);
+                // No extension installed: keep the major wallets available through
+                // the WalletConnect QR fallback instead of presenting a dead end.
+                AppendCuratedEvmRows();
+                ShowEvmState(EvmPageState.List);
                 return;
             }
 
@@ -861,7 +864,11 @@ namespace Blockmaker
             if (count == 0)
             {
                 if (discovery.legacy) ShowBrowserWalletRow();
-                else                  ShowEvmState(EvmPageState.None);
+                else
+                {
+                    AppendCuratedEvmRows();
+                    ShowEvmState(EvmPageState.List);
+                }
                 return;
             }
 
@@ -874,6 +881,7 @@ namespace Blockmaker
             foreach (var w in discovery.wallets) if (w != null && !w.lastUsed) _evmWallets.Add(w);
 
             AppendDiscoveredEvmRows();
+            AppendMissingCuratedEvmRows();
             ShowEvmState(EvmPageState.List);
         }
 
@@ -1023,7 +1031,7 @@ namespace Blockmaker
                 var row = BuildWalletRow(
                     walletName, null, WalletBadge.None,
                     (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, chipLetter, chipHue, chipLogo),
-                    () => BeginEvmConnectFallback(walletName));
+                    () => BeginCuratedEvmConnect(walletName));
                 AnimateRowEnter(row, index++);
                 _evmWalletList.Add(row);
             }
@@ -1031,6 +1039,43 @@ namespace Blockmaker
             var caption = new Label("These connect by QR — scan with the wallet's mobile app");
             caption.AddToClassList("evm-native-caption");
             _evmWalletList.Add(caption);
+        }
+
+        /// Add QR rows only for major wallets that were not already announced by
+        /// EIP-6963. Installed extensions remain the preferred one-click path;
+        /// these rows make the same wallets reachable from mobile/clean browsers.
+        private void AppendMissingCuratedEvmRows()
+        {
+            if (_evmWalletList == null) return;
+            foreach (var (name, letter, hue, logoClass) in CuratedEvmWallets)
+            {
+                bool installed = _evmWallets.Exists(w =>
+                    w != null && !string.IsNullOrEmpty(w.name) &&
+                    w.name.IndexOf(name.Split(' ')[0], StringComparison.OrdinalIgnoreCase) >= 0);
+                if (installed) continue;
+                string walletName = name;
+                string chipLetter = letter;
+                float chipHue = hue;
+                string chipLogo = logoClass;
+                _evmWalletList.Add(BuildWalletRow(
+                    walletName, "Connect by QR", WalletBadge.None,
+                    (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, chipLetter, chipHue, chipLogo),
+                    () => BeginCuratedEvmConnect(walletName)));
+            }
+        }
+
+        private void BeginCuratedEvmConnect(string walletName)
+        {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            BeginEvmWalletConnect(new EvmWalletEntry
+            {
+                rdns = "wc:" + walletName,
+                name = walletName,
+                icon = string.Empty
+            });
+#else
+            BeginEvmConnectFallback(walletName);
+#endif
         }
 
         /// <summary>
@@ -1544,6 +1589,13 @@ namespace Blockmaker
         {
             _pendingWcUri    = e.WalletConnectUri;
             _pendingProvider = e.Provider;
+
+            // Curated EVM rows begin on the connecting pane. Once the WC URI is
+            // ready, move to the dedicated QR page before painting the image.
+            if (_evmSelectedWallet != null &&
+                !string.IsNullOrEmpty(_evmSelectedWallet.rdns) &&
+                _evmSelectedWallet.rdns.StartsWith("wc:", StringComparison.Ordinal))
+                ShowQrPage(e.Provider);
 
             // Decode base64 PNG → Texture2D
             byte[] pngBytes;

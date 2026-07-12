@@ -1378,12 +1378,102 @@ mergeInto(LibraryManager.library, {
   },
 
   /**
+   * EvmConnectWalletConnect — mobile/QR fallback for a curated EVM wallet.
+   * Uses the same pinned SignClient + QR runtime as the Algorand WC bridge,
+   * but requests the Ethereum mainnet namespace needed by xChain. Once the
+   * session is approved it is exposed through the same provider.request shape
+   * used by the injected-wallet signing functions below.
+   */
+  EvmConnectWalletConnect__deps: ['$loadSignClient', '$loadQRCode', '$bmExitFullscreen', '$bmRestoreFullscreen'],
+  EvmConnectWalletConnect: function(projectIdPtr, walletNamePtr, rdnsPtr, gameObjectNamePtr, qrCbPtr, successCbPtr, errorCbPtr) {
+    var projectId      = UTF8ToString(projectIdPtr);
+    var walletName     = UTF8ToString(walletNamePtr) || 'EVM wallet';
+    var rdns           = UTF8ToString(rdnsPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var qrCb           = UTF8ToString(qrCbPtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var cancelled      = false;
+
+    if (window._bmCancelQR) { window._bmCancelQR(); window._bmCancelQR = null; }
+    window._bmCancelQR = function() { cancelled = true; };
+
+    bmExitFullscreen()
+    .then(function() { return Promise.all([loadSignClient(), loadQRCode()]); })
+    .then(function(results) {
+      if (cancelled) return null;
+      var SignClient = results[0];
+      return SignClient.init({
+        projectId: projectId,
+        metadata: {
+          name: 'NFTurbo',
+          description: 'NFTurbo xChain wallet',
+          url: window.location.origin,
+          icons: []
+        }
+      }).then(function(client) {
+        window._bmEvmWCClient = client;
+        try { localStorage.setItem('bm_evm_wc_project_id', projectId); } catch(e) {}
+        return client.connect({
+          requiredNamespaces: {
+            eip155: {
+              methods: ['personal_sign', 'eth_signTypedData_v4'],
+              chains: ['eip155:1'],
+              events: ['accountsChanged', 'chainChanged']
+            }
+          }
+        }).then(function(result) {
+          if (cancelled) return null;
+          return QRCode.toDataURL(result.uri, {
+            width: 256, margin: 2, errorCorrectionLevel: 'M',
+            color: { dark: '#0f0f1c', light: '#ffffff' }
+          }).then(function(dataUrl) {
+            if (cancelled) return null;
+            SendMessage(gameObjectName, qrCb,
+              walletName + '|' + result.uri + '|' + dataUrl.replace(/^data:image\/png;base64,/, ''));
+            return result.approval();
+          });
+        }).then(function(session) {
+          if (!session || cancelled) return;
+          var ns = session.namespaces && session.namespaces.eip155;
+          var accounts = (ns && ns.accounts) || [];
+          if (!accounts.length) throw new Error('No EVM account returned by the wallet.');
+          var evmAddress = accounts[0].split(':').pop();
+          var provider = {
+            request: function(args) {
+              return client.request({ topic: session.topic, chainId: 'eip155:1', request: args });
+            }
+          };
+          window._bmEvmWCSession = session;
+          window._bmEvmProviderEntry = { info: { rdns: rdns, name: walletName }, provider: provider };
+          window._bmEvmAddress = evmAddress;
+          window._bmCancelQR = null;
+          try {
+            localStorage.setItem('bm_evm_last_wallet_rdns', rdns);
+            localStorage.setItem('bm_evm_wc_topic', session.topic);
+          } catch(e) {}
+          bmRestoreFullscreen();
+          SendMessage(gameObjectName, successCb, rdns + '|' + evmAddress);
+        });
+      });
+    })
+    .catch(function(err) {
+      if (cancelled) return;
+      window._bmCancelQR = null;
+      bmRestoreFullscreen();
+      var code = (err && typeof err.code === 'number' && isFinite(err.code)) ? String(err.code) : '';
+      var msg = (err && err.message) ? err.message : 'WalletConnect failed.';
+      SendMessage(gameObjectName, errorCb, code + '|' + msg);
+    });
+  },
+
+  /**
    * EvmTryRestore — silently re-attach the EVM wallet after a page reload.
    * Re-discovers wallets (preferring the last-used rdns) and uses eth_accounts
    * (non-interactive) so no popup appears.
    * On success: successCb("0xEvmAddress"). On error: errorCb(message).
    */
-  EvmTryRestore__deps: ['$bmEvmDiscover', '$bmEvmPickProvider'],
+  EvmTryRestore__deps: ['$bmEvmDiscover', '$bmEvmPickProvider', '$loadSignClient'],
   EvmTryRestore: function(expectedEvmAddrPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var expectedEvmAddr = UTF8ToString(expectedEvmAddrPtr);
     var gameObjectName  = UTF8ToString(gameObjectNamePtr);
@@ -1393,8 +1483,7 @@ mergeInto(LibraryManager.library, {
     bmEvmDiscover(300)
     .then(function() {
       var entry = bmEvmPickProvider('');
-      if (!entry) throw new Error('No EVM wallet found.');
-      return entry.provider.request({ method: 'eth_accounts' })
+      if (entry) return entry.provider.request({ method: 'eth_accounts' })
         .then(function(accounts) {
           if (!accounts || accounts.length === 0) {
             throw new Error('EVM wallet not connected.');
@@ -1408,6 +1497,49 @@ mergeInto(LibraryManager.library, {
           console.log('[BlockmakerWalletBridge] EVM wallet session restored:', evmAddress);
           SendMessage(gameObjectName, successCb, evmAddress);
         });
+
+      // No injected provider: restore a persisted WalletConnect EVM session.
+      var projectId = '';
+      var topic = '';
+      try {
+        projectId = localStorage.getItem('bm_evm_wc_project_id') || '';
+        topic = localStorage.getItem('bm_evm_wc_topic') || '';
+      } catch(e) {}
+      if (!projectId) throw new Error('No EVM wallet found.');
+      return loadSignClient().then(function(SignClient) {
+        return SignClient.init({
+          projectId: projectId,
+          metadata: { name: 'NFTurbo', description: 'NFTurbo xChain wallet', url: window.location.origin, icons: [] }
+        });
+      }).then(function(client) {
+        var sessions = client.session.getAll() || [];
+        var session = null;
+        for (var i = 0; i < sessions.length; i++) {
+          if (topic && sessions[i].topic === topic) { session = sessions[i]; break; }
+        }
+        if (!session) {
+          for (var j = 0; j < sessions.length; j++) {
+            if (sessions[j].namespaces && sessions[j].namespaces.eip155) { session = sessions[j]; break; }
+          }
+        }
+        if (!session) throw new Error('EVM WalletConnect session has ended.');
+        var accounts = (session.namespaces.eip155 && session.namespaces.eip155.accounts) || [];
+        if (!accounts.length) throw new Error('EVM wallet not connected.');
+        var evmAddress = accounts[0].split(':').pop();
+        if (expectedEvmAddr && evmAddress.toLowerCase() !== expectedEvmAddr.toLowerCase())
+          throw new Error('EVM wallet account changed.');
+        var provider = {
+          request: function(args) {
+            return client.request({ topic: session.topic, chainId: 'eip155:1', request: args });
+          }
+        };
+        window._bmEvmWCClient = client;
+        window._bmEvmWCSession = session;
+        window._bmEvmProviderEntry = { info: { rdns: 'wc:restored', name: 'WalletConnect' }, provider: provider };
+        window._bmEvmAddress = evmAddress;
+        console.log('[BlockmakerWalletBridge] EVM WalletConnect session restored:', evmAddress);
+        SendMessage(gameObjectName, successCb, evmAddress);
+      });
     })
     .catch(function(err) {
       var msg = (err && err.message) ? err.message : 'EVM restore failed.';
@@ -1500,9 +1632,22 @@ mergeInto(LibraryManager.library, {
    * last-used wallet, so the next connect starts from a clean slate).
    */
   EvmDisconnect: function() {
+    try {
+      if (window._bmEvmWCClient && window._bmEvmWCSession) {
+        window._bmEvmWCClient.disconnect({
+          topic: window._bmEvmWCSession.topic,
+          reason: { code: 6000, message: 'User disconnected' }
+        }).catch(function() {});
+      }
+    } catch(e) {}
     window._bmEvmProviderEntry = null;
     window._bmEvmAddress       = null;
-    try { localStorage.removeItem('bm_evm_last_wallet_rdns'); } catch(e) {}
+    window._bmEvmWCSession     = null;
+    try {
+      localStorage.removeItem('bm_evm_last_wallet_rdns');
+      localStorage.removeItem('bm_evm_wc_topic');
+      localStorage.removeItem('bm_evm_wc_project_id');
+    } catch(e) {}
     console.log('[BlockmakerWalletBridge] xChain EVM disconnected.');
   },
 

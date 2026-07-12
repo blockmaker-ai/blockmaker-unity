@@ -185,6 +185,21 @@ namespace Blockmaker
             string errorCallback);
 
         /// <summary>
+        /// Connect an EVM wallet through WalletConnect v2. Used by the curated
+        /// WebGL rows when that wallet is not installed as a browser extension.
+        /// qrCallback receives the normal Provider|wcUri|base64Png payload.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void EvmConnectWalletConnect(
+            string projectId,
+            string walletName,
+            string rdns,
+            string gameObjectName,
+            string qrCallback,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>
         /// Silently re-attach the EVM wallet after a page reload (eth_accounts,
         /// no popup). successCallback receives the raw EVM address ("0x…").
         /// </summary>
@@ -315,6 +330,8 @@ namespace Blockmaker
 
         public static void EvmConnect(string rdns, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmConnect — not in WebGL. Use ReownWalletConnector for native.");
+        public static void EvmConnectWalletConnect(string projectId, string walletName, string rdns, string go, string qr, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmConnectWalletConnect — WebGL only.");
 
         public static void EvmSignPersonal(string message, string evm, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] EvmSignPersonal — not in WebGL.");
