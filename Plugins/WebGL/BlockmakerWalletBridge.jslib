@@ -916,11 +916,25 @@ mergeInto(LibraryManager.library, {
   // ══════════════════════════════════════════════════════════════════════════
 
   $loadMagicSDK: function() {
+    // Vendored bundle shipped with the build (TemplateData/bm-magic-vendor.js,
+    // built by Tools~/build-magic-vendor.mjs) — zero-network path, same pattern
+    // as BmWCVendor/BmPeraVendor above; the pinned jsDelivr imports below are
+    // only a fallback so consumers without the vendor file keep working unchanged.
+    if (window.BmMagicVendor && window.BmMagicVendor.Magic && window.BmMagicVendor.AlgorandExtension) {
+      window._bmMagicClass = window.BmMagicVendor.Magic;
+      window._bmMagicAlgoExt = window.BmMagicVendor.AlgorandExtension;
+      return Promise.resolve({ Magic: window._bmMagicClass, AlgorandExtension: window._bmMagicAlgoExt });
+    }
     if (window._bmMagicPromise && !window._bmMagicFailed) return window._bmMagicPromise;
     window._bmMagicFailed = false;
-    window._bmMagicPromise = Promise.all([
-      import('https://cdn.jsdelivr.net/npm/magic-sdk@33.7.1/+esm'),
-      import('https://cdn.jsdelivr.net/npm/@magic-ext/algorand@26.2.0/+esm')
+    window._bmMagicPromise = Promise.race([
+      Promise.all([
+        import('https://cdn.jsdelivr.net/npm/magic-sdk@33.7.1/+esm'),
+        import('https://cdn.jsdelivr.net/npm/@magic-ext/algorand@26.2.0/+esm')
+      ]),
+      new Promise(function(resolve, reject) {
+        setTimeout(function() { reject(new Error('Magic SDK CDN load timed out after 20s')); }, 20000);
+      })
     ]).then(function(mods) {
       var Magic = mods[0].Magic || (mods[0].default && mods[0].default.Magic) || mods[0].default;
       var AlgorandExtension = mods[1].AlgorandExtension || (mods[1].default && mods[1].default.AlgorandExtension) || mods[1].default;
