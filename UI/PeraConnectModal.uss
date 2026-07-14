@@ -206,6 +206,7 @@
 .pera-status {
     font-size:         14px;
     color:             rgba(240, 240, 248, 0.38);
+    white-space:       normal;   /* status copy can run long ("Connected! Now approve…") */
     margin-bottom:     20px;
     -unity-text-align: upper-center;
 }

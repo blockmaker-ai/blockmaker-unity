@@ -185,6 +185,7 @@
     color:             rgb(238, 238, 246);
     -unity-font-style: bold;
     letter-spacing:    -0.3px;
+    white-space:       normal;
 }
 
 .auth-page-heading--standalone {
@@ -477,6 +478,7 @@
 .auth-sent-hint {
     font-size:     14px;
     color:         rgba(238, 238, 246, 0.42);
+    white-space:   normal;   /* labels don't wrap by default — long copy clipped on small canvases */
     margin-bottom: 24px;
 }
 
@@ -678,6 +680,7 @@
     font-size:         14px;
     color:             rgba(238, 238, 246, 0.35);
     -unity-text-align: middle-center;
+    white-space:       normal;
     margin-bottom:     18px;
     padding-left:      16px;
     padding-right:     16px;
@@ -978,11 +981,17 @@
     color:     rgba(255, 255, 255, 0.90);
 }
 
+/* Fixed-height row: names stay one line (code-clamped) — ellipsis is the
+   backstop, never horizontal overflow. */
 .wallet-row-name {
-    font-size:    15px;
-    color:        rgba(238, 238, 246, 0.88);
-    padding-left: 14px;
-    flex-grow:    1;
+    font-size:     15px;
+    color:         rgba(238, 238, 246, 0.88);
+    padding-left:  14px;
+    flex-grow:     1;
+    flex-shrink:   1;
+    white-space:   nowrap;
+    overflow:      hidden;
+    text-overflow: ellipsis;
 }
 
 .wallet-row .auth-btn-chevron {
@@ -1105,6 +1114,7 @@
     color:             rgb(238, 238, 246);
     -unity-text-align: middle-center;
     letter-spacing:    -0.3px;
+    white-space:       normal;
     margin-bottom:     12px;
 }
 
