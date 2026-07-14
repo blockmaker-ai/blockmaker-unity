@@ -200,6 +200,14 @@ namespace Blockmaker
                 if (_logoEl  != null) _logoEl.style.backgroundImage  = bg;
                 if (_logoEl2 != null) _logoEl2.style.backgroundImage = bg;
             }
+            else
+            {
+                // No logo for this provider (e.g. Defly/EVM icon left unset in the scene).
+                // CLEAR the image rather than leave the PREVIOUS provider's logo up — a
+                // blank chip is better than showing the wrong brand (Pera logo on Defly).
+                if (_logoEl  != null) _logoEl.style.backgroundImage  = StyleKeyword.None;
+                if (_logoEl2 != null) _logoEl2.style.backgroundImage = StyleKeyword.None;
+            }
 
             // Curated EVM wallets get a footer reminder that any EVM wallet works;
             // every provider keeps the Download flow ("Get {name}" panel).
@@ -254,16 +262,21 @@ namespace Blockmaker
         /// Returns false when the panel can't be shown (closed, or older UXML) so the
         /// caller can fall back to its previous behavior.
         /// </summary>
-        public bool ShowStepTwo(string provider)
+        public bool ShowStepTwo(string provider, string failureMessage = null)
         {
             if (!_isOpen) return false;
 
-            string appName = string.IsNullOrEmpty(provider) ? "wallet" : provider;
+            string appName   = string.IsNullOrEmpty(provider) ? "your wallet" : provider;
+            bool   isFailure = !string.IsNullOrEmpty(failureMessage);
 
             if (_panelStep2 == null)
             {
-                // Older UXML without the step-2 panel — fall back to a status line.
-                SetStatus($"Connected! Now approve the SIGN-IN REQUEST in your {appName} app.");
+                // Older UXML without the step-2 panel — fall back to a status line. A
+                // declined/failed sign-in shows its own message instead of the generic
+                // "approve" prompt (which made a decline look like nothing happened).
+                SetStatus(isFailure
+                    ? failureMessage
+                    : $"Connected! Now approve the sign-in request in {appName}.");
                 return false;
             }
 
@@ -278,15 +291,24 @@ namespace Blockmaker
             if (_connectDivider != null) _connectDivider.style.display = DisplayStyle.None;
             if (_connectFooter  != null) _connectFooter.style.display  = DisplayStyle.None;
 
-            if (_lblTitle != null) _lblTitle.text = "One more step!";
+            if (_lblTitle != null) _lblTitle.text = isFailure ? "Sign-in didn’t go through" : "One more step!";
             if (_lblStep2Body != null)
-                _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
+            {
+                // A declined/failed signature shows its own message here — otherwise the
+                // generic "approve" prompt overwrites it and the player sees no sign
+                // anything went wrong. "in {name}" reads right for a desktop extension too.
+                _lblStep2Body.text = isFailure
+                    ? failureMessage
+                    : $"Approve the sign-in request in {appName} — it's a free signature, nothing leaves your wallet.";
+                _lblStep2Body.EnableInClassList("pera-step2-body--error", isFailure);
+            }
 
-            RefreshStepTwoActions();
+            RefreshStepTwoActions();   // keeps RESEND / CANCEL visible after a decline
 
             _panelStep2.RemoveFromClassList("pera-hidden");
             _panelStep2.style.display = DisplayStyle.Flex;
-            StartStepTwoDots();
+            if (isFailure) StopStepTwoDots();   // stop the "still waiting" pulse on failure
+            else           StartStepTwoDots();
             return true;
         }
 
@@ -368,6 +390,7 @@ namespace Blockmaker
                 _panelStep2.AddToClassList("pera-hidden");
                 _panelStep2.style.display = DisplayStyle.None;
             }
+            if (_lblStep2Body != null) _lblStep2Body.RemoveFromClassList("pera-step2-body--error");
             if (_qrFrame      != null) _qrFrame.style.display      = DisplayStyle.Flex;
             if (_lblStatus    != null) _lblStatus.style.display    = DisplayStyle.Flex;
             if (_lblStepsHint != null) _lblStepsHint.style.display = DisplayStyle.Flex;

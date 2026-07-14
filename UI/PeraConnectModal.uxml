@@ -31,13 +31,13 @@
             <!-- Step 2 of 2: waiting for the sign-in approval (shown instead of the QR) -->
             <ui:VisualElement name="panel-step2" class="pera-step2 pera-hidden">
                 <ui:Label class="pera-step2-badge" text="STEP 2 OF 2" />
-                <ui:Label name="lbl-step2-body" class="pera-step2-body" text="Approve the SIGN-IN REQUEST in your wallet app - it's a free signature, nothing leaves your wallet." />
+                <ui:Label name="lbl-step2-body" class="pera-step2-body" text="Approve the sign-in request in your wallet — it's a free signature, nothing leaves your wallet." />
                 <ui:VisualElement class="pera-step2-dots">
                     <ui:VisualElement name="pera-step2-dot-1" class="pera-step2-dot" />
                     <ui:VisualElement name="pera-step2-dot-2" class="pera-step2-dot" />
                     <ui:VisualElement name="pera-step2-dot-3" class="pera-step2-dot" />
                 </ui:VisualElement>
-                <ui:Label class="pera-step2-hint" text="Check your phone - the request is waiting in the app." />
+                <ui:Label class="pera-step2-hint" text="The sign-in request is waiting in your wallet — approve it to continue." />
                 <ui:Label name="lbl-step2-resend-hint" class="pera-step2-resend-hint" text="Request expired or nothing in your app? Resend it." />
                 <ui:Button name="btn-step2-resend" class="pera-store-btn pera-step2-resend-btn" text="RESEND REQUEST" />
                 <ui:Button name="btn-step2-cancel" class="pera-step2-cancel-btn" text="CANCEL" />

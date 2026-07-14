@@ -423,6 +423,11 @@ namespace Blockmaker
         {
             _peraCtrl?.Close();
             StopConnectTimeout();
+            // Cancel any in-flight email/Magic login too — otherwise backing out mid-flight
+            // leaves IsAuthenticating true and every other sign-in method reports "Another
+            // sign-in is already in progress" until the 120s Magic timeout. Safe no-op when
+            // nothing is pending. (Mirrors BlockmakerAuthUI's OTP back handler.)
+            BlockmakerAuth.Instance?.CancelPendingMagic();
             BlockmakerAuth.Instance?.CancelWalletConnect();
             BlockmakerAuth.Instance?.CancelEvmConnect();
             if (_overlay != null) _overlay.style.display = DisplayStyle.None;
@@ -433,6 +438,10 @@ namespace Blockmaker
 
         private void ShowOptionsPage()
         {
+            // Backing out to the options page must also cancel a pending email/Magic login,
+            // or IsAuthenticating stays true and locks out every other method for ~120s.
+            // Safe no-op when nothing is pending. (Mirrors BlockmakerAuthUI's OTP back handler.)
+            BlockmakerAuth.Instance?.CancelPendingMagic();
             BlockmakerAuth.Instance?.CancelWalletConnect();
             BlockmakerAuth.Instance?.CancelEvmConnect();
             SetPage(_pageOptions);
@@ -467,9 +476,15 @@ namespace Blockmaker
             SetPage(_pageQr);
             ClearStatus();
 
-            // Update provider label
+            // Update provider label. Strip a trailing " Wallet" from the provider name so
+            // "Trust Wallet"/"Coinbase Wallet" don't compose "Scan with Trust Wallet Wallet".
             if (_lblQrProvider != null)
-                _lblQrProvider.text = $"Scan with {provider} Wallet";
+            {
+                string providerName = StripWalletSuffix(provider);
+                _lblQrProvider.text = string.IsNullOrEmpty(providerName)
+                    ? "Scan with your wallet"
+                    : $"Scan with {providerName} Wallet";
+            }
 
 
             // Show loading state; hide QR image until received
@@ -533,26 +548,35 @@ namespace Blockmaker
         /// wait state instead of a one-line status. Returns false when neither skin
         /// can show it (older UXML) so callers can fall back to the status label.
         /// </summary>
-        private bool EnterStepTwoState(string provider)
+        private bool EnterStepTwoState(string provider, string failureMessage = null)
         {
             if (_peraCtrl != null && _peraCtrl.IsOpen)
             {
                 // The modal covers the prompt, so don't fall through to the page skin;
                 // a false return (older modal UXML) means callers keep old behavior.
-                return _peraCtrl.ShowStepTwo(provider);
+                return _peraCtrl.ShowStepTwo(provider, failureMessage);
             }
 
             if (_pageStep2 == null) return false;
 
             SetPage(_pageStep2);
             ClearStatus();
+            bool isFailure = !string.IsNullOrEmpty(failureMessage);
             if (_lblStep2Body != null)
             {
-                string appName = string.IsNullOrEmpty(provider) ? "wallet" : provider;
-                _lblStep2Body.text = $"Approve the SIGN-IN REQUEST in your {appName} app - it's a free signature, nothing leaves your wallet.";
+                // A declined/failed signature shows its own message here — otherwise the
+                // generic "approve" prompt would overwrite it and the player would see no
+                // sign anything went wrong. "in {name}" (not "in your … app") reads right
+                // for a desktop extension as well as a mobile app.
+                string appName = string.IsNullOrEmpty(provider) ? "your wallet" : provider;
+                _lblStep2Body.text = isFailure
+                    ? failureMessage
+                    : $"Approve the sign-in request in {appName} — it's a free signature, nothing leaves your wallet.";
+                _lblStep2Body.EnableInClassList("auth-step2-body--error", isFailure);
             }
-            RefreshStepTwoActions();
-            StartStepTwoDots();
+            RefreshStepTwoActions();   // keeps RESEND / CANCEL visible after a decline
+            if (isFailure) StopStepTwoDots();   // stop the "still waiting" pulse on failure
+            else           StartStepTwoDots();
             return true;
         }
 
@@ -682,8 +706,24 @@ namespace Blockmaker
 
         private const float WalletConnectTimeoutSeconds = 45f;
 
+        /// True while a wallet connect/sign-in is already pending — used to debounce
+        /// wallet-row clicks. Without this, a double-click re-enters the connect flow,
+        /// the second attempt hits "already in progress", and its error handler closes
+        /// the modal AND cancels the first (still-good) attempt. Covers both the auth
+        /// layer's IsAuthenticating flag and the brief pre-connect EVM pane/delay window
+        /// (the row click shows the connecting pane 0.6s before IsAuthenticating flips).
+        private bool WalletConnectBusy()
+        {
+            var auth = BlockmakerAuth.Instance;
+            if (auth != null && auth.IsAuthenticating)            return true;
+            if (_evmConnectDelayCoroutine != null)               return true;
+            if (_evmState == EvmPageState.Connecting)             return true;
+            return false;
+        }
+
         private void BeginWalletConnect(string provider)
         {
+            if (WalletConnectBusy()) return;   // debounce double-clicks on a wallet row
             if (BlockmakerAuth.Instance == null) { SetStatus("Unable to connect right now. Please restart the game.", isError: true); return; }
 
             if (_peraCtrl != null)
@@ -930,7 +970,7 @@ namespace Blockmaker
             if (state != EvmPageState.Loading) RemoveEvmSkeletonRow();
 
             if (_lblEvmHeading != null)
-                _lblEvmHeading.text = connectingPane ? "Connect Wallet" : "EVM / AVM Wallets";
+                _lblEvmHeading.text = connectingPane ? "Connect Wallet" : "Connect a Wallet";
             if (_lblEvmSubheading != null)
                 _lblEvmSubheading.style.display = connectingPane ? DisplayStyle.None : DisplayStyle.Flex;
 
@@ -1066,6 +1106,7 @@ namespace Blockmaker
 
         private void BeginCuratedEvmConnect(string walletName)
         {
+            if (WalletConnectBusy()) return;   // debounce double-clicks on a wallet row
 #if UNITY_WEBGL && !UNITY_EDITOR
             BeginEvmWalletConnect(new EvmWalletEntry
             {
@@ -1288,6 +1329,10 @@ namespace Blockmaker
         private void BeginEvmWalletConnect(EvmWalletEntry wallet)
         {
             if (wallet == null) return;
+            // Debounce double-clicks on a wallet row. OnEvmRetryClicked cancels the prior
+            // attempt first (clearing IsAuthenticating) and re-enters from the Error state,
+            // so a legitimate retry is not blocked by this guard.
+            if (WalletConnectBusy()) return;
             if (BlockmakerAuth.Instance == null) { SetStatus("Unable to connect right now. Please restart the game.", isError: true); return; }
 
             _evmSelectedWallet = wallet;
@@ -1525,7 +1570,7 @@ namespace Blockmaker
             }
 
             if (ReownWalletConnector.Instance != null && ReownWalletConnector.Instance.IsInitialized)
-                ShowQrPage("X-Chain");
+                ShowQrPage(walletName);   // the picked wallet's name, not the internal "X-Chain"
             else
                 SetStatus("Looking for your wallet app…");
 
@@ -1577,12 +1622,39 @@ namespace Blockmaker
                 (_pageEvmWallets != null && _pageEvmWallets.style.display == DisplayStyle.Flex) ||
                 (_pageStep2      != null && _pageStep2.style.display      == DisplayStyle.Flex);
 
+            // A declined/failed sign-in signature arrives on this same channel. Surface
+            // THAT message in the step-2 skin instead of resetting to the generic
+            // "approve the request…" prompt (which made a decline look like nothing
+            // happened). Everything else is a "waiting/approve" status.
+            bool isFailure = IsDeclineStatus(msg);
+
             // Preferred: the unmissable "STEP 2 OF 2" state in whichever skin is showing.
-            if (inWalletFlow && EnterStepTwoState(CurrentWalletProviderName())) return;
+            if (inWalletFlow && EnterStepTwoState(CurrentWalletProviderName(), isFailure ? msg : null)) return;
 
             // Fallback (older UXML without the step-2 panel): plain status routing.
             if (_peraCtrl != null && _peraCtrl.IsOpen) _peraCtrl.SetStatus(msg);
-            else SetStatus(msg);
+            else SetStatus(msg, isError: isFailure);
+        }
+
+        /// OnAuthStatus is a single message channel (no status type), so distinguish a
+        /// declined/failed sign-in from a "waiting/approve" prompt by its wording. The
+        /// auth layer's failure copy always names the decline/failure explicitly.
+        private static bool IsDeclineStatus(string msg)
+        {
+            if (string.IsNullOrEmpty(msg)) return false;
+            return msg.IndexOf("declined", StringComparison.OrdinalIgnoreCase) >= 0
+                || msg.IndexOf("failed",   StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        /// Strip a trailing " Wallet" (e.g. "Trust Wallet" → "Trust") so provider names
+        /// compose cleanly into "Scan with {name} Wallet" without doubling.
+        private static string StripWalletSuffix(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+            name = name.Trim();
+            if (name.EndsWith(" Wallet", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(0, name.Length - " Wallet".Length).TrimEnd();
+            return name;
         }
 
         private void HandleQRReady(WalletQREventArgs e)

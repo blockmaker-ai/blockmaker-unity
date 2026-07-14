@@ -32,7 +32,7 @@
                         <ui:Label class="auth-btn-icon-glyph" text="W" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-body">
-                        <ui:Label class="auth-btn-label" text="EVM / AVM Wallets" />
+                        <ui:Label class="auth-btn-label" text="Connect a Wallet" />
                     </ui:VisualElement>
                     <ui:VisualElement class="auth-btn-chevron">
                         <ui:VisualElement class="auth-chevron" />
@@ -46,7 +46,7 @@
 
                 <ui:VisualElement class="auth-page-nav">
                     <ui:VisualElement class="auth-page-heading-wrap">
-                        <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="EVM / AVM Wallets" />
+                        <ui:Label name="lbl-evm-heading" class="auth-page-heading" text="Connect a Wallet" />
                     </ui:VisualElement>
                 </ui:VisualElement>
 
@@ -130,20 +130,20 @@
                 <ui:Label class="auth-qr-hint" text="Open your wallet app and scan the code to connect" />
                 <ui:Label class="auth-qr-steps-hint" text="Signing in takes 2 quick approvals in your wallet." />
                 <ui:Button name="btn-open-wallet" class="auth-pill-btn" text="OPEN IN WALLET APP" style="display: none;" />
-                <ui:Button name="btn-copy-wc-link" class="auth-pill-btn" text="Copy Link" />
+                <ui:Button name="btn-copy-wc-link" class="auth-pill-btn" text="COPY LINK" />
             </ui:VisualElement>
 
             <!-- PAGE: waiting for the sign-in approval (wallet approval 2 of 2) -->
             <ui:VisualElement name="page-step2" class="auth-page auth-page--center">
                 <ui:Label class="auth-step2-badge" text="STEP 2 OF 2" />
                 <ui:Label class="auth-step2-title" text="One more step!" />
-                <ui:Label name="lbl-step2-body" class="auth-step2-body" text="Approve the SIGN-IN REQUEST in your wallet app - it's a free signature, nothing leaves your wallet." />
+                <ui:Label name="lbl-step2-body" class="auth-step2-body" text="Approve the sign-in request in your wallet — it's a free signature, nothing leaves your wallet." />
                 <ui:VisualElement class="auth-step2-dots">
                     <ui:VisualElement name="step2-dot-1" class="auth-step2-dot" />
                     <ui:VisualElement name="step2-dot-2" class="auth-step2-dot" />
                     <ui:VisualElement name="step2-dot-3" class="auth-step2-dot" />
                 </ui:VisualElement>
-                <ui:Label class="auth-step2-hint" text="Check your phone - the request is waiting in the app." />
+                <ui:Label class="auth-step2-hint" text="The sign-in request is waiting in your wallet — approve it to continue." />
                 <ui:Label name="lbl-step2-resend-hint" class="auth-step2-resend-hint" text="Request expired or nothing in your app? Resend it." />
                 <ui:Button name="btn-step2-resend" class="auth-step2-resend-btn" text="RESEND REQUEST" />
                 <ui:Button name="btn-step2-cancel" class="auth-link-btn auth-step2-cancel-btn" text="CANCEL" />
