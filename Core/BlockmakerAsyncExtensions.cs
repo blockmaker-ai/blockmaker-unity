@@ -9,7 +9,7 @@ namespace Blockmaker
     /// These wrap the callback-based APIs so game code can use modern C# patterns:
     ///
     ///   var identity = await BlockmakerAuth.Instance.ConnectWalletAsync("Pera");
-    ///   var result   = await BlockmakerClient.Instance.RunFlowAsync("myFlow");
+    ///   var profile  = await BlockmakerClient.Instance.GetAsync&lt;ProfileResponse&gt;("/v1/profile");
     ///
     /// All methods marshal back to the Unity main thread via TaskCompletionSource.
     /// </summary>

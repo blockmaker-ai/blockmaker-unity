@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.0.0] - 2026-07-21
+
+### Security
+- Bind every request, player login, session check, refresh, logout, and managed-wallet signature to the configured public game ID
+- Require exact short-lived signing intents for server-managed wallet transactions and bind them to the builder's returned bytes
+- Coalesce concurrent refresh-token exchanges so rotation cannot be mistaken for token replay
+- Validate the API base URL as an exact HTTPS origin (with localhost HTTP allowed for development) and reject off-origin API paths
+- Preserve structured error codes, request IDs, and retry timing without logging credentials or provider response bodies
+
+### Changed
+- Use `https://blockmaker.polaris.city` as the shared API default while keeping `serverUrl` configurable
+- Require a public `gameId`; server keys are not accepted as game IDs
+- Remove the retired flow-runner API and flow DTOs
+- Add integration and security guidance for multi-game Blockmaker accounts
+
 ## [1.0.0] - 2026-05-29
 
 ### Added

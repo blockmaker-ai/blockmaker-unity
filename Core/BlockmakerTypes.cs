@@ -9,22 +9,6 @@ namespace Blockmaker
     public enum OnboardingStep { None, HasProfile, HasUsername, Complete }
     public enum TransactionType { Payment, AssetTransfer, AssetOptIn }
 
-    // ── Flow types ─────────────────────────────────────────────────────────────────
-
-    [Serializable] public class FlowRunRequest
-    {
-        public string wallet;
-        public string context;
-    }
-
-    [Serializable] public class FlowResult
-    {
-        public bool   success;
-        public bool   ownsNFT;
-        public string output;
-        public string error;
-    }
-
     // ── Profile types ──────────────────────────────────────────────────────────────
 
     [Serializable] public class GameProfileField
@@ -108,6 +92,8 @@ namespace Blockmaker
         public long     priceMicroAlgo;
         public float    priceAlgo;
         public long     appId;
+        public string   signingIntent;
+        public long     signingIntentExpiresAt;
         public string   error;
     }
 
@@ -323,6 +309,7 @@ namespace Blockmaker
     {
         public string didToken;
         public string email;
+        public string gameId;
     }
 
     // ── Email auth types ───────────────────────────────────────────────────────────
@@ -330,6 +317,7 @@ namespace Blockmaker
     [Serializable] public class EmailOTPRequest
     {
         public string email;
+        public string gameId;
     }
 
     /// <summary>Returned by POST /v1/auth/email/request.</summary>
@@ -343,6 +331,7 @@ namespace Blockmaker
     {
         public string email;
         public string otp;
+        public string gameId;
     }
 
     /// <summary>Returned by POST /v1/auth/email/verify.</summary>
@@ -365,6 +354,7 @@ namespace Blockmaker
         public string walletAddress;  // Algorand address (derived address for EVM xChain)
         public string chain;          // "algorand" | "evm"
         public string evmAddress;     // required when chain == "evm"; null otherwise
+        public string gameId;         // required public Blockmaker game ID
     }
 
     /// <summary>Returned by POST /v1/auth/wallet/challenge.</summary>
@@ -387,6 +377,7 @@ namespace Blockmaker
                                       // whose note == nonce (null for evm)
         public string nonce;          // echoes the /challenge nonce
         public string evmAddress;     // required when chain == "evm"; null otherwise
+        public string gameId;         // required public Blockmaker game ID
     }
 
     // ── Token refresh types ──────────────────────────────────────────────────────
@@ -403,11 +394,13 @@ namespace Blockmaker
     [Serializable] public class RefreshTokenRequest
     {
         public string refreshToken;
+        public string gameId;
     }
 
     [Serializable] public class LogoutRequest
     {
         public string refreshToken;
+        public string gameId;
     }
 
     // ── Server-side signing types ──────────────────────────────────────────────────
@@ -416,6 +409,8 @@ namespace Blockmaker
     {
         public string   unsignedTxnBase64;
         public string[] unsignedTxnsBase64;
+        public string   signingIntent;
+        public string   gameId;
     }
 
     /// <summary>Returned by POST /v1/auth/sign. Supports both single and group signing.</summary>
@@ -433,6 +428,7 @@ namespace Blockmaker
         public bool   success;
         public string code;
         public string error;
+        public string requestId;
     }
 
     [Serializable] public class BlockmakerError
@@ -440,19 +436,25 @@ namespace Blockmaker
         public string Code    { get; }
         public string Message { get; }
         public int    HttpStatus { get; }
+        public string RequestId { get; }
+        public int    RetryAfterSeconds { get; }
 
-        public BlockmakerError(string code, string message, int httpStatus = 0)
+        public BlockmakerError(string code, string message, int httpStatus = 0, string requestId = "", int retryAfterSeconds = 0)
         {
             Code       = code ?? "";
             Message    = message ?? "Something went wrong.";
             HttpStatus = httpStatus;
+            RequestId  = requestId ?? "";
+            RetryAfterSeconds = retryAfterSeconds;
         }
 
-        public bool IsAuthError         => Code == "AUTH_MISSING" || Code == "AUTH_INVALID" || Code == "AUTH_EXPIRED";
+        public bool IsAuthError         => Code == "AUTH_MISSING" || Code == "AUTH_INVALID" || Code == "AUTH_EXPIRED" || HttpStatus == 401;
         public bool IsConfigError       => Code == "SERVER_CONFIG";
-        public bool IsRateLimited       => Code == "RATE_LIMITED";
+        public bool IsRateLimited       => Code == "RATE_LIMITED" || HttpStatus == 429;
         public bool IsNetworkError      => Code == "NETWORK" || HttpStatus == 0;
         public bool IsTransactionError  => Code.StartsWith("TX_") || Code == "INVALID_AMOUNT" || Code == "NOTE_TOO_LONG";
+        public bool IsGameMismatch      => Code == "GAME_MISMATCH" || Code == "GAME_NOT_FOUND";
+        public bool IsSigningIntentError => Code.StartsWith("TX_INTENT_");
     }
 
     // ── WalletConnect v1 JSON-RPC response types ─────────────────────────────────
@@ -526,6 +528,8 @@ namespace Blockmaker
         public string[] unsignedTxnsBase64;
         public string   txType;
         public string   from;
+        public string   signingIntent;
+        public long     signingIntentExpiresAt;
         public string   code;
         public string   error;
     }
@@ -545,6 +549,8 @@ namespace Blockmaker
         public string[] unsignedTxnsBase64;
         public string   txType;
         public string   from;
+        public string   signingIntent;
+        public long     signingIntentExpiresAt;
         public string   code;
         public string   error;
     }
