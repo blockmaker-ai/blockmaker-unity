@@ -19,18 +19,53 @@ namespace Blockmaker
         /// <summary>Open the Pera wallet app with a WalletConnect URI.</summary>
         public static void OpenPera(string wcUri)
         {
-            if (!IsMobilePlatform) return;
-            string encoded = UnityEngine.Networking.UnityWebRequest.EscapeURL(wcUri);
+            if (!IsMobilePlatform || string.IsNullOrEmpty(wcUri)) return;
+
+            // @perawallet/connect adds this hint before handing the pairing URI to
+            // Pera. Keep our headless Unity modal wire-compatible with Pera's own
+            // mobile connect button.
     #if UNITY_WEBGL && !UNITY_EDITOR
-            // Mobile browser: prefer Pera's https universal link — it opens the app when
-            // installed and falls back to a Pera web page otherwise, whereas an
-            // unregistered custom scheme fails silently in the browser. This is the same
-            // link form Pera encodes in its own QR codes.
-            Application.OpenURL($"https://perawallet.app/qr/perawallet-wc/?uri={encoded}");
+            // Mirror @perawallet/connect 1.5.x exactly:
+            //   Android browser -> raw wc: URI (Android resolves the wallet handler)
+            //   iOS browser     -> Pera's registered perawallet-wc: scheme
+            //
+            // The old https://perawallet.app/qr/... link can open Pera's website on
+            // Android without handing the live pairing to the app, leaving the player
+            // with no connection or follow-up sign-in request.
+            bool isAndroidBrowser = false;
+            try
+            {
+                isAndroidBrowser =
+                    SystemInfo.operatingSystem.IndexOf(
+                        "Android",
+                        System.StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch { /* fall through to Pera's iOS/custom-scheme link */ }
+
+            Application.OpenURL(BuildPeraLaunchUrl(wcUri, isAndroidBrowser));
+    #elif UNITY_ANDROID && !UNITY_EDITOR
+            Application.OpenURL(BuildPeraLaunchUrl(wcUri, true));
     #else
-            // Native platforms: Pera's registered custom scheme.
-            Application.OpenURL($"perawallet-wc://wc?uri={encoded}");
+            // Native iOS and other mobile platforms: Pera's registered custom scheme.
+            Application.OpenURL(BuildPeraLaunchUrl(wcUri, false));
     #endif
+        }
+
+        private static string BuildPeraLaunchUrl(string wcUri, bool isAndroid)
+        {
+            string peraUri = AddPeraAlgorandHint(wcUri);
+            if (isAndroid) return peraUri;
+
+            string encoded = UnityEngine.Networking.UnityWebRequest.EscapeURL(peraUri);
+            return $"perawallet-wc://wc?uri={encoded}";
+        }
+
+        private static string AddPeraAlgorandHint(string wcUri)
+        {
+            if (wcUri.IndexOf("algorand=", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                return wcUri;
+
+            return wcUri + (wcUri.IndexOf('?') >= 0 ? "&" : "?") + "algorand=true";
         }
 
         /// <summary>Open the Defly wallet app with a WalletConnect URI.</summary>
