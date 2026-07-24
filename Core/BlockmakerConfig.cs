@@ -16,16 +16,16 @@ namespace Blockmaker
     public class BlockmakerConfig : ScriptableObject
     {
         [Header("Server")]
-        [Tooltip("Optional — your Blockmaker server URL. Leave empty to use the shared default.")]
+        [Tooltip("Optional Blockmaker API origin. Leave empty to use https://blockmaker.polaris.city. Production URLs must use HTTPS; localhost HTTP is allowed for development.")]
         public string serverUrl = "";
 
-        internal const string DefaultServerUrl = "https://blockmaker-production.up.railway.app";
+        internal const string DefaultServerUrl = "https://blockmaker.polaris.city";
 
-        [Tooltip("Short unique ID for your game (e.g. 'myrace'). Used to namespace saved sessions so multiple Blockmaker games on the same device don't conflict. If left empty, falls back to Application.identifier.")]
+        [Tooltip("Required public game ID from Blockmaker. This scopes player accounts and data to your game. It is safe to ship; do not paste a server key here.")]
         public string gameId = "";
 
         [Header("Auth")]
-        [Tooltip("Your Blockmaker API key — sk_ prefix, 48 hex chars")]
+        [Tooltip("Optional server key for Editor-only tools. Never use this field as the game ID or in a player build.")]
         public string apiKey = "";
 
         [Header("WalletConnect")]
@@ -78,12 +78,17 @@ namespace Blockmaker
 
         private void OnValidate()
         {
-            // Server URL and API key are optional — shared defaults are used when empty.
+            // The server origin is optional because the shared production origin is the default.
             if (!string.IsNullOrEmpty(serverUrl) &&
                 !serverUrl.StartsWith("https://", System.StringComparison.OrdinalIgnoreCase) &&
                 !serverUrl.StartsWith("http://localhost", System.StringComparison.OrdinalIgnoreCase) &&
                 !serverUrl.StartsWith("http://127.0.0.1", System.StringComparison.OrdinalIgnoreCase))
-                BlockmakerLog.Warning("[BlockmakerConfig] Server URL does not use HTTPS. Use HTTPS in production.");
+                BlockmakerLog.Warning("[BlockmakerConfig] Server URL must use HTTPS (HTTP is allowed only for localhost development).");
+
+            if (string.IsNullOrWhiteSpace(gameId))
+                BlockmakerLog.Warning("[BlockmakerConfig] Public game ID is required. Copy it from your Blockmaker project's Integration page.");
+            else if (gameId.Trim().StartsWith("sk_", System.StringComparison.OrdinalIgnoreCase))
+                BlockmakerLog.Warning("[BlockmakerConfig] gameId must be the public game ID, never a server key.");
 
             if (!string.IsNullOrEmpty(apiKey) && !apiKey.StartsWith("sk_"))
                 BlockmakerLog.Warning("[BlockmakerConfig] API key should start with 'sk_'.");

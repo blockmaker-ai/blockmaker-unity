@@ -51,7 +51,18 @@ Save and reopen Unity.
 
 </details>
 
-## Setup
+## Create or connect a Blockmaker project
+
+1. Open [blockmaker.ai](https://blockmaker.ai) and start setup from the public site.
+2. Sign the free setup message with the wallet that will own the project.
+3. Add your game's exact web origin when Blockmaker asks for it.
+4. On the project's **Integration** page, copy the public game ID. It is safe to ship in a game client.
+
+Each Blockmaker account can own multiple games. Every game has its own public ID, player data,
+allowed origins, keys, and treasury policy. Never copy a server key (`sk_...`) into Unity code,
+a `BlockmakerConfig`, a WebGL template, or source control.
+
+## Unity setup
 
 Go to **Blockmaker > Setup Scene** in the menu bar. This automatically:
 
@@ -61,7 +72,9 @@ Go to **Blockmaker > Setup Scene** in the menu bar. This automatically:
 - Creates PanelSettings if needed
 - Adds a Connect Wallet button
 
-Hit Play — the wallet system is ready. No API keys or signups needed.
+Select the generated `BlockmakerConfig` and paste the public game ID from the Integration page
+into `gameId`. Leave `serverUrl` empty to use `https://blockmaker.polaris.city`, or set an exact
+HTTPS origin for a self-hosted deployment. Hit Play — no server key is required in the game.
 
 ### Sample scene
 
@@ -124,6 +137,16 @@ yield return identity.SignTransactions(unsignedTxnsBase64,
 );
 ```
 
+Use transaction bytes returned by a Blockmaker builder (`BuildAssetOptIn`, a shop prepare call,
+and similar purpose-built endpoints). For server-managed email wallets, the SDK automatically
+binds the builder's short-lived `signingIntent` to those exact bytes and echoes it when signing.
+It refuses arbitrary or expired transaction bytes. Self-custody wallets still show the player the
+normal wallet approval.
+
+Managed email wallets can sign at most five transactions in one group. Chunk larger opt-in batches
+at five if the same integration must support both managed and self-custody wallets (Algorand itself
+allows up to sixteen transactions per atomic group).
+
 ### Check state
 
 ```csharp
@@ -184,17 +207,34 @@ BlockmakerLog.OnLog += (level, msg) => MyLogger.Log(msg);
 
 ## Configuration Reference
 
-All fields are optional — the SDK works with defaults out of the box.
+The public `gameId` is required. Other integration fields have safe defaults or are optional.
 
 | Field | Description |
 |-------|-------------|
-| `serverUrl` | Your own Blockmaker server URL. Leave empty to use the shared default |
-| `apiKey` | Your own API key (`sk_` prefix). **Only used in the Unity Editor, never shipped in player builds** |
+| `gameId` | **Required public game ID** from the project's Integration page; safe to ship |
+| `serverUrl` | Exact Blockmaker HTTPS origin. Leave empty for `https://blockmaker.polaris.city`; localhost HTTP is allowed for development |
+| `apiKey` | Optional server key for trusted Editor tools only. **Never use it in gameplay code or a player build** |
 | `walletConnectProjectId` | Your own WalletConnect project ID. Leave empty to use the shared default |
 | `magicPublishableKey` | Magic SDK key for email login on WebGL |
 | `dAppUrl` | URL shown in wallet apps when players approve a connection |
 | `dAppIconUrl` | Icon shown in wallet apps |
 | `walletSignTimeoutSeconds` | How long to wait for wallet approval (default: 120 seconds) |
+
+## Security model
+
+- Every SDK request asserts the configured public game ID. A session or refresh token from one
+  game cannot be silently reused for another game.
+- Player builds use short-lived player JWTs. The build-time key stripper removes an Editor server
+  key if one was placed in a config asset, but you should still keep server keys out of the repo.
+- Refresh-token rotation is single-flight: concurrent requests share one exchange, avoiding the
+  replay protection that correctly revokes a refresh token used twice.
+- Managed-wallet signing accepts only exact, short-lived transaction intents created by a
+  Blockmaker builder. If you see `TX_INTENT_REQUIRED` or `TX_INTENT_EXPIRED`, rebuild the action;
+  never retry with hand-authored transaction bytes.
+- `GAME_MISMATCH` means the config, player session, and requested project do not agree. Clear the
+  saved session, verify `gameId`, and sign in again. Do not work around it by removing the game ID.
+- API paths passed to `Get` and `Post` must start with `/v1/`; the SDK will not send credentials to
+  an absolute or off-origin URL.
 
 ## Requirements
 

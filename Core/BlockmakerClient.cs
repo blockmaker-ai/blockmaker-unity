@@ -1,5 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Security.Cryptography;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -29,6 +31,54 @@ namespace Blockmaker
         public BlockmakerConfig config;
 
         private string _baseUrl;
+        private string _gameId;
+        private string _configurationError;
+
+        /// <summary>Validated API origin currently used by the SDK, or null when configuration is invalid.</summary>
+        public string BaseUrl => _baseUrl;
+        /// <summary>Validated public Blockmaker game ID currently bound to requests.</summary>
+        public string GameId => _gameId;
+        /// <summary>True only when the SDK has a valid HTTPS/localhost origin and public game ID.</summary>
+        public bool IsConfigured => _baseUrl != null && _gameId != null;
+        /// <summary>User-safe configuration error when <see cref="IsConfigured"/> is false.</summary>
+        public string ConfigurationError => _configurationError;
+
+        // Refresh tokens rotate on every successful exchange. All concurrent callers for
+        // the current token must therefore share one HTTP request; sending the same old
+        // token twice is correctly treated as replay by the server and revokes the session.
+        private bool _refreshInProgress;
+        private string _refreshTokenInFlight;
+        private readonly List<RefreshWaiter> _refreshWaiters = new List<RefreshWaiter>();
+
+        // Managed-wallet signing is allowed only for exact transaction bytes authored by a
+        // Blockmaker builder. HandleResponse records the short-lived server intent against
+        // those exact bytes so existing identity.SignTransaction(s) call sites remain safe
+        // without making the game pass authorization tokens around manually.
+        private readonly Dictionary<string, CachedSigningIntent> _signingIntents =
+            new Dictionary<string, CachedSigningIntent>();
+
+        private sealed class RefreshWaiter
+        {
+            public Action<RefreshTokenResult> onSuccess;
+            public Action<string> onError;
+        }
+
+        private sealed class CachedSigningIntent
+        {
+            public string token;
+            public long expiresAt;
+        }
+
+        [Serializable]
+        private sealed class SigningIntentEnvelope
+        {
+            public string signingIntent;
+            public long signingIntentExpiresAt;
+            public string unsignedTxnBase64;
+            public string[] unsignedTxnsBase64;
+            public string[] unsignedTxns;
+            public string unsignedOptInTxn;
+        }
 
         private void Awake()
         {
@@ -45,11 +95,7 @@ namespace Blockmaker
                 enabled = false;
                 return;
             }
-            var url = config.serverUrl;
-            if (string.IsNullOrEmpty(url))
-                url = BlockmakerConfig.DefaultServerUrl;
-            _baseUrl = url.TrimEnd('/');
-
+            InitializeConfig();
         }
 
         private void OnDestroy()
@@ -65,74 +111,91 @@ namespace Blockmaker
         public void InitFromAuth()
         {
             if (config == null) return;
-            var url = config.serverUrl;
-            if (string.IsNullOrEmpty(url))
-                url = BlockmakerConfig.DefaultServerUrl;
             enabled = true;
             if (Instance == null) Instance = this;
-            _baseUrl = url.TrimEnd('/');
-            BlockmakerLog.Info($"[BlockmakerClient] Initialized — server: {_baseUrl}");
+            InitializeConfig();
         }
 
-        // ═══════════════════════════════════════════════════════════════════════════
-        // FLOW RUNNER
-        // ═══════════════════════════════════════════════════════════════════════════
-
-        /// <summary>Run a flow against the current identity's address.</summary>
-        public void RunFlow(
-            string             flowId,
-            Action<FlowResult> onSuccess,
-            Action<string>     onError   = null,
-            string             contextJson = null)
+        private void InitializeConfig()
         {
-            var auth = BlockmakerAuth.Instance;
-            if (auth == null || !auth.HasWallet)
+            _baseUrl = null;
+            _gameId = null;
+            _configurationError = null;
+
+            if (config == null)
             {
-                onError?.Invoke("No wallet connected. Please connect a wallet or sign in first.");
+                _configurationError = "Blockmaker is not configured. Ask the game developer to add a BlockmakerConfig asset.";
                 return;
             }
-            StartCoroutine(RunFlowRoutine(flowId, auth.Address, contextJson, onSuccess, onError));
-        }
 
-        /// <summary>Run a flow with a custom result type (for game-specific flow data).</summary>
-        public void RunFlow<T>(
-            string         flowId,
-            Action<T>      onSuccess,
-            Action<string> onError     = null,
-            string         contextJson = null) where T : class
-        {
-            var auth = BlockmakerAuth.Instance;
-            if (auth == null || !auth.HasWallet)
+            var rawUrl = string.IsNullOrWhiteSpace(config.serverUrl)
+                ? BlockmakerConfig.DefaultServerUrl
+                : config.serverUrl.Trim();
+            Uri parsed;
+            if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out parsed)
+                || (parsed.Scheme != Uri.UriSchemeHttps && parsed.Scheme != Uri.UriSchemeHttp)
+                || !string.IsNullOrEmpty(parsed.UserInfo)
+                || (parsed.AbsolutePath != "/" && parsed.AbsolutePath != "")
+                || !string.IsNullOrEmpty(parsed.Query)
+                || !string.IsNullOrEmpty(parsed.Fragment))
             {
-                onError?.Invoke("No wallet connected. Please connect a wallet or sign in first.");
+                _configurationError = "Blockmaker server URL must be an exact HTTPS origin with no path, query, or credentials.";
+                BlockmakerLog.Error($"[BlockmakerClient] {_configurationError}");
                 return;
             }
-            StartCoroutine(RunFlowRoutine(flowId, auth.Address, contextJson, onSuccess, onError));
+
+            var isLoopback = parsed.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                || parsed.Host == "127.0.0.1" || parsed.Host == "::1" || parsed.Host == "[::1]";
+            if (parsed.Scheme != Uri.UriSchemeHttps && !isLoopback)
+            {
+                _configurationError = "Blockmaker server URL must use HTTPS (HTTP is allowed only for localhost development).";
+                BlockmakerLog.Error($"[BlockmakerClient] {_configurationError}");
+                return;
+            }
+
+            var publicGameId = (config.gameId ?? "").Trim();
+            if (publicGameId.Length == 0)
+            {
+                _configurationError = "Blockmaker public game ID is missing. Copy it from your project's Integration page.";
+                BlockmakerLog.Error($"[BlockmakerClient] {_configurationError}");
+                return;
+            }
+            if (publicGameId.StartsWith("sk_", StringComparison.OrdinalIgnoreCase))
+            {
+                _configurationError = "Blockmaker gameId must be the public game ID, never a server key.";
+                BlockmakerLog.Error($"[BlockmakerClient] {_configurationError}");
+                return;
+            }
+            if (publicGameId.Length > 128 || !IsSafePublicGameId(publicGameId))
+            {
+                _configurationError = "Blockmaker public game ID contains invalid characters. Copy it again from the Integration page.";
+                BlockmakerLog.Error($"[BlockmakerClient] {_configurationError}");
+                return;
+            }
+
+            _baseUrl = parsed.GetLeftPart(UriPartial.Authority);
+            _gameId = publicGameId;
+            BlockmakerLog.Info($"[BlockmakerClient] Initialized — server: {_baseUrl}, game: {_gameId}");
         }
 
-        /// <summary>Run a flow against an explicit wallet address.</summary>
-        public void RunFlowForWallet(
-            string             flowId,
-            string             walletAddress,
-            Action<FlowResult> onSuccess,
-            Action<string>     onError     = null,
-            string             contextJson = null)
+        private static bool IsSafePublicGameId(string value)
         {
-            if (_baseUrl == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); return; }
-            StartCoroutine(RunFlowRoutine(flowId, walletAddress, contextJson, onSuccess, onError));
+            for (var i = 0; i < value.Length; i++)
+            {
+                var ch = value[i];
+                if ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+                    || (ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.')
+                    continue;
+                return false;
+            }
+            return value.Length > 0;
         }
 
-        private IEnumerator RunFlowRoutine<T>(
-            string flowId, string walletAddress, string contextJson,
-            Action<T> onSuccess, Action<string> onError) where T : class
+        private bool RequireReady(Action<string> onError)
         {
-            string url  = $"{_baseUrl}/v1/flows/{flowId}/run";
-            string body = JsonUtility.ToJson(new FlowRunRequest
-                { wallet = walletAddress, context = contextJson });
-
-            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
-            yield return req.SendWebRequest();
-            HandleResponse(req, onSuccess, onError);
+            if (_baseUrl != null && _gameId != null) return true;
+            onError?.Invoke(_configurationError ?? "Blockmaker is not configured. Please restart the game and try again.");
+            return false;
         }
 
         // ═══════════════════════════════════════════════════════════════════════════
@@ -142,10 +205,11 @@ namespace Blockmaker
         /// <summary>Ask the server to send an OTP to the given email.</summary>
         public IEnumerator RequestEmailOTP(string email, Action onSent, Action<string> onError)
         {
+            if (!RequireReady(onError)) yield break;
             string url  = $"{_baseUrl}/v1/auth/email/request";
-            string body = JsonUtility.ToJson(new EmailOTPRequest { email = email });
+            string body = JsonUtility.ToJson(new EmailOTPRequest { email = email, gameId = _gameId });
 
-            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds, false);
             yield return req.SendWebRequest();
 
             if (req.result != UnityWebRequest.Result.Success)
@@ -178,10 +242,11 @@ namespace Blockmaker
             Action<EmailVerifyResult> onSuccess,
             Action<string>            onError)
         {
+            if (!RequireReady(onError)) yield break;
             string url  = $"{_baseUrl}/v1/auth/email/verify";
-            string body = JsonUtility.ToJson(new EmailVerifyRequest { email = email, otp = otp });
+            string body = JsonUtility.ToJson(new EmailVerifyRequest { email = email, otp = otp, gameId = _gameId });
 
-            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds, false);
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
         }
@@ -201,10 +266,11 @@ namespace Blockmaker
             Action<EmailVerifyResult> onSuccess,
             Action<string>            onError)
         {
+            if (!RequireReady(onError)) yield break;
             string url  = $"{_baseUrl}/v1/auth/magic/verify";
-            string body = JsonUtility.ToJson(new MagicVerifyRequest { didToken = didToken, email = email });
+            string body = JsonUtility.ToJson(new MagicVerifyRequest { didToken = didToken, email = email, gameId = _gameId });
 
-            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds, false);
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
         }
@@ -223,11 +289,12 @@ namespace Blockmaker
             Action<WalletChallengeResult> onSuccess,
             Action<string>                onError)
         {
+            if (!RequireReady(onError)) yield break;
             string url  = $"{_baseUrl}/v1/auth/wallet/challenge";
             string body = JsonUtility.ToJson(new WalletChallengeRequest
-                { walletAddress = walletAddress, chain = chain, evmAddress = evmAddress });
+                { walletAddress = walletAddress, chain = chain, evmAddress = evmAddress, gameId = _gameId });
 
-            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds, false);
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
         }
@@ -245,11 +312,12 @@ namespace Blockmaker
             Action<EmailVerifyResult> onSuccess,
             Action<string>            onError)
         {
+            if (!RequireReady(onError)) yield break;
             string url  = $"{_baseUrl}/v1/auth/wallet/verify";
             string body = JsonUtility.ToJson(new WalletVerifyRequest
-                { walletAddress = walletAddress, chain = chain, signature = signature, signedTxn = signedTxn, nonce = nonce, evmAddress = evmAddress });
+                { walletAddress = walletAddress, chain = chain, signature = signature, signedTxn = signedTxn, nonce = nonce, evmAddress = evmAddress, gameId = _gameId });
 
-            using var req = BuildPost(url, body, config.defaultTimeoutSeconds);
+            using var req = BuildPost(url, body, config.defaultTimeoutSeconds, false);
             yield return req.SendWebRequest();
             HandleResponse(req, onSuccess, onError);
         }
@@ -269,9 +337,20 @@ namespace Blockmaker
             Action<string> onError,
             Action<BlockmakerError> onBlockmakerError = null)
         {
+            if (!RequireReady(onError)) yield break;
+            var txnGroup = new[] { unsignedTxnBase64 };
+            var signingIntent = FindSigningIntent(txnGroup);
+            if (string.IsNullOrEmpty(signingIntent))
+            {
+                const string message = "This transaction request is missing its Blockmaker authorization. Start the action again from the game.";
+                onBlockmakerError?.Invoke(new BlockmakerError("TX_INTENT_REQUIRED", message, 403));
+                onError?.Invoke(message);
+                yield break;
+            }
+
             string url  = $"{_baseUrl}/v1/auth/sign";
             string body = JsonUtility.ToJson(new ServerSignRequest
-                { unsignedTxnBase64 = unsignedTxnBase64 });
+                { unsignedTxnBase64 = unsignedTxnBase64, signingIntent = signingIntent, gameId = _gameId });
 
             using var req = new UnityWebRequest(url, "POST")
             {
@@ -279,7 +358,7 @@ namespace Blockmaker
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(config.longRequestTimeoutSeconds)
             };
-            req.SetRequestHeader("Content-Type",  "application/json");
+            ApplyCommonHeaders(req, true);
             req.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
 
             yield return req.SendWebRequest();
@@ -288,6 +367,7 @@ namespace Blockmaker
             {
                 string err = "Something went wrong. Please try again.";
                 string code = "";
+                string requestId = req.GetResponseHeader("X-Request-ID") ?? "";
                 try
                 {
                     var respBody = req.downloadHandler?.text;
@@ -300,11 +380,12 @@ namespace Blockmaker
                             err = parsed.error;
                         }
                         code = parsed.code ?? "";
+                        if (!string.IsNullOrEmpty(parsed.requestId)) requestId = parsed.requestId;
                     }
                 }
                 catch (Exception parseEx) { BlockmakerLog.Warning($"[BlockmakerClient] Error response parse failed: {parseEx.Message}"); }
                 BlockmakerLog.Error($"[BlockmakerClient] Sign HTTP {req.responseCode}: {req.error}");
-                onBlockmakerError?.Invoke(new BlockmakerError(code, err, (int)req.responseCode));
+                onBlockmakerError?.Invoke(new BlockmakerError(code, err, (int)req.responseCode, requestId, RetryAfterSeconds(req)));
                 onError?.Invoke(err);
                 yield break;
             }
@@ -312,6 +393,12 @@ namespace Blockmaker
             try
             {
                 var result = JsonUtility.FromJson<ServerSignResult>(req.downloadHandler.text);
+                if (result == null || !result.success || string.IsNullOrEmpty(result.signedTxnBase64))
+                {
+                    onError?.Invoke(result?.error ?? "The transaction could not be signed. Start the action again from the game.");
+                    yield break;
+                }
+                ForgetSigningIntent(txnGroup);
                 onSigned?.Invoke(result.signedTxnBase64);
             }
             catch (Exception e)
@@ -328,9 +415,19 @@ namespace Blockmaker
             Action<string>   onError,
             Action<BlockmakerError> onBlockmakerError = null)
         {
+            if (!RequireReady(onError)) yield break;
+            var signingIntent = FindSigningIntent(unsignedTxnsBase64);
+            if (string.IsNullOrEmpty(signingIntent))
+            {
+                const string message = "This transaction request is missing its Blockmaker authorization. Start the action again from the game.";
+                onBlockmakerError?.Invoke(new BlockmakerError("TX_INTENT_REQUIRED", message, 403));
+                onError?.Invoke(message);
+                yield break;
+            }
+
             string url  = $"{_baseUrl}/v1/auth/sign";
             string body = JsonUtility.ToJson(new ServerSignRequest
-                { unsignedTxnsBase64 = unsignedTxnsBase64 });
+                { unsignedTxnsBase64 = unsignedTxnsBase64, signingIntent = signingIntent, gameId = _gameId });
 
             using var req = new UnityWebRequest(url, "POST")
             {
@@ -338,7 +435,7 @@ namespace Blockmaker
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(config.longRequestTimeoutSeconds)
             };
-            req.SetRequestHeader("Content-Type",  "application/json");
+            ApplyCommonHeaders(req, true);
             req.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
 
             yield return req.SendWebRequest();
@@ -347,6 +444,7 @@ namespace Blockmaker
             {
                 string err = "Something went wrong. Please try again.";
                 string code = "";
+                string requestId = req.GetResponseHeader("X-Request-ID") ?? "";
                 try
                 {
                     var respBody = req.downloadHandler?.text;
@@ -359,11 +457,12 @@ namespace Blockmaker
                             err = parsed.error;
                         }
                         code = parsed.code ?? "";
+                        if (!string.IsNullOrEmpty(parsed.requestId)) requestId = parsed.requestId;
                     }
                 }
                 catch (Exception parseEx) { BlockmakerLog.Warning($"[BlockmakerClient] Error response parse failed: {parseEx.Message}"); }
                 BlockmakerLog.Error($"[BlockmakerClient] Sign HTTP {req.responseCode}: {req.error}");
-                onBlockmakerError?.Invoke(new BlockmakerError(code, err, (int)req.responseCode));
+                onBlockmakerError?.Invoke(new BlockmakerError(code, err, (int)req.responseCode, requestId, RetryAfterSeconds(req)));
                 onError?.Invoke(err);
                 yield break;
             }
@@ -371,6 +470,12 @@ namespace Blockmaker
             try
             {
                 var result = JsonUtility.FromJson<ServerSignResult>(req.downloadHandler.text);
+                if (result == null || !result.success || result.signedTxnsBase64 == null || result.signedTxnsBase64.Length == 0)
+                {
+                    onError?.Invoke(result?.error ?? "The transactions could not be signed. Start the action again from the game.");
+                    yield break;
+                }
+                ForgetSigningIntent(unsignedTxnsBase64);
                 onSigned?.Invoke(result.signedTxnsBase64);
             }
             catch (Exception e)
@@ -447,8 +552,15 @@ namespace Blockmaker
         /// </summary>
         public void Post<TReq, TRes>(string path, TReq body, float timeoutSeconds, Action<TRes> onSuccess = null, Action<string> onError = null) where TRes : class
         {
+            if (!RequireReady(onError)) return;
+            string url;
+            if (!TryBuildApiUrl(path, out url))
+            {
+                onError?.Invoke("Blockmaker API paths must start with /v1/ and stay on the configured server.");
+                return;
+            }
             StartCoroutine(PostJsonAuth<TRes>(
-                $"{_baseUrl}{path}", body,
+                url, body,
                 timeoutSeconds,
                 onSuccess, onError
             ));
@@ -457,10 +569,17 @@ namespace Blockmaker
         /// <summary>GET JSON from a server path (auto-appends wallet). Use for game-specific endpoints.</summary>
         public void Get<TRes>(string path, Action<TRes> onSuccess, Action<string> onError = null) where TRes : class
         {
+            if (!RequireReady(onError)) return;
+            string baseRequestUrl;
+            if (!TryBuildApiUrl(path, out baseRequestUrl))
+            {
+                onError?.Invoke("Blockmaker API paths must start with /v1/ and stay on the configured server.");
+                return;
+            }
             string wallet = UnityWebRequest.EscapeURL(BlockmakerAuth.Instance?.Address ?? "");
             string sep = path.Contains("?") ? "&" : "?";
             StartCoroutine(GetJson<TRes>(
-                $"{_baseUrl}{path}{sep}wallet={wallet}",
+                $"{baseRequestUrl}{sep}wallet={wallet}",
                 config.defaultTimeoutSeconds,
                 onSuccess, onError
             ));
@@ -508,7 +627,8 @@ namespace Blockmaker
         /// tied together with a shared Algorand GroupID via the server's assignGroupID.
         /// Sign the returned array as ONE group so an xChain (EVM) LogicSig produces a
         /// SINGLE signature over the shared GroupID (instead of one prompt per asset).
-        /// Algorand caps a group at 16 txns — chunk assetIds at 16 before calling.
+        /// Algorand caps a group at 16 txns. Managed email wallets have a stricter
+        /// server-signing cap of 5, so chunk assetIds at 5 when that tier must work.
         /// onSuccess receives the grouped unsigned txns (base64 msgpack).
         /// </summary>
         public void BuildAssetOptInGroup(long[] assetIds, Action<string[]> onSuccess, Action<string> onError)
@@ -555,6 +675,7 @@ namespace Blockmaker
 
         public void VerifyConnection(Action<bool> onResult)
         {
+            if (!RequireReady(_ => onResult?.Invoke(false))) return;
             StartCoroutine(VerifyConnectionRoutine(onResult));
         }
 
@@ -572,6 +693,7 @@ namespace Blockmaker
         /// </summary>
         public void VerifySessionToken(string sessionToken, Action<bool> onResult)
         {
+            if (!RequireReady(_ => onResult?.Invoke(false))) return;
             StartCoroutine(VerifySessionTokenRoutine(sessionToken, onResult));
         }
 
@@ -582,6 +704,7 @@ namespace Blockmaker
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(config.defaultTimeoutSeconds)
             };
+            ApplyCommonHeaders(req, false);
             req.SetRequestHeader("Authorization", $"Bearer {sessionToken}");
             yield return req.SendWebRequest();
             onResult?.Invoke(req.result == UnityWebRequest.Result.Success);
@@ -593,21 +716,72 @@ namespace Blockmaker
         /// </summary>
         public void RefreshToken(string refreshToken, Action<RefreshTokenResult> onSuccess, Action<string> onError = null)
         {
-            StartCoroutine(RefreshTokenRoutine(refreshToken, onSuccess, onError));
+            if (!RequireReady(onError)) return;
+            refreshToken = (refreshToken ?? "").Trim();
+            if (refreshToken.Length == 0)
+            {
+                onError?.Invoke("Your session has expired. Please sign in again.");
+                return;
+            }
+
+            if (_refreshInProgress)
+            {
+                if (!string.Equals(_refreshTokenInFlight, refreshToken, StringComparison.Ordinal))
+                {
+                    onError?.Invoke("A different player session is already being refreshed. Please try again.");
+                    return;
+                }
+                _refreshWaiters.Add(new RefreshWaiter { onSuccess = onSuccess, onError = onError });
+                return;
+            }
+
+            _refreshInProgress = true;
+            _refreshTokenInFlight = refreshToken;
+            _refreshWaiters.Add(new RefreshWaiter { onSuccess = onSuccess, onError = onError });
+            StartCoroutine(RefreshTokenRoutine(refreshToken));
         }
 
-        private IEnumerator RefreshTokenRoutine(string refreshToken, Action<RefreshTokenResult> onSuccess, Action<string> onError)
+        private IEnumerator RefreshTokenRoutine(string refreshToken)
         {
-            var body = JsonUtility.ToJson(new RefreshTokenRequest { refreshToken = refreshToken });
+            var body = JsonUtility.ToJson(new RefreshTokenRequest { refreshToken = refreshToken, gameId = _gameId });
             using var req = new UnityWebRequest($"{_baseUrl}/v1/auth/refresh", "POST")
             {
                 uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(config.defaultTimeoutSeconds)
             };
-            req.SetRequestHeader("Content-Type", "application/json");
+            ApplyCommonHeaders(req, true);
             yield return req.SendWebRequest();
-            HandleResponse(req, onSuccess, onError);
+            HandleResponse<RefreshTokenResult>(req,
+                result =>
+                {
+                    if (result == null || !result.success || string.IsNullOrEmpty(result.sessionToken) || string.IsNullOrEmpty(result.refreshToken))
+                        CompleteRefresh(null, "Your session could not be refreshed. Please sign in again.");
+                    else
+                        CompleteRefresh(result, null);
+                },
+                error => CompleteRefresh(null, error));
+        }
+
+        private void CompleteRefresh(RefreshTokenResult result, string error)
+        {
+            var waiters = _refreshWaiters.ToArray();
+            _refreshWaiters.Clear();
+            _refreshInProgress = false;
+            _refreshTokenInFlight = null;
+
+            foreach (var waiter in waiters)
+            {
+                try
+                {
+                    if (result != null) waiter.onSuccess?.Invoke(result);
+                    else waiter.onError?.Invoke(error ?? "Your session could not be refreshed. Please sign in again.");
+                }
+                catch (Exception callbackError)
+                {
+                    BlockmakerLog.Warning($"[BlockmakerClient] Refresh callback failed: {callbackError.Message}");
+                }
+            }
         }
 
         /// <summary>
@@ -617,19 +791,20 @@ namespace Blockmaker
         public void ServerLogout(string refreshToken)
         {
             if (string.IsNullOrEmpty(refreshToken)) return;
+            if (!RequireReady(null)) return;
             StartCoroutine(ServerLogoutRoutine(refreshToken));
         }
 
         private IEnumerator ServerLogoutRoutine(string refreshToken)
         {
-            var body = JsonUtility.ToJson(new LogoutRequest { refreshToken = refreshToken });
+            var body = JsonUtility.ToJson(new LogoutRequest { refreshToken = refreshToken, gameId = _gameId });
             using var req = new UnityWebRequest($"{_baseUrl}/v1/auth/logout", "POST")
             {
                 uploadHandler   = new UploadHandlerRaw(Encoding.UTF8.GetBytes(body)),
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(config.defaultTimeoutSeconds)
             };
-            req.SetRequestHeader("Content-Type", "application/json");
+            ApplyCommonHeaders(req, true);
             yield return req.SendWebRequest();
         }
 
@@ -867,12 +1042,14 @@ namespace Blockmaker
             Action<ProfileImageResult>  onSuccess,
             Action<string>              onError = null)
         {
+            if (!RequireReady(onError)) yield break;
             string url = ProfileUrl("/v1/profile/image");
             var form   = new WWWForm();
             form.AddBinaryData("image", imageBytes, filename, mimeType);
 
             using var req = UnityWebRequest.Post(url, form);
             req.timeout = SafeTimeout(config.longRequestTimeoutSeconds);
+            ApplyCommonHeaders(req, false);
             var token = GetSessionToken();
             if (!string.IsNullOrEmpty(token))
                 req.SetRequestHeader("Authorization", $"Bearer {token}");
@@ -1059,7 +1236,7 @@ namespace Blockmaker
             string url, object payload, float timeout,
             Action<T> onSuccess, Action<string> onError) where T : class
         {
-            if (_baseUrl == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+            if (!RequireReady(onError)) yield break;
             string body = JsonUtility.ToJson(payload);
             using var req = new UnityWebRequest(url, "POST")
             {
@@ -1067,7 +1244,7 @@ namespace Blockmaker
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(timeout)
             };
-            req.SetRequestHeader("Content-Type",  "application/json");
+            ApplyCommonHeaders(req, true);
             var token = GetSessionToken();
             if (!string.IsNullOrEmpty(token))
                 req.SetRequestHeader("Authorization", $"Bearer {token}");
@@ -1079,7 +1256,7 @@ namespace Blockmaker
             string url, object payload, float timeout,
             Action<T> onSuccess, Action<string> onError) where T : class
         {
-            if (_baseUrl == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+            if (!RequireReady(onError)) yield break;
             string body = JsonUtility.ToJson(payload);
             using var req = BuildPost(url, body, timeout);
             yield return req.SendWebRequest();
@@ -1090,7 +1267,7 @@ namespace Blockmaker
             string url, float timeout,
             Action<T> onSuccess, Action<string> onError) where T : class
         {
-            if (_baseUrl == null) { onError?.Invoke("Something went wrong. Please restart the game and try again."); yield break; }
+            if (!RequireReady(onError)) yield break;
             using var req = BuildGet(url, timeout);
             // Override with session token so JWT-auth players work on profile endpoints
             var token = GetSessionToken();
@@ -1105,7 +1282,7 @@ namespace Blockmaker
             return Mathf.Max(1, Mathf.RoundToInt(seconds));
         }
 
-        private UnityWebRequest BuildPost(string url, string jsonBody, float timeout)
+        private UnityWebRequest BuildPost(string url, string jsonBody, float timeout, bool includeAuth = true)
         {
             var req = new UnityWebRequest(url, "POST")
             {
@@ -1113,10 +1290,13 @@ namespace Blockmaker
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout         = SafeTimeout(timeout)
             };
-            req.SetRequestHeader("Content-Type",  "application/json");
-            var token = GetAuthHeader();
-            if (!string.IsNullOrEmpty(token))
-                req.SetRequestHeader("Authorization", $"Bearer {token}");
+            ApplyCommonHeaders(req, true);
+            if (includeAuth)
+            {
+                var token = GetAuthHeader();
+                if (!string.IsNullOrEmpty(token))
+                    req.SetRequestHeader("Authorization", $"Bearer {token}");
+            }
             return req;
         }
 
@@ -1124,10 +1304,126 @@ namespace Blockmaker
         {
             var req = UnityWebRequest.Get(url);
             req.timeout = SafeTimeout(timeout);
+            ApplyCommonHeaders(req, false);
             var token = GetAuthHeader();
             if (!string.IsNullOrEmpty(token))
                 req.SetRequestHeader("Authorization", $"Bearer {token}");
             return req;
+        }
+
+        private void ApplyCommonHeaders(UnityWebRequest req, bool jsonContent)
+        {
+            if (jsonContent) req.SetRequestHeader("Content-Type", "application/json");
+            if (!string.IsNullOrEmpty(_gameId)) req.SetRequestHeader("X-Blockmaker-Game", _gameId);
+        }
+
+        private bool TryBuildApiUrl(string path, out string url)
+        {
+            url = null;
+            if (_baseUrl == null || string.IsNullOrEmpty(path)
+                || !path.StartsWith("/v1/", StringComparison.Ordinal)
+                || path.IndexOf('#') >= 0 || path.IndexOf('\r') >= 0 || path.IndexOf('\n') >= 0
+                || path.IndexOf("..", StringComparison.Ordinal) >= 0
+                || path.IndexOf("://", StringComparison.Ordinal) >= 0)
+                return false;
+            url = _baseUrl + path;
+            return true;
+        }
+
+        private static long UnixTimeMilliseconds()
+        {
+            return (long)(DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+        }
+
+        private static string SigningIntentKey(string[] unsignedTxnsBase64)
+        {
+            if (unsignedTxnsBase64 == null || unsignedTxnsBase64.Length == 0) return null;
+            var canonical = new StringBuilder();
+            foreach (var txn in unsignedTxnsBase64)
+            {
+                if (string.IsNullOrEmpty(txn)) return null;
+                canonical.Append(txn.Length).Append(':').Append(txn).Append(';');
+            }
+            using var sha = SHA256.Create();
+            return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(canonical.ToString())));
+        }
+
+        private void RememberSigningIntent(string token, long expiresAt, string[] unsignedTxnsBase64)
+        {
+            var key = SigningIntentKey(unsignedTxnsBase64);
+            var now = UnixTimeMilliseconds();
+            if (key == null || string.IsNullOrWhiteSpace(token) || expiresAt <= now) return;
+            if (_signingIntents.Count >= 64)
+            {
+                var expiredKeys = new List<string>();
+                foreach (var entry in _signingIntents)
+                    if (entry.Value.expiresAt <= now) expiredKeys.Add(entry.Key);
+                foreach (var expiredKey in expiredKeys) _signingIntents.Remove(expiredKey);
+            }
+            if (_signingIntents.Count >= 128)
+            {
+                string oldestKey = null;
+                long oldestExpiry = long.MaxValue;
+                foreach (var entry in _signingIntents)
+                {
+                    if (entry.Value.expiresAt >= oldestExpiry) continue;
+                    oldestKey = entry.Key;
+                    oldestExpiry = entry.Value.expiresAt;
+                }
+                if (oldestKey != null) _signingIntents.Remove(oldestKey);
+            }
+            _signingIntents[key] = new CachedSigningIntent { token = token.Trim(), expiresAt = expiresAt };
+        }
+
+        private void TryRememberSigningIntent(string json)
+        {
+            if (string.IsNullOrEmpty(json) || json.IndexOf("\"signingIntent\"", StringComparison.Ordinal) < 0) return;
+            try
+            {
+                var envelope = JsonUtility.FromJson<SigningIntentEnvelope>(json);
+                if (envelope == null || string.IsNullOrEmpty(envelope.signingIntent)) return;
+                string[] txns = null;
+                if (envelope.unsignedTxnsBase64 != null && envelope.unsignedTxnsBase64.Length > 0)
+                    txns = envelope.unsignedTxnsBase64;
+                else if (envelope.unsignedTxns != null && envelope.unsignedTxns.Length > 0)
+                    txns = envelope.unsignedTxns;
+                else if (!string.IsNullOrEmpty(envelope.unsignedTxnBase64))
+                    txns = new[] { envelope.unsignedTxnBase64 };
+                else if (!string.IsNullOrEmpty(envelope.unsignedOptInTxn))
+                    txns = new[] { envelope.unsignedOptInTxn };
+                RememberSigningIntent(envelope.signingIntent, envelope.signingIntentExpiresAt, txns);
+            }
+            catch (Exception parseError)
+            {
+                BlockmakerLog.Warning($"[BlockmakerClient] Could not read transaction authorization: {parseError.Message}");
+            }
+        }
+
+        private string FindSigningIntent(string[] unsignedTxnsBase64)
+        {
+            var key = SigningIntentKey(unsignedTxnsBase64);
+            if (key == null) return null;
+            CachedSigningIntent cached;
+            if (!_signingIntents.TryGetValue(key, out cached)) return null;
+            if (cached.expiresAt <= UnixTimeMilliseconds())
+            {
+                _signingIntents.Remove(key);
+                return null;
+            }
+            return cached.token;
+        }
+
+        private void ForgetSigningIntent(string[] unsignedTxnsBase64)
+        {
+            var key = SigningIntentKey(unsignedTxnsBase64);
+            if (key != null) _signingIntents.Remove(key);
+        }
+
+        private static int RetryAfterSeconds(UnityWebRequest req)
+        {
+            var value = req.GetResponseHeader("Retry-After");
+            int seconds;
+            return int.TryParse(value, out seconds) && seconds > 0 ? seconds : 0;
         }
 
         private void HandleResponse<T>(
@@ -1147,7 +1443,8 @@ namespace Blockmaker
                     err = "The server is having trouble right now. Please try again in a moment.";
                 else
                     err = "Something went wrong. Please try again.";
-                string code = "NETWORK";
+                string code = req.result == UnityWebRequest.Result.ConnectionError ? "NETWORK" : "HTTP_ERROR";
+                string requestId = req.GetResponseHeader("X-Request-ID") ?? "";
                 int httpStatus = (int)req.responseCode;
                 try
                 {
@@ -1162,13 +1459,14 @@ namespace Blockmaker
                         }
                         if (!string.IsNullOrEmpty(parsed.code))
                             code = parsed.code;
+                        if (!string.IsNullOrEmpty(parsed.requestId)) requestId = parsed.requestId;
                     }
                 }
                 catch (Exception parseEx) { BlockmakerLog.Warning($"[BlockmakerClient] Error response parse failed: {parseEx.Message}"); }
                 BlockmakerLog.Error($"[BlockmakerClient] HTTP {req.responseCode}: {req.error}");
 
                 if (onBlockmakerError != null)
-                    onBlockmakerError.Invoke(new BlockmakerError(code, err, httpStatus));
+                    onBlockmakerError.Invoke(new BlockmakerError(code, err, httpStatus, requestId, RetryAfterSeconds(req)));
                 onError?.Invoke(err);
                 return;
             }
@@ -1180,6 +1478,7 @@ namespace Blockmaker
                     onError?.Invoke("Something went wrong. Please try again.");
                     return;
                 }
+                TryRememberSigningIntent(body);
                 onSuccess?.Invoke(JsonUtility.FromJson<T>(body));
             }
             catch (Exception e)
