@@ -23,7 +23,9 @@ namespace Blockmaker
     ///   Pera — uses a native WalletConnect v1 client (WalletConnectV1Client)
     ///   that connects directly to Pera's bridge servers, no external SDK needed.
     ///   Defly — uses the Reown SDK (WalletConnect v2).
-    ///   Both paths generate a QR code via OnWalletQRReady for display in the UI.
+    ///   Lute — uses Lute's official browser/extension adapter in WebGL.
+    ///   Pera and Defly generate a QR code via OnWalletQRReady for display in the UI;
+    ///   Lute opens its own protected approval window.
     ///   After the user scans and approves, OnIdentityChanged fires with the address.
     ///
     ///   Requires a WalletConnect Project ID for Defly/EVM — get one free at:
@@ -51,6 +53,7 @@ namespace Blockmaker
         // ── Provider constants ─────────────────────────────────────────────────────
         public const string ProviderPera  = "Pera";
         public const string ProviderDefly = "Defly";
+        public const string ProviderLute  = "Lute";
 
         // ── Events ─────────────────────────────────────────────────────────────────
 
@@ -455,6 +458,13 @@ namespace Blockmaker
 
         private void Start()
         {
+#if UNITY_WEBGL && !UNITY_EDITOR
+            // Warm the official Lute adapter before the player clicks it. Lute's
+            // approval window must be opened synchronously from that click, so the
+            // click path never waits on a CDN import. NFTURBO normally satisfies
+            // this from its vendored adapter; this is the generic SDK fallback.
+            BlockmakerWalletBridge.LuteJsPrepare();
+#endif
             if (!TryRestoreSession())
             {
                 SetIdentity(new GuestIdentity());
@@ -512,7 +522,7 @@ namespace Blockmaker
                 return true;
             }
 
-            foreach (var provider in new[] { "Pera", "Defly" })
+            foreach (var provider in new[] { ProviderPera, ProviderDefly, ProviderLute })
             {
                 var data = WalletConnectIdentity.TryLoadSessionData(provider);
                 if (data != null)
@@ -587,6 +597,18 @@ namespace Blockmaker
                 // identity in place rather than downgrading to Guest.
                 if (isWallet)
                 {
+                    // Lute has no silent signing session: every approval is a fresh,
+                    // user-opened browser/extension surface. A tokenless remembered
+                    // address must return to the sign-in picker instead of trying to
+                    // open a popup during boot, which browsers correctly block.
+                    if (Identity is LuteIdentity lute)
+                    {
+                        BlockmakerLog.Info("[BlockmakerAuth] Remembered Lute identity has no valid session — fresh player sign-in required.");
+                        lute.ClearSession();
+                        SetIdentity(new GuestIdentity());
+                        SettleSessionRestore();
+                        return;
+                    }
                     BlockmakerLog.Info("[BlockmakerAuth] Restored wallet session has no JWT yet — will sign in once the connection is ready.");
                     // Settled as "no valid token right now" — a later relay-gated wallet login
                     // that lands a JWT announces itself via OnIdentityChanged (allowed upgrade).
@@ -648,7 +670,14 @@ namespace Blockmaker
                     // gated TriggerWalletLogin path (TryReconnectWalletSessions / reconnect / restore
                     // callbacks) re-acquires a JWT once the connection is ready.
                     // Email/Magic keep the original behavior: a failed refresh means re-login.
-                    if (capturedIdentity is WalletConnectIdentity cwc)
+                    if (capturedIdentity is LuteIdentity lute)
+                    {
+                        BlockmakerLog.Info($"[BlockmakerAuth] Lute session expired — fresh player sign-in required: {err}");
+                        lute.ClearSession();
+                        SetIdentity(new GuestIdentity());
+                        SafeInvoke(OnAuthError, "Your Lute sign-in expired. Connect Lute again to continue.");
+                    }
+                    else if (capturedIdentity is WalletConnectIdentity cwc)
                     {
                         BlockmakerLog.Info($"[BlockmakerAuth] Wallet token refresh failed — keeping identity, will re-sign when relay is ready: {err}");
                         cwc.ClearTokens();
@@ -864,6 +893,7 @@ namespace Blockmaker
         ///
         /// Pera: uses native WalletConnect v1 on all platforms.
         /// Defly: uses Reown SDK (WalletConnect v2); falls back to JS bridge on WebGL.
+        /// Lute: uses the official browser/extension adapter in WebGL.
         ///
         /// OnWalletQRReady fires with the QR code for display.
         /// onSuccess / OnIdentityChanged fire when the user approves.
@@ -882,10 +912,11 @@ namespace Blockmaker
             }
 
             if (!provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase) &&
-                !provider.Equals(ProviderDefly, StringComparison.OrdinalIgnoreCase))
+                !provider.Equals(ProviderDefly, StringComparison.OrdinalIgnoreCase) &&
+                !provider.Equals(ProviderLute, StringComparison.OrdinalIgnoreCase))
             {
-                BlockmakerLog.Error($"[BlockmakerAuth] Unknown wallet provider '{provider}'. Supported: \"{ProviderPera}\", \"{ProviderDefly}\".");
-                onError?.Invoke($"Unknown wallet provider \"{provider}\". Please use Pera or Defly.");
+                BlockmakerLog.Error($"[BlockmakerAuth] Unknown wallet provider '{provider}'. Supported: \"{ProviderPera}\", \"{ProviderDefly}\", \"{ProviderLute}\".");
+                onError?.Invoke($"Unknown wallet provider \"{provider}\". Please use Pera, Defly or Lute.");
                 return;
             }
 
@@ -893,6 +924,27 @@ namespace Blockmaker
             _isWalletConnecting    = true;
             _pendingConnectSuccess = onSuccess;
             _pendingConnectError   = onError;
+
+            if (provider.Equals(ProviderLute, StringComparison.OrdinalIgnoreCase))
+            {
+    #if UNITY_WEBGL && !UNITY_EDITOR
+                BlockmakerWalletBridge.LuteJsConnect(
+                    gameObject.name,
+                    nameof(OnWalletConnectedFromJS),
+                    nameof(OnWalletErrorFromJS));
+                StartWebGLTimeout(WalletSignTimeout, () =>
+                {
+                    if (_isWalletConnecting) FailWalletConnection("Lute did not respond in time. Please try again.");
+                });
+    #else
+                _isWalletConnecting = false;
+                IsAuthenticating = false;
+                _pendingConnectSuccess = null;
+                _pendingConnectError = null;
+                onError?.Invoke("Lute is available in the WebGL version of this game.");
+    #endif
+                return;
+            }
 
             if (provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase))
             {
@@ -1200,7 +1252,19 @@ namespace Blockmaker
 
                 SetIdentity(identity);
                 identity.SaveSession();
-                TriggerWalletLogin(identity);
+                if (identity is LuteIdentity)
+                {
+                    // Lute's sign-in proof needs a second browser approval window.
+                    // Do not attempt to open it from this async connection callback;
+                    // browsers would block it. The step-two UI asks the player to
+                    // continue, and RetryWalletLogin primes the window from that click.
+                    SafeInvoke(OnAuthStatus,
+                        "Lute is connected. Continue in Lute to approve the free sign-in request.");
+                }
+                else
+                {
+                    TriggerWalletLogin(identity);
+                }
 
                 if (prevTier < IdentityTier.SelfCustody)
                     SafeInvoke(OnIdentityUpgraded, identity, prevTier);
@@ -2280,7 +2344,9 @@ namespace Blockmaker
                             // previously only logged, leaving the panel silently pulsing
                             // "approve the request" with no hint anything went wrong.
                             SafeInvoke(OnAuthStatus,
-                                "Sign-in request was declined or failed — use RESEND to try again, or CANCEL.");
+                                wc is LuteIdentity
+                                    ? "Sign-in request was declined or failed — choose CONTINUE WITH LUTE to try again, or CANCEL."
+                                    : "Sign-in request was declined or failed — use RESEND to try again, or CANCEL.");
                         });
                 }
                 else if (identity is EvmXChainIdentity evm)
@@ -2360,12 +2426,51 @@ namespace Blockmaker
             BlockmakerLog.Info("[BlockmakerAuth] Retrying wallet sign-in — abandoning the previous attempt and sending a fresh request.");
             AbandonWalletLoginAttempt();
 
+            // Lute needs a browser window opened directly from this button click. The
+            // challenge and exact zero-value sign-in transaction are prepared after
+            // the click; lute-connect reuses this named window when signing begins.
+            if (Identity is LuteIdentity && !PrimeWalletApprovalWindow())
+            {
+                SafeInvoke(OnAuthStatus,
+                    "Your browser blocked Lute. Allow popups for this game, then choose CONTINUE WITH LUTE again.");
+                return;
+            }
+
             // Fresh attempt. For WalletConnect identities TriggerWalletLogin itself fires the
             // "Connected! Now approve the sign-in request…" OnAuthStatus message; EVM xChain
             // has no message in the trigger path, so give the UI equivalent feedback here.
             if (Identity is EvmXChainIdentity)
                 SafeInvoke(OnAuthStatus, "Approve the sign-in request in your wallet…");
             TriggerWalletLogin(Identity);
+        }
+
+        /// <summary>
+        /// Reserve a wallet approval surface directly from the current player click.
+        /// Only Lute WebGL needs this because its web signer opens a separate window;
+        /// other wallets return true without doing anything. Games should call this
+        /// at the start of a click that will prepare a transaction asynchronously.
+        /// No transaction or account data is sent by this method.
+        /// </summary>
+        public bool PrimeWalletApprovalWindow()
+        {
+            if (!(Identity is LuteIdentity)) return true;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            return BlockmakerWalletBridge.LuteJsPrimeSignWindow() == 1;
+#else
+            return false;
+#endif
+        }
+
+        /// <summary>
+        /// Close a Lute approval window that was reserved but never received a
+        /// transaction (for example because preparation failed). No-op otherwise.
+        /// </summary>
+        public void CancelPrimedWalletApprovalWindow()
+        {
+            if (!(Identity is LuteIdentity)) return;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            BlockmakerWalletBridge.LuteJsCancelPrimedSignWindow();
+#endif
         }
 
         /// <summary>
@@ -2410,9 +2515,10 @@ namespace Blockmaker
                 return new DeflyIdentity(address);
             if (provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase))
                 return new PeraIdentity(address);
+            if (provider.Equals(ProviderLute, StringComparison.OrdinalIgnoreCase))
+                return new LuteIdentity(address);
 
-            BlockmakerLog.Warning($"[BlockmakerAuth] Unknown provider '{provider}', defaulting to Pera.");
-            return new PeraIdentity(address);
+            throw new ArgumentException($"Unknown wallet provider '{provider}'.", nameof(provider));
         }
     }
 

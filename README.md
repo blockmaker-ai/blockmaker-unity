@@ -8,6 +8,7 @@ Add Algorand wallet auth and transaction signing to your Unity game. Open-source
 |--------|-------------|
 | **Pera** | QR code scan (WalletConnect v1) |
 | **Defly** | QR code scan (WalletConnect v2) |
+| **Lute** | Browser wallet or extension (WebGL) |
 | **X-Chain** | Any EVM wallet (MetaMask, Rainbow, Coinbase + more) via [xChain Accounts](https://github.com/algorandfoundation/xchain-accounts) |
 | **Email** | Magic SDK (WebGL) or server-managed OTP (all platforms) |
 
@@ -99,6 +100,12 @@ BlockmakerAuth.Instance.ConnectWallet("Defly",
     error    => Debug.Log(error)
 );
 
+// Lute (browser wallet or extension in WebGL)
+BlockmakerAuth.Instance.ConnectWallet("Lute",
+    identity => Debug.Log($"Connected: {identity.Address}"),
+    error    => Debug.Log(error)
+);
+
 // X-Chain — any EVM wallet (MetaMask, Rainbow, Coinbase + more)
 BlockmakerAuth.Instance.ConnectEvm(
     identity => Debug.Log($"Connected: {identity.Address}"),
@@ -142,6 +149,12 @@ and similar purpose-built endpoints). For server-managed email wallets, the SDK 
 binds the builder's short-lived `signingIntent` to those exact bytes and echoes it when signing.
 It refuses arbitrary or expired transaction bytes. Self-custody wallets still show the player the
 normal wallet approval.
+
+Lute's web signer opens a separate approval window. If a button first calls your server to prepare
+a transaction and signs it later, call `BlockmakerAuth.Instance.PrimeWalletApprovalWindow()`
+directly inside that button's click handler before starting the request. It is a no-op for Pera,
+Defly, X-Chain and email wallets. For Lute it reserves the approval window without sending account
+or transaction data, then the exact prepared transaction reuses that window when it is ready.
 
 Managed email wallets can sign at most five transactions in one group. Chunk larger opt-in batches
 at five if the same integration must support both managed and self-custody wallets (Algorand itself

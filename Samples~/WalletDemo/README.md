@@ -9,7 +9,7 @@ A minimal sample showing the Blockmaker wallet system in action.
 3. Add the `WalletDemo` component to it
 4. Hit Play
 
-You'll see a "Connect Wallet" button. Click it to open the wallet selection modal. Connect with Pera, Defly, X-Chain (MetaMask etc.), or email.
+You'll see a "Connect Wallet" button. Click it to open the wallet selection modal. Connect with Pera, Defly, Lute, X-Chain (MetaMask etc.), or email.
 
 ## What this demo does
 

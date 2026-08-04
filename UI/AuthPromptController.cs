@@ -19,8 +19,8 @@ namespace Blockmaker
     ///
     /// The prompt manages five pages:
     ///   page-options       — Email / Wallets buttons
-    ///   page-evm-wallets   — unified "EVM / AVM Wallets" picker: ONE code-built
-    ///                        flat list (Pera + Defly rows always, then the
+        ///   page-evm-wallets   — unified "EVM / AVM Wallets" picker: ONE code-built
+        ///                        flat list (Pera + Defly + Lute rows always, then the
     ///                        discovered/curated EVM rows below — skeleton row while
     ///                        discovery runs, quiet none-found row when empty) plus
     ///                        the CONNECTING (+ error states) pane — see the
@@ -107,6 +107,7 @@ namespace Blockmaker
         private bool _step2ResendCoolingDown;
 
         private const string ResendRequestLabel = "RESEND REQUEST";
+        private const string ContinueLuteLabel  = "CONTINUE WITH LUTE";
         private const string ResendSentLabel    = "SENT - CHECK YOUR WALLET";
         private const long   ResendCooldownMs   = 5000;
 
@@ -571,7 +572,9 @@ namespace Blockmaker
                 string appName = string.IsNullOrEmpty(provider) ? "your wallet" : provider;
                 _lblStep2Body.text = isFailure
                     ? failureMessage
-                    : $"Approve the sign-in request in {appName} — it's a free signature, nothing leaves your wallet.";
+                    : appName == BlockmakerAuth.ProviderLute
+                        ? "Lute is connected. Select CONTINUE WITH LUTE, then approve the free sign-in request. Nothing leaves your wallet."
+                        : $"Approve the sign-in request in {appName} — it's a free signature, nothing leaves your wallet.";
                 _lblStep2Body.EnableInClassList("auth-step2-body--error", isFailure);
             }
             RefreshStepTwoActions();   // keeps RESEND / CANCEL visible after a decline
@@ -592,7 +595,7 @@ namespace Blockmaker
                 _btnStep2Resend.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
                 if (!_step2ResendCoolingDown)
                 {
-                    _btnStep2Resend.text = ResendRequestLabel;
+                    _btnStep2Resend.text = IsCurrentLuteIdentity() ? ContinueLuteLabel : ResendRequestLabel;
                     _btnStep2Resend.SetEnabled(canRetry);
                 }
             }
@@ -610,7 +613,7 @@ namespace Blockmaker
 
             if (_btnStep2Resend == null) return;
             _step2ResendCoolingDown = true;
-            _btnStep2Resend.text = ResendSentLabel;
+            _btnStep2Resend.text = IsCurrentLuteIdentity() ? "LUTE OPENED — FINISH THERE" : ResendSentLabel;
             _btnStep2Resend.SetEnabled(false);
 
             if (_step2ResendCooldown == null)
@@ -622,7 +625,7 @@ namespace Blockmaker
         {
             _step2ResendCoolingDown = false;
             if (_btnStep2Resend == null) return;
-            _btnStep2Resend.text = ResendRequestLabel;
+            _btnStep2Resend.text = IsCurrentLuteIdentity() ? ContinueLuteLabel : ResendRequestLabel;
             _btnStep2Resend.SetEnabled(BlockmakerAuth.CanRetryWalletLogin);
         }
 
@@ -632,7 +635,7 @@ namespace Blockmaker
             _step2ResendCoolingDown = false;
             if (_btnStep2Resend != null)
             {
-                _btnStep2Resend.text = ResendRequestLabel;
+                _btnStep2Resend.text = IsCurrentLuteIdentity() ? ContinueLuteLabel : ResendRequestLabel;
                 _btnStep2Resend.SetEnabled(true);
             }
         }
@@ -681,6 +684,11 @@ namespace Blockmaker
             if (identity is WalletConnectIdentity wc)  return string.IsNullOrEmpty(wc.SessionToken);
             if (identity is EvmXChainIdentity   evm)   return string.IsNullOrEmpty(evm.SessionToken);
             return false;
+        }
+
+        private static bool IsCurrentLuteIdentity()
+        {
+            return BlockmakerAuth.Instance?.Identity is LuteIdentity;
         }
 
         private string CurrentWalletProviderName()
@@ -1015,7 +1023,7 @@ namespace Blockmaker
             ("Trust Wallet",    "T", 160f, "wallet-logo--trust"),
         };
 
-        /// The Pera (RECOMMENDED) + Defly rows that top the unified list on every
+        /// The Pera + Defly + Lute rows that top the unified list on every
         /// platform. Added immediately on page open — never animated, never rebuilt
         /// by discovery.
         private void BuildBaseWalletRows()
@@ -1031,6 +1039,62 @@ namespace Blockmaker
                 "Defly Wallet", null, WalletBadge.None,
                 (icon, glyph) => icon.AddToClassList("auth-btn-icon--defly"),
                 () => BeginWalletConnect("Defly")));
+
+            _evmWalletList.Add(BuildWalletRow(
+                "Lute Wallet", "Browser or extension", WalletBadge.None,
+                (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, "L", 285f),
+                BeginLuteConnect));
+        }
+
+        /// <summary>
+        /// Lute opens its own browser/extension surface and must be called directly
+        /// from this click. Do not put it through the delayed EVM coroutine: delaying
+        /// would discard the browser's popup permission.
+        /// </summary>
+        private void BeginLuteConnect()
+        {
+            if (WalletConnectBusy()) return;
+            if (BlockmakerAuth.Instance == null)
+            {
+                SetStatus("Unable to connect right now. Please restart the game.", isError: true);
+                return;
+            }
+
+            var lute = new EvmWalletEntry
+            {
+                rdns = "blockmaker:lute",
+                name = "Lute",
+                icon = string.Empty
+            };
+            _evmSelectedWallet = lute;
+            if (_evmConnectIcon != null && _lblEvmConnectGlyph != null)
+                ApplyCuratedWalletIcon(_evmConnectIcon, _lblEvmConnectGlyph, "L", 285f);
+            if (_lblEvmConnectTitle != null) _lblEvmConnectTitle.text = "Opening Lute…";
+            SetEvmConnectBody("Choose the Algorand account you want to use in the Lute window.", isError: false);
+            if (_btnEvmRetry  != null) _btnEvmRetry.style.display = DisplayStyle.None;
+            if (_btnEvmCancel != null) _btnEvmCancel.text = "CANCEL";
+            ShowEvmState(EvmPageState.Connecting);
+
+            StartConnectTimeout(msg =>
+            {
+                if (this != null && _evmState == EvmPageState.Connecting)
+                    SetEvmConnectBody(msg, isError: false);
+            });
+
+            BlockmakerAuth.Instance.ConnectWallet(
+                BlockmakerAuth.ProviderLute,
+                onSuccess: _ =>
+                {
+                    if (this == null) return;
+                    StopConnectTimeout();
+                },
+                onError: err =>
+                {
+                    if (this == null) return;
+                    StopConnectTimeout();
+                    if (_evmState == EvmPageState.Connecting)
+                        ShowEvmConnectError(err, lute);
+                });
         }
 
         /// Discovered (EIP-6963) rows, appended below Pera/Defly in _evmWallets
@@ -1442,6 +1506,12 @@ namespace Blockmaker
         private void OnEvmRetryClicked()
         {
             if (_evmSelectedWallet == null) return;
+            if (_evmSelectedWallet.rdns == "blockmaker:lute")
+            {
+                BlockmakerAuth.Instance?.CancelWalletConnect();
+                BeginLuteConnect();
+                return;
+            }
             BlockmakerAuth.Instance?.CancelEvmConnect();
             BeginEvmWalletConnect(_evmSelectedWallet);
         }
@@ -1450,7 +1520,10 @@ namespace Blockmaker
         {
             CancelEvmConnectDelay();
             StopConnectTimeout();
-            BlockmakerAuth.Instance?.CancelEvmConnect();
+            if (_evmSelectedWallet?.rdns == "blockmaker:lute")
+                BlockmakerAuth.Instance?.CancelWalletConnect();
+            else
+                BlockmakerAuth.Instance?.CancelEvmConnect();
             _evmSelectedWallet = null;
 
             // The connecting pane is only reachable from a row on the unified list,

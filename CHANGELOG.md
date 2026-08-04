@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.1] - 2026-08-04
+
+### Added
+- Add first-class Lute browser and extension connection, session, single-transaction signing, and atomic-group signing for WebGL.
+- Add a popup-safe approval-window priming API for flows that prepare exact transaction bytes asynchronously after a player click.
+
+### Security
+- Keep Lute isolated from WalletConnect session state so a stale Pera or Defly session cannot sign for a selected Lute identity.
+- Fail closed on rejected, incomplete, timed-out, or malformed Lute signing responses; no partial transaction group is returned.
+
 ## [2.0.0] - 2026-07-21
 
 ### Security
