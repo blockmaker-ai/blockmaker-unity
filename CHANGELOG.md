@@ -2,9 +2,17 @@
 
 ## [2.0.1] - 2026-08-15
 
+### Added
+- Add first-class Lute browser and extension connection, session, single-transaction signing, and atomic-group signing for WebGL.
+- Add a popup-safe approval-window priming API for flows that prepare exact transaction bytes asynchronously after a player click.
+
 ### Fixed
 - Keep temporary Magic email outages, disabled-provider states, and website-binding failures actionable in player UI while preventing unknown server diagnostics from being rendered
 - Classify direct Magic/browser login and signing failures into safe cancellation, timeout, network, and availability messages without logging Magic email/address identifiers or raw provider exceptions
+
+### Security
+- Keep Lute isolated from WalletConnect session state so a stale Pera or Defly session cannot sign for a selected Lute identity.
+- Fail closed on rejected, incomplete, timed-out, or malformed Lute signing responses; no partial transaction group is returned.
 
 ## [2.0.0] - 2026-07-21
 
