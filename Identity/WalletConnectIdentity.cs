@@ -141,6 +141,58 @@ namespace Blockmaker
                 yield break;
             }
 
+    #if UNITY_WEBGL && !UNITY_EDITOR
+            // Lute is a browser/extension signer, not a WalletConnect session.
+            // Route it before WCv1/Reown so a stale wallet session can never sign
+            // on behalf of the selected Lute identity.
+            if (ProviderName == BlockmakerAuth.ProviderLute)
+            {
+                if (!IsValidBase64(unsignedTxnBase64) || BlockmakerAuth.Instance == null)
+                {
+                    onError?.Invoke("Something went wrong preparing the transaction. Please try again.");
+                    yield break;
+                }
+
+                int luteSignGen = BlockmakerAuth.Instance.BeginPendingSign();
+                BlockmakerWalletBridge.LuteJsSignTransaction(
+                    unsignedTxnBase64,
+                    BlockmakerAuth.Instance.gameObject.name,
+                    nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
+                    nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS));
+
+                float luteElapsed = 0f;
+                while (BlockmakerAuth.Instance != null &&
+                       BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen) &&
+                       BlockmakerAuth.Instance.PendingSignedTxn == null &&
+                       BlockmakerAuth.Instance.PendingSignError == null &&
+                       luteElapsed < BlockmakerAuth.WalletSignTimeout)
+                {
+                    luteElapsed += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+
+                if (BlockmakerAuth.Instance == null ||
+                    !BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen))
+                {
+                    onError?.Invoke("The request was interrupted. Please try again.");
+                    yield break;
+                }
+
+                if (BlockmakerAuth.Instance.PendingSignedTxn == null &&
+                    BlockmakerAuth.Instance.PendingSignError == null)
+                {
+                    onError?.Invoke("Lute did not respond in time. Nothing was submitted. Please try again.");
+                    yield break;
+                }
+
+                string luteResult = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
+                string luteError  = BlockmakerAuth.Instance.ConsumePendingSignError();
+                if (luteResult != null) onSigned?.Invoke(luteResult);
+                else onError?.Invoke(luteError ?? "Lute could not complete the request. Nothing was submitted.");
+                yield break;
+            }
+    #endif
+
             string result = null;
             string error  = null;
             bool   done   = false;
@@ -325,6 +377,72 @@ namespace Blockmaker
                 onError?.Invoke("Something went wrong. Please try again.");
                 yield break;
             }
+
+            for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+            {
+                if (!IsValidBase64(unsignedTxnsBase64[i]))
+                {
+                    onError?.Invoke("Something went wrong preparing the transaction. Please try again.");
+                    yield break;
+                }
+            }
+
+    #if UNITY_WEBGL && !UNITY_EDITOR
+            if (ProviderName == BlockmakerAuth.ProviderLute)
+            {
+                if (BlockmakerAuth.Instance == null)
+                {
+                    onError?.Invoke("Something went wrong. Please restart the game and try again.");
+                    yield break;
+                }
+
+                string luteTxnsJson = "[";
+                for (int i = 0; i < unsignedTxnsBase64.Length; i++)
+                {
+                    if (i > 0) luteTxnsJson += ",";
+                    luteTxnsJson += $"\"{unsignedTxnsBase64[i]}\"";
+                }
+                luteTxnsJson += "]";
+
+                int luteSignGen = BlockmakerAuth.Instance.BeginPendingSign();
+                BlockmakerWalletBridge.LuteJsSignGroupTransaction(
+                    luteTxnsJson,
+                    BlockmakerAuth.Instance.gameObject.name,
+                    nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
+                    nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS));
+
+                float luteElapsed = 0f;
+                while (BlockmakerAuth.Instance != null &&
+                       BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen) &&
+                       BlockmakerAuth.Instance.PendingSignedTxns == null &&
+                       BlockmakerAuth.Instance.PendingSignError == null &&
+                       luteElapsed < BlockmakerAuth.WalletSignTimeout)
+                {
+                    luteElapsed += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+
+                if (BlockmakerAuth.Instance == null ||
+                    !BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen))
+                {
+                    onError?.Invoke("The request was interrupted. Please try again.");
+                    yield break;
+                }
+
+                if (BlockmakerAuth.Instance.PendingSignedTxns == null &&
+                    BlockmakerAuth.Instance.PendingSignError == null)
+                {
+                    onError?.Invoke("Lute did not respond in time. Nothing was submitted. Please try again.");
+                    yield break;
+                }
+
+                string[] luteResults = BlockmakerAuth.Instance.ConsumePendingSignedTxns();
+                string luteError = BlockmakerAuth.Instance.ConsumePendingSignError();
+                if (luteResults != null) onSigned?.Invoke(luteResults);
+                else onError?.Invoke(luteError ?? "Lute could not complete the request. Nothing was submitted.");
+                yield break;
+            }
+    #endif
 
             string[] results = null;
             string   error   = null;
@@ -765,6 +883,12 @@ namespace Blockmaker
     {
         public override string ProviderName => "Defly";
         public DeflyIdentity(string address) : base(address) { }
+    }
+
+    public class LuteIdentity : WalletConnectIdentity
+    {
+        public override string ProviderName => "Lute";
+        public LuteIdentity(string address) : base(address) { }
     }
 
 }

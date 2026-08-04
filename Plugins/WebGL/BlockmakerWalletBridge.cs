@@ -111,6 +111,51 @@ namespace Blockmaker
         [DllImport("__Internal")]
         public static extern void PeraJsDisconnect();
 
+        // ── Lute browser / extension wallet ───────────────────────────────────────
+
+        /// <summary>
+        /// Connect to Lute on Algorand mainnet. This must be invoked directly from
+        /// a player click so the browser is allowed to open Lute's approval window.
+        /// successCallback receives "Lute:address".
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void LuteJsPrepare();
+
+        /// <summary>
+        /// Open Lute's signing window from the current browser click so a later
+        /// server-prepared transaction can reuse it. Returns 1 when ready (or when
+        /// the Lute extension is installed), 0 when the browser blocked the window.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern int LuteJsPrimeSignWindow();
+
+        [DllImport("__Internal")]
+        public static extern void LuteJsCancelPrimedSignWindow();
+
+        [DllImport("__Internal")]
+        public static extern void LuteJsConnect(
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        [DllImport("__Internal")]
+        public static extern void LuteJsSignTransaction(
+            string txnBase64,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        [DllImport("__Internal")]
+        public static extern void LuteJsSignGroupTransaction(
+            string txnsJson,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>Forget Blockmaker's in-page Lute adapter state. Lute keeps its own wallet.</summary>
+        [DllImport("__Internal")]
+        public static extern void LuteJsDisconnect();
+
         // ── Magic SDK ──────────────────────────────────────────────────────────────
 
         [DllImport("__Internal")]
@@ -302,6 +347,25 @@ namespace Blockmaker
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsSignGroupTransaction — not in WebGL.");
 
         public static void PeraJsDisconnect() { }
+
+        // ── Lute browser wallet stubs ─────────────────────────────────────────────
+
+        public static void LuteJsConnect(string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsConnect — Lute is available in WebGL builds only.");
+
+        public static void LuteJsPrepare() { }
+
+        public static int LuteJsPrimeSignWindow() => 0;
+
+        public static void LuteJsCancelPrimedSignWindow() { }
+
+        public static void LuteJsSignTransaction(string txn, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsSignTransaction — Lute is available in WebGL builds only.");
+
+        public static void LuteJsSignGroupTransaction(string txnsJson, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsSignGroupTransaction — Lute is available in WebGL builds only.");
+
+        public static void LuteJsDisconnect() { }
 
         // ── Magic SDK stubs ────────────────────────────────────────────────────────
 

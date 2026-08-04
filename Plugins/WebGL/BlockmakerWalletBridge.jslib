@@ -42,6 +42,11 @@
  *                      with algosdk, as Pera's signTransaction API requires).
  * PeraJsDisconnect   — Ends the Pera JS session.
  *
+ * ── Lute (browser / extension wallet) ──────────────────────────────────────
+ * LuteJsConnect / LuteJsSignTransaction / LuteJsSignGroupTransaction
+ *                    — Uses the official lute-connect adapter. NFTURBO vendors
+ *                      the pinned adapter; other games get a pinned CDN fallback.
+ *
  * ── Magic SDK (Email Wallet) ────────────────────────────────────────────────
  * MagicLoginWithEmail — Loads Magic SDK, starts email OTP login, returns
  *                       "Magic|address|email|didToken" on success.
@@ -337,9 +342,14 @@ mergeInto(LibraryManager.library, {
    * Disconnect — ends the active session.
    * provider is accepted for API consistency but WC v2 has one session at a time.
    */
-  Disconnect__deps: ['CancelWalletQR', 'PeraJsDisconnect'],
+  Disconnect__deps: ['CancelWalletQR', 'PeraJsDisconnect', 'LuteJsDisconnect'],
   Disconnect: function(providerPtr) {
     var provider = UTF8ToString(providerPtr);
+    if (provider.toLowerCase() === 'lute') {
+      _LuteJsDisconnect();
+      console.log('[BlockmakerWalletBridge] Lute page state cleared.');
+      return;
+    }
     _CancelWalletQR();
     // Also end the official Pera JS SDK session if one exists (WebGL Pera path)
     _PeraJsDisconnect();
@@ -909,6 +919,248 @@ mergeInto(LibraryManager.library, {
       try { window._bmPeraWallet.disconnect().catch(function() {}); } catch(e) {}
       console.log('[BlockmakerWalletBridge] Pera JS session disconnected.');
     }
+  },
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // ══  Lute browser / extension wallet  ═════════════════════════════════════
+  // ══════════════════════════════════════════════════════════════════════════
+  //
+  // Lute's official adapter opens its approval surface synchronously from
+  // connect()/signTxns(). LuteJsConnect and the signing functions therefore do
+  // not await a network import before invoking it: a vendored adapter is used
+  // immediately when present, and LuteJsPrepare warms the pinned CDN fallback
+  // during game boot. If loading has not finished, the player gets a clear retry
+  // message rather than a browser-blocked popup or an ambiguous timeout.
+
+  $bmLuteClass: function() {
+    var vendor = window.BmLuteVendor;
+    if (!vendor) return window._bmLuteWalletClass || null;
+    var LuteConnect = vendor.default || vendor.LuteConnect || vendor;
+    if (typeof LuteConnect !== 'function') return null;
+    window._bmLuteWalletClass = LuteConnect;
+    return LuteConnect;
+  },
+
+  $loadLuteConnect__deps: ['$bmLuteClass'],
+  $loadLuteConnect: function() {
+    var vendored = bmLuteClass();
+    if (vendored) return Promise.resolve(vendored);
+    if (window._bmLutePromise && !window._bmLuteFailed) return window._bmLutePromise;
+    window._bmLuteFailed = false;
+    window._bmLutePromise = Promise.race([
+      import('https://cdn.jsdelivr.net/npm/lute-connect@2.0.1/+esm'),
+      new Promise(function(resolve, reject) {
+        setTimeout(function() { reject(new Error('Lute wallet adapter load timed out after 20s')); }, 20000);
+      })
+    ]).then(function(mod) {
+      var LuteConnect = mod.default || mod.LuteConnect;
+      if (typeof LuteConnect !== 'function') throw new Error('LuteConnect not found in module');
+      window._bmLuteWalletClass = LuteConnect;
+      return LuteConnect;
+    }).catch(function(err) {
+      window._bmLuteFailed = true;
+      throw err;
+    });
+    return window._bmLutePromise;
+  },
+
+  $getLuteWallet__deps: ['$bmLuteClass'],
+  $getLuteWallet: function() {
+    var LuteConnect = bmLuteClass();
+    if (!LuteConnect) return null;
+    if (!window._bmLuteWallet) {
+      window._bmLuteWallet = new LuteConnect(document.title || 'Blockmaker game');
+    }
+    return window._bmLuteWallet;
+  },
+
+  $bmLuteError: function(err, action) {
+    var message = (err && err.message) ? String(err.message) : 'Lute could not complete the request.';
+    var code = err && err.code != null ? String(err.code) : '';
+    if (code === '4100' || /reject|cancel|declin|closed/i.test(message))
+      return 'The request was not approved in Lute. Nothing was submitted.';
+    if (/popup|pop-up|blocked/i.test(message))
+      return 'Your browser blocked the Lute window. Allow popups for this game, then try again.';
+    if (/network|fetch|offline|timeout|timed out/i.test(message))
+      return 'Lute could not be reached. Check your connection and try again.';
+    return action + ' could not be completed in Lute. Please try again.';
+  },
+
+  $bmLuteSignedBytes__deps: ['$bmUint8ToBase64'],
+  $bmLuteSignedBytes: function(value) {
+    if (!value) return null;
+    if (typeof value === 'string') return value;
+    try {
+      var bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+      return bytes.length > 0 ? bmUint8ToBase64(bytes) : null;
+    } catch(e) {
+      return null;
+    }
+  },
+
+  LuteJsPrepare__deps: ['$loadLuteConnect'],
+  LuteJsPrepare: function() {
+    loadLuteConnect().catch(function(err) {
+      console.warn('[BlockmakerWalletBridge] Lute adapter preload failed:', err && err.message ? err.message : err);
+    });
+  },
+
+  /**
+   * Reserve Lute's named signing window synchronously from a player click. The
+   * official adapter later calls window.open() with the same name, so it reuses
+   * this already-authorized window after the server has prepared the exact txn.
+   * This carries no transaction data and auto-closes if no sign starts promptly.
+   */
+  LuteJsPrimeSignWindow__deps: ['$getLuteWallet'],
+  LuteJsPrimeSignWindow: function() {
+    if (window.lute) return 1; // extension path needs no browser popup
+    var wallet = getLuteWallet();
+    if (!wallet) return 0;
+    try {
+      if (window._bmLutePrimedWindow && !window._bmLutePrimedWindow.closed) return 1;
+      var left = 100 + (window.screenX || 0);
+      var top  = 100 + (window.screenY || 0);
+      var params = 'width=500,height=750,left=' + left + ',top=' + top;
+      var win = window.open('https://lute.app/sign', wallet.siteName || document.title || 'Blockmaker game', params);
+      if (!win) return 0;
+      window._bmLutePrimedWindow = win;
+      if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+      window._bmLutePrimeTimer = setTimeout(function() {
+        try {
+          if (window._bmLutePrimedWindow && !window._bmLutePrimedWindow.closed)
+            window._bmLutePrimedWindow.close();
+        } catch(e) {}
+        window._bmLutePrimedWindow = null;
+        window._bmLutePrimeTimer = null;
+      }, 90000);
+      return 1;
+    } catch(e) {
+      return 0;
+    }
+  },
+
+  LuteJsCancelPrimedSignWindow: function() {
+    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+    try {
+      if (window._bmLutePrimedWindow && !window._bmLutePrimedWindow.closed)
+        window._bmLutePrimedWindow.close();
+    } catch(e) {}
+    window._bmLutePrimeTimer = null;
+    window._bmLutePrimedWindow = null;
+  },
+
+  LuteJsConnect__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteError'],
+  LuteJsConnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var wallet = getLuteWallet();
+
+    if (!wallet) {
+      loadLuteConnect().catch(function() {});
+      SendMessage(gameObjectName, errorCb, 'Lute is still loading. Wait a moment, then choose Lute again.');
+      return;
+    }
+
+    wallet.connect('mainnet-v1.0')
+      .then(function(addresses) {
+        var address = Array.isArray(addresses) && addresses.length > 0 ? addresses[0] : '';
+        if (!address) {
+          SendMessage(gameObjectName, errorCb, 'Lute did not return an Algorand account. Choose an account and try again.');
+          return;
+        }
+        window._bmLuteAddress = address;
+        SendMessage(gameObjectName, successCb, 'Lute:' + address);
+      })
+      .catch(function(err) {
+        SendMessage(gameObjectName, errorCb, bmLuteError(err, 'The connection'));
+      });
+  },
+
+  LuteJsSignTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignTransaction: function(txnBase64Ptr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnBase64      = UTF8ToString(txnBase64Ptr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var wallet = getLuteWallet();
+
+    if (!wallet) {
+      loadLuteConnect().catch(function() {});
+      SendMessage(gameObjectName, errorCb, 'Lute is still loading. Wait a moment, then try again.');
+      return;
+    }
+
+    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+    window._bmLutePrimeTimer = null;
+    window._bmLutePrimedWindow = null;
+
+    wallet.signTxns([{ txn: txnBase64 }])
+      .then(function(signed) {
+        var encoded = Array.isArray(signed) && signed.length === 1 ? bmLuteSignedBytes(signed[0]) : null;
+        if (!encoded) {
+          SendMessage(gameObjectName, errorCb, 'Lute did not sign the transaction. Nothing was submitted.');
+          return;
+        }
+        SendMessage(gameObjectName, successCb, encoded);
+      })
+      .catch(function(err) {
+        SendMessage(gameObjectName, errorCb, bmLuteError(err, 'The transaction'));
+      });
+  },
+
+  LuteJsSignGroupTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignGroupTransaction: function(txnsJsonPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnsJson       = UTF8ToString(txnsJsonPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var b64Array;
+    try { b64Array = JSON.parse(txnsJson); }
+    catch(e) { SendMessage(gameObjectName, errorCb, 'Invalid transaction data.'); return; }
+    if (!Array.isArray(b64Array) || b64Array.length === 0) {
+      SendMessage(gameObjectName, errorCb, 'No transactions provided.');
+      return;
+    }
+
+    var wallet = getLuteWallet();
+    if (!wallet) {
+      loadLuteConnect().catch(function() {});
+      SendMessage(gameObjectName, errorCb, 'Lute is still loading. Wait a moment, then try again.');
+      return;
+    }
+
+    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+    window._bmLutePrimeTimer = null;
+    window._bmLutePrimedWindow = null;
+
+    wallet.signTxns(b64Array.map(function(b64) { return { txn: b64 }; }))
+      .then(function(signed) {
+        if (!Array.isArray(signed) || signed.length !== b64Array.length) {
+          SendMessage(gameObjectName, errorCb, 'Lute returned an incomplete transaction group. Nothing was submitted.');
+          return;
+        }
+        var encoded = [];
+        for (var i = 0; i < signed.length; i++) {
+          var value = bmLuteSignedBytes(signed[i]);
+          if (!value) {
+            SendMessage(gameObjectName, errorCb, 'Lute did not approve transaction ' + (i + 1) + ' of ' + signed.length + '. Nothing was submitted.');
+            return;
+          }
+          encoded.push(value);
+        }
+        SendMessage(gameObjectName, successCb, JSON.stringify(encoded));
+      })
+      .catch(function(err) {
+        SendMessage(gameObjectName, errorCb, bmLuteError(err, 'The transaction group'));
+      });
+  },
+
+  LuteJsDisconnect__deps: ['LuteJsCancelPrimedSignWindow'],
+  LuteJsDisconnect: function() {
+    _LuteJsCancelPrimedSignWindow();
+    window._bmLuteAddress = null;
+    window._bmLuteWallet = null;
   },
 
   // ══════════════════════════════════════════════════════════════════════════
