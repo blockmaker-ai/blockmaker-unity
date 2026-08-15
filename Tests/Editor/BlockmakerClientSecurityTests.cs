@@ -240,6 +240,82 @@ namespace Blockmaker.Tests
             Assert.That(BlockmakerErrors.PlayerFacingMagicLoginError(serverError), Is.EqualTo(expected));
         }
 
+        [TestCase(
+            "MAGIC_CANCELLED",
+            "Email sign-in was cancelled. You can try again when you’re ready.")]
+        [TestCase(
+            "User denied account access",
+            "Email sign-in was cancelled. You can try again when you’re ready.")]
+        [TestCase(
+            "MAGIC_TIMEOUT",
+            "Email sign-in timed out. Please try again.")]
+        [TestCase(
+            "MAGIC_NETWORK",
+            "Email sign-in could not reach its service. Check your connection and try again.")]
+        [TestCase(
+            "MAGIC_UNAVAILABLE",
+            "Email sign-in is temporarily unavailable. Choose another sign-in option, or try again later.")]
+        [TestCase(
+            "MAGIC_IDENTITY_MISMATCH",
+            "Email verification ended because the wallet identity changed. Please start email sign-in again.")]
+        [TestCase(
+            "secret provider diagnostic for user@example.com",
+            "Sign-in could not be completed. Please try again or choose another sign-in option.")]
+        public void MagicProviderErrorsNeverExposeRawBrowserText(string providerError, string expected)
+        {
+            Assert.That(BlockmakerErrors.PlayerFacingMagicProviderError(providerError), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void MagicIdentityBindingRequiresExactWalletAndSameEmail()
+        {
+            var matches = typeof(BlockmakerAuth).GetMethod(
+                "MagicIdentityMatches",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            var addressMatches = typeof(BlockmakerAuth).GetMethod(
+                "MagicWalletAddressMatches",
+                BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(matches, Is.Not.Null);
+            Assert.That(addressMatches, Is.Not.Null);
+
+            bool Invoke(string expectedAddress, string expectedEmail, string actualAddress, string actualEmail) =>
+                (bool)matches.Invoke(null, new object[] { expectedAddress, expectedEmail, actualAddress, actualEmail });
+
+            Assert.That(Invoke("ALGO-ADDRESS", "Player@example.com", "ALGO-ADDRESS", "player@example.com"), Is.True);
+            Assert.That(Invoke("ALGO-ADDRESS", "player@example.com", "OTHER-ADDRESS", "player@example.com"), Is.False);
+            Assert.That(Invoke("ALGO-ADDRESS", "player@example.com", "ALGO-ADDRESS", "other@example.com"), Is.False);
+            Assert.That(Invoke("", "player@example.com", "ALGO-ADDRESS", "player@example.com"), Is.False);
+            Assert.That(
+                (bool)addressMatches.Invoke(null, new object[] { "ALGO-ADDRESS", "ALGO-ADDRESS" }),
+                Is.True);
+            Assert.That(
+                (bool)addressMatches.Invoke(null, new object[] { "ALGO-ADDRESS", "OTHER-ADDRESS" }),
+                Is.False);
+        }
+
+        [TestCase(
+            "MAGIC_UNAVAILABLE",
+            "Email wallet signing is temporarily unavailable. Please try again later.")]
+        [TestCase(
+            "User rejected request with provider diagnostics",
+            "You cancelled the transaction request. Nothing was submitted.")]
+        [TestCase(
+            "MAGIC_TIMEOUT",
+            "The transaction request timed out. Start the action again.")]
+        [TestCase(
+            "Magic SDK not initialized. Log in first.",
+            "Your wallet session ended. Reconnect your wallet and start the action again.")]
+        [TestCase(
+            "MAGIC_NETWORK",
+            "Your wallet could not be reached. Check your connection and start the action again.")]
+        [TestCase(
+            "RPC endpoint leaked secret diagnostic",
+            "The transaction could not be signed. Start the action again.")]
+        public void WalletSigningErrorsNeverExposeRawProviderText(string providerError, string expected)
+        {
+            Assert.That(BlockmakerErrors.PlayerFacingWalletSigningError(providerError), Is.EqualTo(expected));
+        }
+
         [Test]
         public void StructuredErrorsClassifyTenantIntentAndRateLimitFailures()
         {

@@ -93,7 +93,7 @@ namespace Blockmaker
                 unsignedTxnBase64,
                 BlockmakerAuth.Instance.gameObject.name,
                 nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
-                nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
+                nameof(BlockmakerAuth.Instance.OnMagicTxnErrorFromJS)
             );
 
             float elapsed = 0f;
@@ -173,7 +173,7 @@ namespace Blockmaker
                 txnsJson,
                 BlockmakerAuth.Instance.gameObject.name,
                 nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
-                nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
+                nameof(BlockmakerAuth.Instance.OnMagicTxnErrorFromJS)
             );
 
             float elapsed = 0f;
@@ -228,7 +228,7 @@ namespace Blockmaker
             };
             SecurePrefs.SetString(SessionKey, JsonUtility.ToJson(data));
             SecurePrefs.Save();
-            BlockmakerLog.Info($"[MagicIdentity] Session saved for {Email}");
+            BlockmakerLog.Info("[MagicIdentity] Session saved.");
         }
 
         public void ClearSession()
@@ -256,7 +256,7 @@ namespace Blockmaker
                 if (string.IsNullOrEmpty(data.sessionToken) && string.IsNullOrEmpty(data.refreshToken))
                     return null;
 
-                BlockmakerLog.Info($"[MagicIdentity] Restored session for {data.email}");
+                BlockmakerLog.Info("[MagicIdentity] Restored session.");
                 return new MagicIdentity(data.email, data.walletAddress, data.sessionToken, data.refreshToken);
             }
             catch (Exception e)

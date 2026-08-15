@@ -642,7 +642,7 @@ namespace Blockmaker
         {
             string warning = $"Heads up: you switched to {e.NewProvider}, so items linked to your old {e.OldProvider} account won't show here. To see them again, sign back in with {e.OldProvider}.";
             _authCtrl?.SetStatus(warning, isError: false, isWarning: true);
-            BlockmakerLog.Warning($"[BlockmakerAuthUI] Wallet address changed: {e.OldProvider} ({e.OldAddress}) → {e.NewProvider} ({e.NewAddress})");
+            BlockmakerLog.Warning($"[BlockmakerAuthUI] Wallet provider changed: {e.OldProvider} → {e.NewProvider}");
         }
 
     }

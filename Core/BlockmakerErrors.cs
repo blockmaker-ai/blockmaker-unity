@@ -71,6 +71,69 @@ namespace Blockmaker
             return "Sign-in could not be completed. Please try again.";
         }
 
+        /// <summary>
+        /// Converts browser/Magic SDK failures into stable player copy. Raw
+        /// provider exceptions are deliberately never rendered or logged by
+        /// the Unity client because they are not a reviewed public contract.
+        /// </summary>
+        public static string PlayerFacingMagicProviderError(string error)
+        {
+            if (Contains(error, "MAGIC_IDENTITY_MISMATCH"))
+                return "Email verification ended because the wallet identity changed. Please start email sign-in again.";
+
+            if (Contains(error, "MAGIC_CANCELLED") || IsUserCancelled(error))
+                return "Email sign-in was cancelled. You can try again when you’re ready.";
+
+            if (Contains(error, "MAGIC_TIMEOUT") || IsTimeout(error))
+                return "Email sign-in timed out. Please try again.";
+
+            if (Contains(error, "MAGIC_NETWORK") ||
+                Contains(error, "unable to reach") ||
+                Contains(error, "network") ||
+                Contains(error, "offline") ||
+                Contains(error, "failed to fetch") ||
+                Contains(error, "failed to load") ||
+                IsNotConnected(error))
+            {
+                return "Email sign-in could not reach its service. Check your connection and try again.";
+            }
+
+            if (Contains(error, "MAGIC_UNAVAILABLE"))
+                return "Email sign-in is temporarily unavailable. Choose another sign-in option, or try again later.";
+
+            return "Sign-in could not be completed. Please try again or choose another sign-in option.";
+        }
+
+        /// <summary>
+        /// Normalizes all JavaScript wallet signing failures before they reach
+        /// game UI. Provider exceptions and RPC details are never rendered.
+        /// </summary>
+        public static string PlayerFacingWalletSigningError(string error)
+        {
+            if (Contains(error, "MAGIC_UNAVAILABLE"))
+                return "Email wallet signing is temporarily unavailable. Please try again later.";
+
+            if (Contains(error, "MAGIC_CANCELLED") || IsUserCancelled(error) || Contains(error, "declined to sign"))
+                return "You cancelled the transaction request. Nothing was submitted.";
+
+            if (Contains(error, "MAGIC_TIMEOUT") || IsTimeout(error))
+                return "The transaction request timed out. Start the action again.";
+
+            if (Contains(error, "not initialized") || IsSessionExpired(error) || IsNotConnected(error))
+                return "Your wallet session ended. Reconnect your wallet and start the action again.";
+
+            if (Contains(error, "MAGIC_NETWORK") ||
+                Contains(error, "network") ||
+                Contains(error, "offline") ||
+                Contains(error, "failed to fetch") ||
+                Contains(error, "failed to load"))
+            {
+                return "Your wallet could not be reached. Check your connection and start the action again.";
+            }
+
+            return "The transaction could not be signed. Start the action again.";
+        }
+
         public static bool IsGameMismatch(string error) =>
             Contains(error, "does not match your game") || Contains(error, "game id");
 

@@ -4,6 +4,7 @@
 
 ### Fixed
 - Keep temporary Magic email outages, disabled-provider states, and website-binding failures actionable in player UI while preventing unknown server diagnostics from being rendered
+- Classify direct Magic/browser login and signing failures into safe cancellation, timeout, network, and availability messages without logging Magic email/address identifiers or raw provider exceptions
 
 ## [2.0.0] - 2026-07-21
 

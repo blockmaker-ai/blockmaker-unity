@@ -306,7 +306,7 @@ namespace Blockmaker
         // ── Magic SDK stubs ────────────────────────────────────────────────────────
 
         public static void MagicLoginWithEmail(string key, string email, string go, string s, string e)
-            => BlockmakerLog.Warning($"[BlockmakerWalletBridge] MagicLoginWithEmail({email}) — not in WebGL.");
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] MagicLoginWithEmail — not in WebGL.");
 
         public static void MagicSignTransaction(string txn, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] MagicSignTransaction — not in WebGL.");

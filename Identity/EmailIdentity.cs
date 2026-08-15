@@ -51,7 +51,7 @@ namespace Blockmaker
             };
             SecurePrefs.SetString(SessionKey, JsonUtility.ToJson(data));
             SecurePrefs.Save();
-            BlockmakerLog.Info($"[EmailIdentity] Session saved for {Email}");
+            BlockmakerLog.Info("[EmailIdentity] Session saved.");
         }
 
         public override void ClearSession()
@@ -75,7 +75,7 @@ namespace Blockmaker
                 if (string.IsNullOrEmpty(data.sessionToken) && string.IsNullOrEmpty(data.refreshToken))
                     return null;
 
-                BlockmakerLog.Info($"[EmailIdentity] Restored session for {data.email}");
+                BlockmakerLog.Info("[EmailIdentity] Restored session.");
                 return new EmailIdentity(data.email, data.walletAddress, data.sessionToken, data.refreshToken);
             }
             catch (Exception e)

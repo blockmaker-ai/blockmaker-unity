@@ -968,19 +968,37 @@ mergeInto(LibraryManager.library, {
     return window._bmMagicInstance;
   },
 
+  // Provider exceptions are not a stable public contract and may contain
+  // email/domain details. Only these reviewed categories may cross into Unity.
+  $bmMagicErrorCode: function(err) {
+    var raw = (err && err.message) ? String(err.message) : '';
+    var lower = raw.toLowerCase();
+    if (/domain|origin|allowlist|not allowed|unauthorized|forbidden|api key/.test(lower))
+      return 'MAGIC_UNAVAILABLE';
+    if (/cancel|reject|denied|user closed/.test(lower))
+      return 'MAGIC_CANCELLED';
+    if (/timeout|timed?\s*out/.test(lower))
+      return 'MAGIC_TIMEOUT';
+    if (/network|offline|failed to fetch|failed to load|load failed/.test(lower))
+      return 'MAGIC_NETWORK';
+    return 'MAGIC_FAILED';
+  },
+
   /**
    * MagicLoginWithEmail
    * Loads Magic SDK, starts email OTP login (Magic handles its own UI).
    * On success: successCb("Magic|algorandAddress|email|didToken")
-   * On error:   errorCb("error message")
+   * On error:   errorCb("MAGIC_CANCELLED|MAGIC_TIMEOUT|MAGIC_NETWORK|MAGIC_UNAVAILABLE|MAGIC_FAILED")
    */
-  MagicLoginWithEmail__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$loadMagicSDK', '$getMagicInstance'],
+  MagicLoginWithEmail__deps: ['$bmExitFullscreen', '$bmRestoreFullscreen', '$loadMagicSDK', '$getMagicInstance', '$bmMagicErrorCode'],
   MagicLoginWithEmail: function(apiKeyPtr, emailPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var apiKey         = UTF8ToString(apiKeyPtr);
     var email          = UTF8ToString(emailPtr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
     var successCb      = UTF8ToString(successCbPtr);
     var errorCb        = UTF8ToString(errorCbPtr);
+    var attempt        = (window._bmMagicLoginAttempt || 0) + 1;
+    window._bmMagicLoginAttempt = attempt;
 
     bmExitFullscreen()
     .then(function() { return loadMagicSDK(); })
@@ -996,19 +1014,26 @@ mergeInto(LibraryManager.library, {
       ]);
     })
     .then(function(results) {
+      if (attempt !== window._bmMagicLoginAttempt) return;
       var didToken = results[0];
       var userInfo = results[1];
       var address  = userInfo.publicAddress;
       if (!address) throw new Error('Magic did not return an Algorand address.');
-      console.log('[BlockmakerWalletBridge] Magic login success:', email, address);
+      // Do not put the verified email or wallet address in the host page's
+      // console. Games may forward browser logs to third-party telemetry.
+      console.log('[BlockmakerWalletBridge] Magic login succeeded.');
       bmRestoreFullscreen();
       SendMessage(gameObjectName, successCb, 'Magic|' + address + '|' + email + '|' + didToken);
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'Magic login failed.';
-      console.error('[BlockmakerWalletBridge] MagicLoginWithEmail error:', msg);
+      if (attempt !== window._bmMagicLoginAttempt) return;
+      // Provider/CDN exceptions are not a player-facing contract and can
+      // contain implementation details. Reduce them to a stable category
+      // before crossing into Unity or browser telemetry.
+      var code = bmMagicErrorCode(err);
+      console.error('[BlockmakerWalletBridge] MagicLoginWithEmail failed:', code);
       bmRestoreFullscreen();
-      SendMessage(gameObjectName, errorCb, msg);
+      SendMessage(gameObjectName, errorCb, code);
     });
   },
 
@@ -1017,9 +1042,9 @@ mergeInto(LibraryManager.library, {
    * Signs a single Algorand transaction using the Magic client-side key.
    * txnBase64: base64-encoded unsigned transaction bytes.
    * On success: successCb("base64SignedTxn")
-   * On error:   errorCb("error message")
+   * On error:   errorCb("MAGIC_CANCELLED|MAGIC_TIMEOUT|MAGIC_NETWORK|MAGIC_UNAVAILABLE|MAGIC_FAILED")
    */
-  MagicSignTransaction__deps: ['$bmUint8ToBase64', '$bmBase64ToUint8'],
+  MagicSignTransaction__deps: ['$bmUint8ToBase64', '$bmBase64ToUint8', '$bmMagicErrorCode'],
   MagicSignTransaction: function(txnBase64Ptr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnBase64      = UTF8ToString(txnBase64Ptr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
@@ -1032,18 +1057,23 @@ mergeInto(LibraryManager.library, {
     }
 
     var magic = window._bmMagicInstance;
+    var promise;
+    try {
+      var bytes = bmBase64ToUint8(txnBase64);
+      promise = Promise.resolve(magic.algorand.signTransaction(bytes));
+    } catch (err) {
+      SendMessage(gameObjectName, errorCb, bmMagicErrorCode(err));
+      return;
+    }
 
-    var bytes = bmBase64ToUint8(txnBase64);
-
-    magic.algorand.signTransaction(bytes)
+    promise
     .then(function(signedBlob) {
       var raw = signedBlob instanceof Uint8Array ? signedBlob : new Uint8Array(signedBlob);
       var b64 = bmUint8ToBase64(raw);
       SendMessage(gameObjectName, successCb, b64);
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'Magic signing failed.';
-      SendMessage(gameObjectName, errorCb, msg);
+      SendMessage(gameObjectName, errorCb, bmMagicErrorCode(err));
     });
   },
 
@@ -1053,9 +1083,9 @@ mergeInto(LibraryManager.library, {
    * magic.algorand.signGroupTransactionV2().
    * txnsJsonPtr: JSON string — array of base64-encoded unsigned txn bytes.
    * On success: successCb(JSON array of base64 signed txns)
-   * On error:   errorCb("error message")
+   * On error:   errorCb("MAGIC_CANCELLED|MAGIC_TIMEOUT|MAGIC_NETWORK|MAGIC_UNAVAILABLE|MAGIC_FAILED")
    */
-  MagicSignGroupTransaction__deps: ['$bmUint8ToBase64', '$bmBase64ToUint8'],
+  MagicSignGroupTransaction__deps: ['$bmUint8ToBase64', '$bmBase64ToUint8', '$bmMagicErrorCode'],
   MagicSignGroupTransaction: function(txnsJsonPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnsJson       = UTF8ToString(txnsJsonPtr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
@@ -1077,17 +1107,18 @@ mergeInto(LibraryManager.library, {
       return;
     }
 
-    var txnBytes = b64Array.map(function(b64) { return bmBase64ToUint8(b64); });
-    var expected = txnBytes.length;
-
+    var txnBytes;
+    var expected;
     var promise;
     try {
+      txnBytes = b64Array.map(function(b64) { return bmBase64ToUint8(b64); });
+      expected = txnBytes.length;
       if (typeof magic.algorand.signGroupTransactionV2 !== 'function') {
         throw new Error('signGroupTransactionV2 not available in this Magic SDK version.');
       }
-      promise = magic.algorand.signGroupTransactionV2(txnBytes);
+      promise = Promise.resolve(magic.algorand.signGroupTransactionV2(txnBytes));
     } catch(e) {
-      SendMessage(gameObjectName, errorCb, (e && e.message) ? e.message : 'Magic group signing failed.');
+      SendMessage(gameObjectName, errorCb, bmMagicErrorCode(e));
       return;
     }
 
@@ -1111,8 +1142,7 @@ mergeInto(LibraryManager.library, {
       SendMessage(gameObjectName, successCb, JSON.stringify(out));
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'Magic group signing failed.';
-      SendMessage(gameObjectName, errorCb, msg);
+      SendMessage(gameObjectName, errorCb, bmMagicErrorCode(err));
     });
   },
 
@@ -1132,7 +1162,7 @@ mergeInto(LibraryManager.library, {
    * If active: successCb("Magic|address|email")
    * If not:    errorCb("No active session")
    */
-  MagicTryRestore__deps: ['$loadMagicSDK', '$getMagicInstance'],
+  MagicTryRestore__deps: ['$loadMagicSDK', '$getMagicInstance', '$bmMagicErrorCode'],
   MagicTryRestore: function(apiKeyPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var apiKey         = UTF8ToString(apiKeyPtr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
@@ -1152,13 +1182,12 @@ mergeInto(LibraryManager.library, {
       return window._bmMagicInstance.user.getInfo().then(function(info) {
         var address = info.publicAddress;
         var email   = info.email || '';
-        console.log('[BlockmakerWalletBridge] Magic session restored:', email, address);
+        console.log('[BlockmakerWalletBridge] Magic session restored.');
         SendMessage(gameObjectName, successCb, 'Magic|' + address + '|' + email);
       });
     })
     .catch(function(err) {
-      var msg = (err && err.message) ? err.message : 'Magic restore failed.';
-      SendMessage(gameObjectName, errorCb, msg);
+      SendMessage(gameObjectName, errorCb, bmMagicErrorCode(err));
     });
   },
 

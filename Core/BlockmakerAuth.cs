@@ -549,7 +549,7 @@ namespace Blockmaker
             if (magicIdentity != null)
             {
                 SetIdentity(magicIdentity);
-                BlockmakerLog.Info($"[BlockmakerAuth] Magic session restored: {magicIdentity.Email}");
+                BlockmakerLog.Info("[BlockmakerAuth] Magic session restored.");
                 return true;
             }
 
@@ -557,7 +557,7 @@ namespace Blockmaker
             if (emailIdentity != null)
             {
                 SetIdentity(emailIdentity);
-                BlockmakerLog.Info($"[BlockmakerAuth] Email session restored: {emailIdentity.Email}");
+                BlockmakerLog.Info("[BlockmakerAuth] Email session restored.");
                 return true;
             }
 
@@ -1349,13 +1349,19 @@ namespace Blockmaker
 
             string jwt        = null;
             string refreshTok = null;
+            string serverAddress = null;
             string error      = null;
 
             try
             {
                 yield return BlockmakerClient.Instance.VerifyMagicToken(
                     didToken, email,
-                    result => { jwt = result.sessionToken; refreshTok = result.refreshToken; },
+                    result =>
+                    {
+                        jwt           = result.sessionToken;
+                        refreshTok    = result.refreshToken;
+                        serverAddress = result.walletAddress;
+                    },
                     err    => { error = err; }
                 );
             }
@@ -1366,7 +1372,7 @@ namespace Blockmaker
 
             if (error != null)
             {
-                BlockmakerLog.Error($"[BlockmakerAuth] Magic server verify failed: {error}");
+                BlockmakerLog.Error("[BlockmakerAuth] Magic server verification failed.");
                 string playerError = BlockmakerErrors.PlayerFacingMagicLoginError(error);
                 SafeInvoke(OnAuthError, playerError);
                 _pendingMagicError?.Invoke(playerError);
@@ -1378,6 +1384,16 @@ namespace Blockmaker
 
             if (_pendingMagicSuccess == null && _pendingMagicError == null)
                 yield break;
+
+            if (!MagicWalletAddressMatches(serverAddress, address))
+            {
+                BlockmakerLog.Error("[BlockmakerAuth] Magic browser and server wallet identities did not match.");
+#if UNITY_WEBGL && !UNITY_EDITOR
+                BlockmakerWalletBridge.MagicLogout();
+#endif
+                OnMagicLoginError("MAGIC_IDENTITY_MISMATCH");
+                yield break;
+            }
 
             try
             {
@@ -1396,7 +1412,7 @@ namespace Blockmaker
             }
             catch (Exception ex)
             {
-                BlockmakerLog.Error($"[BlockmakerAuth] Magic login error: {ex.Message}");
+                BlockmakerLog.Error($"[BlockmakerAuth] Magic login finalization failed ({ex.GetType().Name}).");
                 OnMagicLoginError("Something went wrong while signing in. Please try again.");
             }
         }
@@ -1409,9 +1425,10 @@ namespace Blockmaker
             if (_pendingMagicSuccess == null && _pendingMagicError == null)
                 return;
 
-            BlockmakerLog.Error($"[BlockmakerAuth] Magic login error: {error}");
-            SafeInvoke(OnAuthError, error);
-            _pendingMagicError?.Invoke(error);
+            string playerError = BlockmakerErrors.PlayerFacingMagicProviderError(error);
+            BlockmakerLog.Error("[BlockmakerAuth] Magic login attempt failed.");
+            SafeInvoke(OnAuthError, playerError);
+            _pendingMagicError?.Invoke(playerError);
             _pendingMagicError   = null;
             _pendingMagicSuccess = null;
             IsAuthenticating     = false;
@@ -1433,9 +1450,37 @@ namespace Blockmaker
         [Preserve]
         public void OnMagicRestoreSuccess(string payload)
         {
-            var parts = payload.Split('|');
-            if (parts.Length < 3) return;
-            BlockmakerLog.Info($"[BlockmakerAuth] Magic JS session confirmed active for {parts[2]}");
+            if (!(Identity is MagicIdentity magic)) return;
+            var parts = payload?.Split(new[] { '|' }, 3);
+            if (parts == null || parts.Length < 3 ||
+                !MagicIdentityMatches(magic.Address, magic.Email, parts[1], parts[2]))
+            {
+                BlockmakerLog.Warning("[BlockmakerAuth] Restored Magic browser identity did not match the saved session; clearing it.");
+                magic.ClearSession();
+                SetIdentity(new GuestIdentity());
+                SafeInvoke(OnAuthError, "Your email wallet session changed. Please sign in again.");
+                return;
+            }
+            BlockmakerLog.Info("[BlockmakerAuth] Magic JS session confirmed active.");
+        }
+
+        private static bool MagicIdentityMatches(
+            string expectedAddress,
+            string expectedEmail,
+            string actualAddress,
+            string actualEmail)
+        {
+            return MagicWalletAddressMatches(expectedAddress, actualAddress)
+                && !string.IsNullOrEmpty(expectedEmail)
+                && !string.IsNullOrEmpty(actualEmail)
+                && string.Equals(expectedEmail, actualEmail, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool MagicWalletAddressMatches(string expectedAddress, string actualAddress)
+        {
+            return !string.IsNullOrEmpty(expectedAddress)
+                && !string.IsNullOrEmpty(actualAddress)
+                && string.Equals(expectedAddress, actualAddress, StringComparison.Ordinal);
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -2032,6 +2077,14 @@ namespace Blockmaker
                 PendingSignError = error;
         }
 
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnMagicTxnErrorFromJS(string error)
+        {
+            if (_pendingSignGeneration == _signGeneration)
+                PendingSignError = BlockmakerErrors.PlayerFacingWalletSigningError(error);
+        }
+
         // ── Logout ─────────────────────────────────────────────────────────────────
 
         public void Logout()
@@ -2143,7 +2196,7 @@ namespace Blockmaker
             }
             Identity = identity;
             IsAuthenticating = false;
-            BlockmakerLog.Info($"[BlockmakerAuth] Identity set: {identity.ProviderName} | {identity.Address} | Tier: {identity.Tier}");
+            BlockmakerLog.Info($"[BlockmakerAuth] Identity set: {identity.ProviderName} | Tier: {identity.Tier}");
 
             if (identity is EmailIdentity || identity is MagicIdentity ||
                 identity is WalletConnectIdentity || identity is EvmXChainIdentity)

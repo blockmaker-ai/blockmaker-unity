@@ -1985,7 +1985,7 @@ namespace Blockmaker
             {
                 SetStatus(warning, isError: true);
             }
-            BlockmakerLog.Warning($"[AuthPrompt] Wallet address changed: {e.OldProvider} ({e.OldAddress}) → {e.NewProvider} ({e.NewAddress})");
+            BlockmakerLog.Warning($"[AuthPrompt] Wallet provider changed: {e.OldProvider} → {e.NewProvider}");
         }
 
         private void DismissWalletWarning()
