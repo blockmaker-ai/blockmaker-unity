@@ -217,6 +217,29 @@ namespace Blockmaker.Tests
             Assert.That(error, Does.Contain("different player session"));
         }
 
+        [TestCase(
+            "Email sign-in is still being prepared for this game address. Choose another supported option or try again shortly.",
+            "Email sign-in is temporarily unavailable. Choose another sign-in option, or try again later.")]
+        [TestCase(
+            "Email wallet sign-in is temporarily unavailable. Please try again.",
+            "Email sign-in is temporarily unavailable. Choose another sign-in option, or try again later.")]
+        [TestCase(
+            "That sign-in option is not enabled for this game. Choose one shown by the game.",
+            "Email sign-in is not enabled for this game. Choose a sign-in option shown by the game.")]
+        [TestCase(
+            "This web address is not connected to the game. Ask the game owner to add it in Blockmaker.",
+            "Email sign-in cannot continue on this website. Return to the game’s official website and start again.")]
+        [TestCase(
+            "Verification failed. Please sign in again.",
+            "Email verification ended. Please start email sign-in again.")]
+        [TestCase(
+            "internal database path /secret/private.db",
+            "Sign-in could not be completed. Please try again.")]
+        public void MagicLoginErrorsStayPlayerSafeAndActionable(string serverError, string expected)
+        {
+            Assert.That(BlockmakerErrors.PlayerFacingMagicLoginError(serverError), Is.EqualTo(expected));
+        }
+
         [Test]
         public void StructuredErrorsClassifyTenantIntentAndRateLimitFailures()
         {

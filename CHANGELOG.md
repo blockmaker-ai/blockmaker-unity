@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.0.1] - 2026-08-15
+
+### Fixed
+- Keep temporary Magic email outages, disabled-provider states, and website-binding failures actionable in player UI while preventing unknown server diagnostics from being rendered
+
 ## [2.0.0] - 2026-07-21
 
 ### Security

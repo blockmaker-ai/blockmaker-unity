@@ -1367,8 +1367,9 @@ namespace Blockmaker
             if (error != null)
             {
                 BlockmakerLog.Error($"[BlockmakerAuth] Magic server verify failed: {error}");
-                SafeInvoke(OnAuthError, "Sign-in could not be completed. Please try again.");
-                _pendingMagicError?.Invoke("Sign-in could not be completed. Please try again.");
+                string playerError = BlockmakerErrors.PlayerFacingMagicLoginError(error);
+                SafeInvoke(OnAuthError, playerError);
+                _pendingMagicError?.Invoke(playerError);
                 _pendingMagicError   = null;
                 _pendingMagicSuccess = null;
                 IsAuthenticating     = false;
