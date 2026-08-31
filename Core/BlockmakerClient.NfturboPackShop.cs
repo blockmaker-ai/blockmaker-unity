@@ -19,6 +19,7 @@ namespace Blockmaker
     public partial class BlockmakerClient
     {
         private const string NfturboPackShopRootPath = "/v1/pack-shop";
+        private const string NfturboPackShopPublicInfoPath = "/v1/pack-shop/info";
         private const string NfturboPackShopChallengePath =
             "/v1/auth/wallet/nfturbo-pack-shop/challenge";
         private const string NfturboPackShopVerifyPath =
@@ -51,6 +52,7 @@ namespace Blockmaker
         private string _nfturboPackShopAuthProvider;
         private bool _nfturboPackShopWalletSignInFlight;
         private bool _nfturboPackShopLutePrimeReserved;
+        private IBlockmakerIdentity _nfturboPackShopLutePrimeIdentity;
 
         /// <summary>
         /// True only when the current Pera/Lute identity has a still-live, exact
@@ -80,14 +82,20 @@ namespace Blockmaker
             {
                 identity = BlockmakerAuth.Instance?.Identity as WalletConnectIdentity;
                 if (TryNfturboPackShopProvider(identity, out providerId) &&
-                    providerId == "lute") return true;
+                    providerId == "lute" &&
+                    identity == _nfturboPackShopLutePrimeIdentity) return true;
+                CancelNfturboPackShopLutePrime();
             }
             if (!TryGetNfturboPackShopIdentity(out identity, out providerId, out ignored))
                 return false;
             if (providerId != "lute") return true;
             bool primed = BlockmakerAuth.Instance != null &&
                 BlockmakerAuth.Instance.PrimeWalletApprovalWindow();
-            if (primed) _nfturboPackShopLutePrimeReserved = true;
+            if (primed)
+            {
+                _nfturboPackShopLutePrimeReserved = true;
+                _nfturboPackShopLutePrimeIdentity = identity;
+            }
             return primed;
         }
 
@@ -108,8 +116,10 @@ namespace Blockmaker
             if (expectedIdentity == null || current != expectedIdentity ||
                 !TryNfturboPackShopProvider(current, out providerId)) return false;
             if (providerId != "lute") return true;
-            if (!_nfturboPackShopLutePrimeReserved) return false;
+            if (!_nfturboPackShopLutePrimeReserved ||
+                _nfturboPackShopLutePrimeIdentity != expectedIdentity) return false;
             _nfturboPackShopLutePrimeReserved = false;
+            _nfturboPackShopLutePrimeIdentity = null;
             return true;
         }
 
@@ -127,10 +137,15 @@ namespace Blockmaker
             string providerId;
             if (expectedIdentity == null || current != expectedIdentity ||
                 !TryNfturboPackShopProvider(current, out providerId)) return false;
-            if (providerId != "lute" || !_nfturboPackShopLutePrimeReserved)
-                return true;
+            if (providerId != "lute") return true;
+            if (!_nfturboPackShopLutePrimeReserved)
+                return _nfturboPackShopLutePrimeIdentity == null;
+            if (_nfturboPackShopLutePrimeIdentity != expectedIdentity) return false;
+            var owner = _nfturboPackShopLutePrimeIdentity;
+            if (owner == null) return false;
             _nfturboPackShopLutePrimeReserved = false;
-            auth.CancelPrimedWalletApprovalWindow();
+            _nfturboPackShopLutePrimeIdentity = null;
+            auth.CancelLuteWalletApprovalWindow(owner);
             return true;
         }
 
@@ -288,6 +303,30 @@ namespace Blockmaker
             if (!TryPrepareNfturboPackShopRequest(path, out url, out token, onError)) return;
             StartCoroutine(GetNfturboPackShopJson(
                 url, token, config.defaultTimeoutSeconds, onSuccess, onError));
+        }
+
+        /// <summary>
+        /// Read the one public NFTURBO Pack-Shop catalogue endpoint without any
+        /// generic player credential, scoped credential, refresh token, or Editor
+        /// API-key fallback. Redirects are disabled so even future header additions
+        /// cannot be replayed off-origin. No other route is accepted.
+        /// </summary>
+        public void GetNfturboPackShopPublic<TRes>(
+            string path,
+            Action<TRes> onSuccess,
+            Action<string> onError = null) where TRes : class
+        {
+            string url;
+            if (!RequireReady(onError)) return;
+            if (!string.Equals(path, NfturboPackShopPublicInfoPath,
+                    StringComparison.Ordinal) || !TryBuildApiUrl(path, out url))
+            {
+                SafeInvokeNfturboPackShop(onError,
+                    "Only the public NFTURBO Store catalogue can be requested without Store access.");
+                return;
+            }
+            StartCoroutine(GetNfturboPackShopPublicJson(
+                url, config.defaultTimeoutSeconds, onSuccess, onError));
         }
 
         /// <summary>
@@ -510,6 +549,19 @@ namespace Blockmaker
             }
         }
 
+        private IEnumerator GetNfturboPackShopPublicJson<TRes>(
+            string url,
+            float timeout,
+            Action<TRes> onSuccess,
+            Action<string> onError) where TRes : class
+        {
+            using (var request = BuildNfturboPackShopPublicGet(url, timeout))
+            {
+                yield return request.SendWebRequest();
+                HandleResponse(request, onSuccess, onError, null, false);
+            }
+        }
+
         private bool TryPrepareNfturboPackShopRequest(
             string path,
             out string url,
@@ -575,6 +627,19 @@ namespace Blockmaker
             request.SetRequestHeader("X-Blockmaker-Client",
                 NfturboPackShopAuthContract.ClientHeader);
             request.SetRequestHeader("Authorization", "Bearer " + token);
+            return request;
+        }
+
+        private UnityWebRequest BuildNfturboPackShopPublicGet(
+            string url,
+            float timeout)
+        {
+            var request = UnityWebRequest.Get(url);
+            request.timeout = SafeTimeout(timeout);
+            request.redirectLimit = 0;
+            ApplyCommonHeaders(request, false);
+            request.SetRequestHeader("X-Blockmaker-Client",
+                NfturboPackShopAuthContract.ClientHeader);
             return request;
         }
 
@@ -644,8 +709,10 @@ namespace Blockmaker
         private void CancelNfturboPackShopLutePrime()
         {
             if (!_nfturboPackShopLutePrimeReserved) return;
+            var owner = _nfturboPackShopLutePrimeIdentity;
             _nfturboPackShopLutePrimeReserved = false;
-            BlockmakerAuth.Instance?.CancelPrimedWalletApprovalWindow();
+            _nfturboPackShopLutePrimeIdentity = null;
+            BlockmakerAuth.Instance?.CancelLuteWalletApprovalWindow(owner);
         }
 
         private static bool TryGetNfturboPackShopIdentity(
@@ -776,14 +843,21 @@ namespace Blockmaker
                 value.lastValidRound < value.firstValidRound ||
                 value.lastValidRound - value.firstValidRound > 40 ||
                 value.expiresAt <= 0 ||
-                !IsCanonicalNfturboPackShopBase64(value.unsignedTxnBase64, 2_048) ||
-                !NfturboPackShopMessageMatches(value, wallet, providerId, gameId))
+                !IsCanonicalNfturboPackShopBase64(value.unsignedTxnBase64, 2_048))
                 return false;
 
             long now = UnixTimeMilliseconds();
             if (value.expiresAt < now - 30_000 || value.expiresAt > now + 10 * 60_000)
                 return false;
-            return true;
+            if (!NfturboPackShopMessageMatches(value, wallet, providerId, gameId))
+                return false;
+            return NfturboPackShopTransactionValidator.IsExactChallengeTransaction(
+                value.unsignedTxnBase64,
+                wallet,
+                value.message,
+                value.firstValidRound,
+                value.lastValidRound,
+                value.txId);
         }
 
         private static bool ValidateNfturboPackShopVerification(
@@ -832,17 +906,12 @@ namespace Blockmaker
                 lines[7] != "origin: " + value.origin ||
                 lines[8] != "client: " + NfturboPackShopAuthContract.ClientKind ||
                 lines[9] != "nonce: " + value.nonce ||
-                !lines[10].StartsWith("expires: ", StringComparison.Ordinal))
+                lines[10] != "expires: " +
+                    DateTimeOffset.FromUnixTimeMilliseconds(value.expiresAt)
+                        .UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+                            CultureInfo.InvariantCulture))
                 return false;
-
-            DateTimeOffset messageExpiry;
-            if (!DateTimeOffset.TryParse(
-                    lines[10].Substring("expires: ".Length),
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
-                    out messageExpiry))
-                return false;
-            return Math.Abs(messageExpiry.ToUnixTimeMilliseconds() - value.expiresAt) <= 1;
+            return true;
         }
 
         private static bool IsLowerHexSha256Line(string line, string prefix)

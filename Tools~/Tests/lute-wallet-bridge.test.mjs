@@ -9,11 +9,12 @@ const bridgeSource = fs.readFileSync(
 
 const ADDRESS = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAY5HFKQ";
 
-function createBridge(FakeLute) {
+function createBridge(FakeLute, FakePera = null) {
   const messages = [];
   const opened = [];
   const windowObject = {
     BmLuteVendor: { default: FakeLute },
+    ...(FakePera ? { BmPeraVendor: { PeraWalletConnect: FakePera } } : {}),
     screenX: 0,
     screenY: 0,
     open(url, name, params) {
@@ -41,6 +42,8 @@ function createBridge(FakeLute) {
     Date,
     setTimeout,
     clearTimeout,
+    setInterval,
+    clearInterval,
     atob(value) { return Buffer.from(value, "base64").toString("binary"); },
     btoa(value) { return Buffer.from(value, "binary").toString("base64"); },
   };
@@ -87,6 +90,43 @@ async function settle() {
 }
 
 {
+  let finishConnect;
+  class UnusedLute {}
+  class FakePera {
+    constructor() {
+      this.connector = { connected: false, uri: "wc:tagged-pera", on() {} };
+    }
+    reconnectSession() { return Promise.resolve([]); }
+    connect() {
+      this.connector.connected = true;
+      return new Promise((resolve) => { finishConnect = resolve; });
+    }
+  }
+  const { library, messages, context } = createBridge(UnusedLute, FakePera);
+  context.loadQRCode = () => Promise.resolve({
+    toDataURL() { return Promise.resolve("data:image/png;base64,UE5H"); },
+  });
+
+  library.PeraJsConnectTagged(
+    "pera-connect-1", "Auth", "connected", "failed", "qr",
+  );
+  await new Promise((resolve) => setTimeout(resolve, 125));
+  await settle();
+  assert.deepEqual(messages.shift(), {
+    gameObject: "Auth",
+    callback: "qr",
+    payload: "pera-connect-1|Pera|wc:tagged-pera|UE5H",
+  });
+  finishConnect([ADDRESS]);
+  await settle();
+  assert.deepEqual(messages.shift(), {
+    gameObject: "Auth",
+    callback: "connected",
+    payload: `pera-connect-1|${ADDRESS}`,
+  });
+}
+
+{
   class FakeLute {
     constructor(siteName) { this.siteName = siteName; }
     connect() { return Promise.resolve([ADDRESS]); }
@@ -100,6 +140,16 @@ async function settle() {
     gameObject: "Auth",
     callback: "connected",
     payload: `Lute:${ADDRESS}`,
+  });
+
+  library.LuteJsConnectTagged(
+    "lute-connect-1", "Auth", "connected", "failed",
+  );
+  await settle();
+  assert.deepEqual(messages.pop(), {
+    gameObject: "Auth",
+    callback: "connected",
+    payload: `lute-connect-1|Lute:${ADDRESS}`,
   });
 
   assert.equal(library.LuteJsPrimeSignWindow(), 1);
@@ -136,6 +186,40 @@ async function settle() {
 }
 
 {
+  let finishSign;
+  class SlowLute {
+    constructor(siteName) { this.siteName = siteName; }
+    signTxns() {
+      return new Promise((resolve) => { finishSign = resolve; });
+    }
+  }
+
+  const { library, messages, opened, windowObject } = createBridge(SlowLute);
+  assert.equal(library.LuteJsPrimeSignWindow(), 1);
+  library.LuteJsSignTransactionTagged(
+    "AQID", "owned-active-sign", "Auth", "signed", "failed",
+  );
+  assert.equal(windowObject._bmLutePrimedWindow, null);
+  assert.equal(windowObject._bmLuteActiveSignWindow, opened[0]);
+  assert.equal(windowObject._bmLuteActiveSignAttemptId, "owned-active-sign");
+
+  library.LuteJsCancelActiveSignWindow("wrong-sign");
+  assert.equal(opened[0].closed, false);
+  library.LuteJsCancelActiveSignWindow("owned-active-sign");
+  assert.equal(opened[0].closed, true);
+  assert.equal(windowObject._bmLuteActiveSignWindow, null);
+
+  finishSign([new Uint8Array([1, 2, 3])]);
+  await settle();
+  assert.equal(messages.pop().payload, "owned-active-sign|AQID");
+
+  assert.equal(library.LuteJsPrimeSignWindow(), 1);
+  assert.equal(opened.length, 2, "the next click must reserve a fresh Lute window");
+  library.LuteJsCancelPrimedSignWindow();
+  assert.equal(opened[1].closed, true);
+}
+
+{
   class RejectingLute {
     constructor(siteName) { this.siteName = siteName; }
     connect() { return Promise.reject(Object.assign(new Error("User Rejected Request"), { code: 4100 })); }
@@ -164,4 +248,4 @@ async function settle() {
   assert.equal(messages.pop().payload, "Lute returned an incomplete transaction group. Nothing was submitted.");
 }
 
-console.log("Pera/Lute WebGL bridge tests passed (connect, popup, tagged single/group sign, rejection, incomplete group).");
+console.log("Pera/Lute WebGL bridge tests passed (tagged connect/QR, owned popup cancellation, tagged single/group sign, rejection, incomplete group).");

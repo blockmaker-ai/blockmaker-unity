@@ -81,6 +81,18 @@ namespace Blockmaker
             string errorCallback, string qrCb);
 
         /// <summary>
+        /// Pera connect with an opaque attempt ID echoed by QR, success, and error
+        /// callbacks so a cancelled browser promise cannot complete its successor.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void PeraJsConnectTagged(
+            string attemptId,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback,
+            string qrCallback);
+
+        /// <summary>
         /// Silently restore Pera's localStorage session on load.
         /// successCallback receives "Pera:address" (same shape as TryReconnect).
         /// </summary>
@@ -154,8 +166,23 @@ namespace Blockmaker
         [DllImport("__Internal")]
         public static extern void LuteJsCancelPrimedSignWindow();
 
+        /// <summary>
+        /// Close only the Lute popup consumed by the matching in-flight sign.
+        /// A stale attempt ID cannot close a successor's approval surface.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void LuteJsCancelActiveSignWindow(string attemptId);
+
         [DllImport("__Internal")]
         public static extern void LuteJsConnect(
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>Attempt-tagged Lute connection callbacks.</summary>
+        [DllImport("__Internal")]
+        public static extern void LuteJsConnectTagged(
+            string attemptId,
             string gameObjectName,
             string successCallback,
             string errorCallback);
@@ -378,6 +405,10 @@ namespace Blockmaker
         public static void PeraJsConnect(string go, string s, string e, string qr)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsConnect — not in WebGL. Pera uses the native WCv1 flow on this platform.");
 
+        public static void PeraJsConnectTagged(
+            string attemptId, string go, string s, string e, string qr)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] Tagged Pera connect — not in WebGL.");
+
         public static void PeraJsReconnect(string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsReconnect — not in WebGL.");
 
@@ -404,11 +435,17 @@ namespace Blockmaker
         public static void LuteJsConnect(string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsConnect — Lute is available in WebGL builds only.");
 
+        public static void LuteJsConnectTagged(
+            string attemptId, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] Tagged Lute connect — not in WebGL.");
+
         public static void LuteJsPrepare() { }
 
         public static int LuteJsPrimeSignWindow() => 0;
 
         public static void LuteJsCancelPrimedSignWindow() { }
+
+        public static void LuteJsCancelActiveSignWindow(string attemptId) { }
 
         public static void LuteJsSignTransaction(string txn, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsSignTransaction — Lute is available in WebGL builds only.");

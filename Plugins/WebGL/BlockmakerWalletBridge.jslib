@@ -776,6 +776,86 @@ mergeInto(LibraryManager.library, {
     });
   },
 
+  /** Attempt-tagged Pera connect; every QR/success/error callback echoes the ID. */
+  PeraJsConnectTagged__deps: ['$getPeraWallet', '$bmPeraWireDisconnect', '$loadQRCode'],
+  PeraJsConnectTagged: function(attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr, qrCbPtr) {
+    var attemptId      = UTF8ToString(attemptIdPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var qrCb           = qrCbPtr ? UTF8ToString(qrCbPtr) : '';
+    var tagged = function(value) { return attemptId + '|' + value; };
+
+    if (!window._bmPeraModalKiller) {
+      var killer = document.createElement('style');
+      killer.textContent = '#pera-wallet-connect-modal-wrapper{display:none !important;}';
+      document.head.appendChild(killer);
+      window._bmPeraModalKiller = killer;
+    }
+
+    var qrPoll = null;
+    function stopQrPoll() { if (qrPoll) { clearInterval(qrPoll); qrPoll = null; } }
+
+    getPeraWallet()
+    .then(function(wallet) {
+      return wallet.reconnectSession()
+        .catch(function() { return []; })
+        .then(function(accounts) {
+          if (accounts && accounts.length > 0 &&
+              wallet.connector && wallet.connector.connected) return accounts;
+
+          var connectPromise = wallet.connect();
+          if (qrCb) {
+            var tries = 0;
+            qrPoll = setInterval(function() {
+              tries++;
+              var uri = wallet.connector && wallet.connector.uri;
+              if (uri) {
+                stopQrPoll();
+                loadQRCode().then(function(QR) {
+                  return QR.toDataURL(uri, {
+                    width:                256,
+                    margin:               2,
+                    errorCorrectionLevel: 'M',
+                    color: { dark: '#0f0f1c', light: '#ffffff' }
+                  });
+                }).then(function(dataUrl) {
+                  var b64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+                  SendMessage(gameObjectName, qrCb, tagged('Pera|' + uri + '|' + b64));
+                }).catch(function(qErr) {
+                  console.warn('[BlockmakerWalletBridge] Pera QR render failed, sending URI only:', qErr);
+                  SendMessage(gameObjectName, qrCb, tagged('Pera|' + uri + '|'));
+                });
+              } else if (tries > 100) {
+                stopQrPoll();
+                console.warn('[BlockmakerWalletBridge] Pera WC v1 URI never appeared on the connector.');
+              }
+            }, 100);
+          }
+
+          return connectPromise.then(
+            function(accounts2) { stopQrPoll(); return accounts2; },
+            function(err)       { stopQrPoll(); throw err; }
+          );
+        })
+        .then(function(accounts) {
+          if (!accounts || accounts.length === 0) throw new Error('No Algorand accounts returned by Pera.');
+          window._bmPeraConnected = true;
+          bmPeraWireDisconnect(wallet);
+          console.log('[BlockmakerWalletBridge] Tagged Pera JS session established:', accounts[0]);
+          SendMessage(gameObjectName, successCb, tagged(accounts[0]));
+        });
+    })
+    .catch(function(err) {
+      stopQrPoll();
+      var type = (err && err.data && err.data.type) ? err.data.type : '';
+      var msg  = (err && err.message) ? err.message : 'Pera connection failed.';
+      if (type === 'CONNECT_MODAL_CLOSED' || /closed by user/i.test(msg)) msg = 'PERA_CONNECT_CANCELLED';
+      console.error('[BlockmakerWalletBridge] PeraJsConnectTagged error:', msg);
+      SendMessage(gameObjectName, errorCb, tagged(msg));
+    });
+  },
+
   /**
    * PeraJsReconnect — silently restore Pera's localStorage session on load.
    * On success: successCb("Pera:<address>") — same payload shape as
@@ -1128,6 +1208,42 @@ mergeInto(LibraryManager.library, {
     window._bmLutePrimedWindow = null;
   },
 
+  // Move the reserved popup into an attempt-owned active slot immediately
+  // before signTxns consumes its named window. Cancellation can then close the
+  // exact old popup without risking a newer sign's approval surface.
+  $bmLuteBeginSignWindow: function(attemptId) {
+    if (window._bmLuteActiveSignWindow &&
+        !window._bmLuteActiveSignWindow.closed) return false;
+    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+    window._bmLutePrimeTimer = null;
+    window._bmLuteActiveSignWindow = window._bmLutePrimedWindow || null;
+    window._bmLuteActiveSignAttemptId = attemptId || '';
+    window._bmLutePrimedWindow = null;
+    return true;
+  },
+
+  $bmLuteFinishSignWindow: function(attemptId) {
+    if ((window._bmLuteActiveSignAttemptId || '') !== (attemptId || '')) return;
+    window._bmLuteActiveSignWindow = null;
+    window._bmLuteActiveSignAttemptId = null;
+  },
+
+  $bmLuteCancelActiveSignWindow: function(attemptId) {
+    if ((window._bmLuteActiveSignAttemptId || '') !== (attemptId || '')) return false;
+    try {
+      if (window._bmLuteActiveSignWindow && !window._bmLuteActiveSignWindow.closed)
+        window._bmLuteActiveSignWindow.close();
+    } catch(e) {}
+    window._bmLuteActiveSignWindow = null;
+    window._bmLuteActiveSignAttemptId = null;
+    return true;
+  },
+
+  LuteJsCancelActiveSignWindow__deps: ['$bmLuteCancelActiveSignWindow'],
+  LuteJsCancelActiveSignWindow: function(attemptIdPtr) {
+    bmLuteCancelActiveSignWindow(UTF8ToString(attemptIdPtr));
+  },
+
   LuteJsConnect__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteError'],
   LuteJsConnect: function(gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
@@ -1156,7 +1272,37 @@ mergeInto(LibraryManager.library, {
       });
   },
 
-  LuteJsSignTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsConnectTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteError'],
+  LuteJsConnectTagged: function(attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var attemptId      = UTF8ToString(attemptIdPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var tagged = function(value) { return attemptId + '|' + value; };
+    var wallet = getLuteWallet();
+
+    if (!wallet) {
+      loadLuteConnect().catch(function() {});
+      SendMessage(gameObjectName, errorCb, tagged('Lute is still loading. Wait a moment, then choose Lute again.'));
+      return;
+    }
+
+    wallet.connect('mainnet-v1.0')
+      .then(function(addresses) {
+        var address = Array.isArray(addresses) && addresses.length > 0 ? addresses[0] : '';
+        if (!address) {
+          SendMessage(gameObjectName, errorCb, tagged('Lute did not return an Algorand account. Choose an account and try again.'));
+          return;
+        }
+        window._bmLuteAddress = address;
+        SendMessage(gameObjectName, successCb, tagged('Lute:' + address));
+      })
+      .catch(function(err) {
+        SendMessage(gameObjectName, errorCb, tagged(bmLuteError(err, 'The connection')));
+      });
+  },
+
+  LuteJsSignTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError', '$bmLuteBeginSignWindow', '$bmLuteFinishSignWindow'],
   LuteJsSignTransaction: function(txnBase64Ptr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnBase64      = UTF8ToString(txnBase64Ptr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
@@ -1170,12 +1316,14 @@ mergeInto(LibraryManager.library, {
       return;
     }
 
-    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
-    window._bmLutePrimeTimer = null;
-    window._bmLutePrimedWindow = null;
+    if (!bmLuteBeginSignWindow('')) {
+      SendMessage(gameObjectName, errorCb, 'Another Lute approval is already open. Finish or cancel it, then try again.');
+      return;
+    }
 
     wallet.signTxns([{ txn: txnBase64 }])
       .then(function(signed) {
+        bmLuteFinishSignWindow('');
         var encoded = Array.isArray(signed) && signed.length === 1 ? bmLuteSignedBytes(signed[0]) : null;
         if (!encoded) {
           SendMessage(gameObjectName, errorCb, 'Lute did not sign the transaction. Nothing was submitted.');
@@ -1184,12 +1332,13 @@ mergeInto(LibraryManager.library, {
         SendMessage(gameObjectName, successCb, encoded);
       })
       .catch(function(err) {
+        bmLuteFinishSignWindow('');
         SendMessage(gameObjectName, errorCb, bmLuteError(err, 'The transaction'));
       });
   },
 
   /** Attempt-tagged Lute sign; see the tagged Pera variant above. */
-  LuteJsSignTransactionTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignTransactionTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError', '$bmLuteBeginSignWindow', '$bmLuteFinishSignWindow'],
   LuteJsSignTransactionTagged: function(txnBase64Ptr, attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnBase64      = UTF8ToString(txnBase64Ptr);
     var attemptId      = UTF8ToString(attemptIdPtr);
@@ -1205,12 +1354,14 @@ mergeInto(LibraryManager.library, {
       return;
     }
 
-    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
-    window._bmLutePrimeTimer = null;
-    window._bmLutePrimedWindow = null;
+    if (!bmLuteBeginSignWindow(attemptId)) {
+      SendMessage(gameObjectName, errorCb, tagged('Another Lute approval is already open. Finish or cancel it, then try again.'));
+      return;
+    }
 
     wallet.signTxns([{ txn: txnBase64 }])
       .then(function(signed) {
+        bmLuteFinishSignWindow(attemptId);
         var encoded = Array.isArray(signed) && signed.length === 1 ? bmLuteSignedBytes(signed[0]) : null;
         if (!encoded) {
           SendMessage(gameObjectName, errorCb, tagged('Lute did not sign the transaction. Nothing was submitted.'));
@@ -1219,11 +1370,12 @@ mergeInto(LibraryManager.library, {
         SendMessage(gameObjectName, successCb, tagged(encoded));
       })
       .catch(function(err) {
+        bmLuteFinishSignWindow(attemptId);
         SendMessage(gameObjectName, errorCb, tagged(bmLuteError(err, 'The transaction')));
       });
   },
 
-  LuteJsSignGroupTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignGroupTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError', '$bmLuteBeginSignWindow', '$bmLuteFinishSignWindow'],
   LuteJsSignGroupTransaction: function(txnsJsonPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnsJson       = UTF8ToString(txnsJsonPtr);
     var gameObjectName = UTF8ToString(gameObjectNamePtr);
@@ -1244,12 +1396,14 @@ mergeInto(LibraryManager.library, {
       return;
     }
 
-    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
-    window._bmLutePrimeTimer = null;
-    window._bmLutePrimedWindow = null;
+    if (!bmLuteBeginSignWindow('')) {
+      SendMessage(gameObjectName, errorCb, 'Another Lute approval is already open. Finish or cancel it, then try again.');
+      return;
+    }
 
     wallet.signTxns(b64Array.map(function(b64) { return { txn: b64 }; }))
       .then(function(signed) {
+        bmLuteFinishSignWindow('');
         if (!Array.isArray(signed) || signed.length !== b64Array.length) {
           SendMessage(gameObjectName, errorCb, 'Lute returned an incomplete transaction group. Nothing was submitted.');
           return;
@@ -1266,12 +1420,13 @@ mergeInto(LibraryManager.library, {
         SendMessage(gameObjectName, successCb, JSON.stringify(encoded));
       })
       .catch(function(err) {
+        bmLuteFinishSignWindow('');
         SendMessage(gameObjectName, errorCb, bmLuteError(err, 'The transaction group'));
     });
   },
 
   /** Attempt-tagged Lute atomic-group sign. */
-  LuteJsSignGroupTransactionTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignGroupTransactionTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError', '$bmLuteBeginSignWindow', '$bmLuteFinishSignWindow'],
   LuteJsSignGroupTransactionTagged: function(txnsJsonPtr, attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnsJson       = UTF8ToString(txnsJsonPtr);
     var attemptId      = UTF8ToString(attemptIdPtr);
@@ -1294,12 +1449,14 @@ mergeInto(LibraryManager.library, {
       return;
     }
 
-    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
-    window._bmLutePrimeTimer = null;
-    window._bmLutePrimedWindow = null;
+    if (!bmLuteBeginSignWindow(attemptId)) {
+      SendMessage(gameObjectName, errorCb, tagged('Another Lute approval is already open. Finish or cancel it, then try again.'));
+      return;
+    }
 
     wallet.signTxns(b64Array.map(function(b64) { return { txn: b64 }; }))
       .then(function(signed) {
+        bmLuteFinishSignWindow(attemptId);
         if (!Array.isArray(signed) || signed.length !== b64Array.length) {
           SendMessage(gameObjectName, errorCb, tagged('Lute returned an incomplete transaction group. Nothing was submitted.'));
           return;
@@ -1316,13 +1473,15 @@ mergeInto(LibraryManager.library, {
         SendMessage(gameObjectName, successCb, tagged(JSON.stringify(encoded)));
       })
       .catch(function(err) {
+        bmLuteFinishSignWindow(attemptId);
         SendMessage(gameObjectName, errorCb, tagged(bmLuteError(err, 'The transaction group')));
       });
   },
 
-  LuteJsDisconnect__deps: ['LuteJsCancelPrimedSignWindow'],
+  LuteJsDisconnect__deps: ['LuteJsCancelPrimedSignWindow', '$bmLuteCancelActiveSignWindow'],
   LuteJsDisconnect: function() {
     _LuteJsCancelPrimedSignWindow();
+    bmLuteCancelActiveSignWindow(window._bmLuteActiveSignAttemptId || '');
     window._bmLuteAddress = null;
     window._bmLuteWallet = null;
   },

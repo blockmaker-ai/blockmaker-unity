@@ -311,6 +311,12 @@ namespace Blockmaker
             if (_pendingSignGeneration != generation ||
                 _signGeneration != generation) return false;
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+            string attemptId = _pendingSignAttemptId;
+            var owner = _pendingSignOwner;
+            if (owner is LuteIdentity && !string.IsNullOrEmpty(attemptId))
+                BlockmakerWalletBridge.LuteJsCancelActiveSignWindow(attemptId);
+#endif
             PendingSignedTxn = null;
             PendingSignedTxns = null;
             PendingSignError = null;
@@ -390,6 +396,12 @@ namespace Blockmaker
         // connection attempt. CompleteWalletConnection consumes it before invoking
         // the game's callback, keeping generic player login out of the Shop flow.
         private bool      _nfturboPackShopConnectInFlight;
+
+        // Pera/Lute browser connection promises cannot be cancelled reliably.
+        // Every callback therefore carries the exact attempt that opened it; a
+        // cancelled attempt can never consume the mode/callbacks of its successor.
+        private string    _walletConnectAttemptId;
+        private string    _walletConnectAttemptProvider;
 
         // Monotonically-increasing id of the CURRENT wallet-login attempt. Every attempt
         // captures the value at start; RetryWalletLogin / CancelWalletLogin / Logout bump it,
@@ -998,19 +1010,27 @@ namespace Blockmaker
             _isWalletConnecting    = true;
             _pendingConnectSuccess = onSuccess;
             _pendingConnectError   = onError;
+            string walletConnectAttemptId = null;
+            if (provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase) ||
+                provider.Equals(ProviderLute, StringComparison.OrdinalIgnoreCase))
+                walletConnectAttemptId = BeginWalletConnectAttempt(provider);
 
             if (provider.Equals(ProviderLute, StringComparison.OrdinalIgnoreCase))
             {
     #if UNITY_WEBGL && !UNITY_EDITOR
-                BlockmakerWalletBridge.LuteJsConnect(
+                BlockmakerWalletBridge.LuteJsConnectTagged(
+                    walletConnectAttemptId,
                     gameObject.name,
                     nameof(OnWalletConnectedFromJS),
                     nameof(OnWalletErrorFromJS));
                 StartWebGLTimeout(WalletSignTimeout, () =>
                 {
-                    if (_isWalletConnecting) FailWalletConnection("Lute did not respond in time. Please try again.");
+                    if (IsCurrentWalletConnectAttempt(
+                            walletConnectAttemptId, ProviderLute))
+                        FailWalletConnection("Lute did not respond in time. Please try again.");
                 });
     #else
+                InvalidateWalletConnectAttempt();
                 _isWalletConnecting = false;
                 IsAuthenticating = false;
                 _pendingConnectSuccess = null;
@@ -1029,7 +1049,8 @@ namespace Blockmaker
                 // HEADLESS: its DOM modal is suppressed (browser fullscreen would hide it —
                 // sign-in must never leave fullscreen) and the v1 URI is sent to Unity for
                 // the usual in-canvas QR.
-                BlockmakerWalletBridge.PeraJsConnect(
+                BlockmakerWalletBridge.PeraJsConnectTagged(
+                    walletConnectAttemptId,
                     gameObject.name,
                     nameof(OnPeraJsConnected),
                     nameof(OnPeraJsError),
@@ -1037,7 +1058,9 @@ namespace Blockmaker
                 );
                 StartWebGLTimeout(WalletSignTimeout, () =>
                 {
-                    if (_isWalletConnecting) FailWalletConnection("Connection timed out. Please try again.");
+                    if (IsCurrentWalletConnectAttempt(
+                            walletConnectAttemptId, ProviderPera))
+                        FailWalletConnection("Connection timed out. Please try again.");
                 });
     #else
                 _peraConnectCoroutine = StartCoroutine(PeraNativeWCv1Flow());
@@ -1119,6 +1142,19 @@ namespace Blockmaker
         [Preserve]
         public void OnWalletQRFromJS(string payload)
         {
+            if (string.Equals(_walletConnectAttemptProvider, ProviderPera,
+                    StringComparison.Ordinal))
+            {
+                string taggedPayload;
+                if (!TryReadWalletConnectAttemptCallback(
+                        payload, ProviderPera, out taggedPayload)) return;
+                payload = taggedPayload;
+            }
+            else if (HasWalletConnectAttemptPrefix(payload))
+            {
+                return;
+            }
+
             int firstPipe = payload.IndexOf('|');
             if (firstPipe < 0) return;
             var provider  = payload.Substring(0, firstPipe);
@@ -1137,12 +1173,25 @@ namespace Blockmaker
         [Preserve]
         public void OnWalletConnectedFromJS(string payload)
         {
-            CancelWebGLTimeout();
             if (!_isWalletConnecting)
             {
                 BlockmakerLog.Warning("[BlockmakerAuth] Ignoring unexpected wallet connection callback.");
                 return;
             }
+
+            if (string.Equals(_walletConnectAttemptProvider, ProviderLute,
+                    StringComparison.Ordinal))
+            {
+                string taggedPayload;
+                if (!TryConsumeWalletConnectAttemptCallback(
+                        payload, ProviderLute, out taggedPayload)) return;
+                payload = taggedPayload;
+            }
+            else if (HasWalletConnectAttemptPrefix(payload))
+            {
+                return;
+            }
+            CancelWebGLTimeout();
 
             var parts    = payload.Split(new[] { ':' }, 2);
             var provider = parts.Length > 1 ? parts[0] : "Unknown";
@@ -1194,6 +1243,18 @@ namespace Blockmaker
         [Preserve]
         public void OnWalletErrorFromJS(string error)
         {
+            if (string.Equals(_walletConnectAttemptProvider, ProviderLute,
+                    StringComparison.Ordinal))
+            {
+                string taggedError;
+                if (!TryConsumeWalletConnectAttemptCallback(
+                        error, ProviderLute, out taggedError)) return;
+                error = taggedError;
+            }
+            else if (HasWalletConnectAttemptPrefix(error))
+            {
+                return;
+            }
             CancelWebGLTimeout();
             FailWalletConnection(error);
         }
@@ -1202,20 +1263,24 @@ namespace Blockmaker
 
         /// <summary>
         /// Success callback for BlockmakerWalletBridge.PeraJsConnect (WebGL only).
-        /// Receives the bare Algorand address — Pera's own modal handled the
-        /// QR / deep-link UX, so this feeds straight into the same post-connect
-        /// funnel as the other wallets (identity → SaveSession → TriggerWalletLogin).
+        /// Receives "attemptId|AlgorandAddress". Pera's attempt-tagged QR,
+        /// success, and error callbacks are accepted only for the exact active
+        /// connection before entering the shared post-connect funnel.
         /// </summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Preserve]
-        public void OnPeraJsConnected(string address)
+        public void OnPeraJsConnected(string payload)
         {
-            CancelWebGLTimeout();
             if (!_isWalletConnecting)
             {
                 BlockmakerLog.Warning("[BlockmakerAuth] Ignoring unexpected Pera JS connection callback.");
                 return;
             }
+
+            string address;
+            if (!TryConsumeWalletConnectAttemptCallback(
+                    payload, ProviderPera, out address)) return;
+            CancelWebGLTimeout();
 
             CompleteWalletConnection(ProviderPera, address);
         }
@@ -1223,14 +1288,18 @@ namespace Blockmaker
         /// <summary>Error callback for BlockmakerWalletBridge.PeraJsConnect (WebGL only).</summary>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Preserve]
-        public void OnPeraJsError(string error)
+        public void OnPeraJsError(string payload)
         {
-            CancelWebGLTimeout();
             if (!_isWalletConnecting)
             {
-                BlockmakerLog.Warning($"[BlockmakerAuth] Ignoring Pera JS error after connect ended: {error}");
+                BlockmakerLog.Warning("[BlockmakerAuth] Ignoring Pera JS error after connect ended.");
                 return;
             }
+
+            string error;
+            if (!TryConsumeWalletConnectAttemptCallback(
+                    payload, ProviderPera, out error)) return;
+            CancelWebGLTimeout();
 
             // Recognizable code sent by the jslib when the user simply closed Pera's modal.
             if (error == "PERA_CONNECT_CANCELLED")
@@ -1307,7 +1376,7 @@ namespace Blockmaker
                 if (_wcv1Client != null)
                 {
                     var sd = _wcv1Client.GetSessionData();
-                    if (sd != null)
+                    if (sd != null && !_nfturboPackShopConnectInFlight)
                     {
                         SecurePrefs.SetString(BlockmakerPrefs.Key("wc_session_pera_wcv1"), JsonUtility.ToJson(sd));
                         SecurePrefs.Save();
@@ -1346,6 +1415,7 @@ namespace Blockmaker
             {
                 bool nfturboPackShopConnection = _nfturboPackShopConnectInFlight;
                 _nfturboPackShopConnectInFlight = false;
+                InvalidateWalletConnectAttempt();
                 var prevTier = Tier;
                 var identity = CreateWalletIdentity(provider, address);
                 if (identity is WalletConnectIdentity wcIdentity && _wcv1Client != null)
@@ -1358,7 +1428,11 @@ namespace Blockmaker
                 IsAuthenticating       = false;
 
                 SetIdentity(identity);
-                identity.SaveSession();
+                // A Shop-only connection has no generic JWT or refresh token. Do
+                // not persist it as a generic restorable identity: otherwise boot
+                // reconnect would silently run the generic challenge/build login.
+                if (!nfturboPackShopConnection)
+                    identity.SaveSession();
                 if (identity is LuteIdentity)
                 {
                     // Lute's sign-in proof needs a second browser approval window.
@@ -1390,6 +1464,7 @@ namespace Blockmaker
         private void FailWalletConnection(string error)
         {
             _nfturboPackShopConnectInFlight = false;
+            InvalidateWalletConnectAttempt();
             BlockmakerLog.Error($"[BlockmakerAuth] Wallet error: {error}");
             SafeInvoke(OnAuthError, error);
             _pendingConnectError?.Invoke(error);
@@ -1401,7 +1476,11 @@ namespace Blockmaker
 
         public void CancelWalletConnect()
         {
-            if (!_isWalletConnecting) return;
+            if (!_isWalletConnecting)
+            {
+                InvalidateWalletConnectAttempt();
+                return;
+            }
             CancelWebGLTimeout();
             if (_peraQRTexture != null) { Destroy(_peraQRTexture); _peraQRTexture = null; }
             if (_peraConnectCoroutine != null)
@@ -1416,9 +1495,77 @@ namespace Blockmaker
             _pendingConnectError   = null;
             _isWalletConnecting    = false;
             _nfturboPackShopConnectInFlight = false;
+            InvalidateWalletConnectAttempt();
     #if UNITY_WEBGL && !UNITY_EDITOR
             BlockmakerWalletBridge.CancelWalletQR();
     #endif
+        }
+
+        private string BeginWalletConnectAttempt(string provider)
+        {
+            _walletConnectAttemptId = Guid.NewGuid().ToString("N");
+            _walletConnectAttemptProvider =
+                provider.Equals(ProviderPera, StringComparison.OrdinalIgnoreCase)
+                    ? ProviderPera : ProviderLute;
+            return _walletConnectAttemptId;
+        }
+
+        private bool IsCurrentWalletConnectAttempt(string attemptId, string provider)
+        {
+            return _isWalletConnecting &&
+                string.Equals(_walletConnectAttemptId, attemptId,
+                    StringComparison.Ordinal) &&
+                string.Equals(_walletConnectAttemptProvider, provider,
+                    StringComparison.Ordinal);
+        }
+
+        private bool TryReadWalletConnectAttemptCallback(
+            string payload,
+            string provider,
+            out string value)
+        {
+            value = null;
+            if (!_isWalletConnecting ||
+                string.IsNullOrEmpty(_walletConnectAttemptId) ||
+                !string.Equals(_walletConnectAttemptProvider, provider,
+                    StringComparison.Ordinal) ||
+                string.IsNullOrEmpty(payload)) return false;
+            int separator = payload.IndexOf('|');
+            if (separator <= 0 ||
+                !string.Equals(payload.Substring(0, separator),
+                    _walletConnectAttemptId, StringComparison.Ordinal)) return false;
+            value = payload.Substring(separator + 1);
+            return !string.IsNullOrEmpty(value);
+        }
+
+        private bool TryConsumeWalletConnectAttemptCallback(
+            string payload,
+            string provider,
+            out string value)
+        {
+            if (!TryReadWalletConnectAttemptCallback(payload, provider, out value))
+                return false;
+            InvalidateWalletConnectAttempt();
+            return true;
+        }
+
+        private static bool HasWalletConnectAttemptPrefix(string payload)
+        {
+            if (string.IsNullOrEmpty(payload) || payload.Length <= 32 ||
+                payload[32] != '|') return false;
+            for (int i = 0; i < 32; i++)
+            {
+                char character = payload[i];
+                if ((character < '0' || character > '9') &&
+                    (character < 'a' || character > 'f')) return false;
+            }
+            return true;
+        }
+
+        private void InvalidateWalletConnectAttempt()
+        {
+            _walletConnectAttemptId = null;
+            _walletConnectAttemptProvider = null;
         }
 
         private void StartWebGLTimeout(float seconds, Action onTimeout)
@@ -2324,6 +2471,7 @@ namespace Blockmaker
             _isWalletConnecting    = false;
             _walletLoginInFlight   = false;
             _nfturboPackShopConnectInFlight = false;
+            InvalidateWalletConnectAttempt();
             // Invalidate + hard-stop any in-flight wallet-signature login: without this a
             // still-polling Login() could complete AFTER logout and write a fresh session
             // (UpdateTokens/SaveSession) for an identity the user just discarded.
@@ -2686,7 +2834,13 @@ namespace Blockmaker
         /// </summary>
         public void CancelPrimedWalletApprovalWindow()
         {
-            if (!(Identity is LuteIdentity)) return;
+            CancelLuteWalletApprovalWindow(Identity);
+        }
+
+        internal void CancelLuteWalletApprovalWindow(
+            IBlockmakerIdentity expectedLuteIdentity)
+        {
+            if (!(expectedLuteIdentity is LuteIdentity)) return;
 #if UNITY_WEBGL && !UNITY_EDITOR
             BlockmakerWalletBridge.LuteJsCancelPrimedSignWindow();
 #endif
@@ -2869,12 +3023,19 @@ namespace Blockmaker
             if (string.IsNullOrEmpty(_nfturboPackShopSignAttemptId) ||
                 (expectedIdentity != null &&
                  _nfturboPackShopSigningIdentity != expectedIdentity)) return false;
+            string attemptId = _nfturboPackShopSignAttemptId;
             _nfturboPackShopSignAttemptId = null;
             _nfturboPackShopSignedTxn = null;
             _nfturboPackShopSignError = null;
             var signingIdentity = _nfturboPackShopSigningIdentity;
             _nfturboPackShopSigningIdentity = null;
-            if (signingIdentity is LuteIdentity) CancelPrimedWalletApprovalWindow();
+            if (signingIdentity is LuteIdentity)
+            {
+#if UNITY_WEBGL && !UNITY_EDITOR
+                BlockmakerWalletBridge.LuteJsCancelActiveSignWindow(attemptId);
+#endif
+                CancelLuteWalletApprovalWindow(signingIdentity);
+            }
             return true;
         }
 
@@ -2892,6 +3053,14 @@ namespace Blockmaker
         {
             if (!string.Equals(_nfturboPackShopSignAttemptId, attemptId,
                     StringComparison.Ordinal)) return;
+#if UNITY_WEBGL && !UNITY_EDITOR
+            var signingIdentity = _nfturboPackShopSigningIdentity;
+            // On success/error the bridge has already released this reference;
+            // on timeout it still owns the consumed named window, so this exact
+            // attempt close prevents an abandoned popup without touching a retry.
+            if (signingIdentity is LuteIdentity)
+                BlockmakerWalletBridge.LuteJsCancelActiveSignWindow(attemptId);
+#endif
             _nfturboPackShopSignAttemptId = null;
             _nfturboPackShopSignedTxn = null;
             _nfturboPackShopSignError = null;
