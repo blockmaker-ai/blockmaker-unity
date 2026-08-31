@@ -92,6 +92,49 @@ namespace Blockmaker
         }
 
         /// <summary>
+        /// Atomically consume the approval-window reservation owned by the exact
+        /// current Pera/Lute identity immediately before a game-owned
+        /// <see cref="IBlockmakerIdentity.SignTransaction"/> or
+        /// <see cref="IBlockmakerIdentity.SignTransactions"/> call. Pera is a
+        /// successful no-op. For Lute this clears only the SDK marker; the browser
+        /// window stays open for the sign that follows. A false result means the
+        /// identity changed or no Lute window was reserved by a player click.
+        /// </summary>
+        public bool TryConsumeNfturboPackShopApprovalWindow(
+            IBlockmakerIdentity expectedIdentity)
+        {
+            var current = BlockmakerAuth.Instance?.Identity as WalletConnectIdentity;
+            string providerId;
+            if (expectedIdentity == null || current != expectedIdentity ||
+                !TryNfturboPackShopProvider(current, out providerId)) return false;
+            if (providerId != "lute") return true;
+            if (!_nfturboPackShopLutePrimeReserved) return false;
+            _nfturboPackShopLutePrimeReserved = false;
+            return true;
+        }
+
+        /// <summary>
+        /// Cancel an unused approval-window reservation owned by the exact current
+        /// Pera/Lute identity. Pera is a successful no-op. For Lute this clears the
+        /// marker and closes the reserved browser window; it never cancels a window
+        /// already consumed by a signing call.
+        /// </summary>
+        public bool CancelUnusedNfturboPackShopApprovalWindow(
+            IBlockmakerIdentity expectedIdentity)
+        {
+            var auth = BlockmakerAuth.Instance;
+            var current = auth?.Identity as WalletConnectIdentity;
+            string providerId;
+            if (expectedIdentity == null || current != expectedIdentity ||
+                !TryNfturboPackShopProvider(current, out providerId)) return false;
+            if (providerId != "lute" || !_nfturboPackShopLutePrimeReserved)
+                return true;
+            _nfturboPackShopLutePrimeReserved = false;
+            auth.CancelPrimedWalletApprovalWindow();
+            return true;
+        }
+
+        /// <summary>
         /// Acquire a short-lived Pack-Shop-only credential by signing the exact
         /// harmless transaction returned by the scoped challenge endpoint. Pera and
         /// Lute sign those returned bytes directly; this method never calls the
@@ -341,10 +384,12 @@ namespace Blockmaker
                 string signedTransaction = null;
                 string signingError = null;
                 bool signingCallback = false;
+                if (!TryConsumeNfturboPackShopApprovalWindow(identity))
+                {
+                    failure = "NFTURBO Store approval was not opened from the current player action. Please try again.";
+                    yield break;
+                }
                 _nfturboPackShopWalletSignInFlight = true;
-                // The Lute adapter now owns/reuses the primed window; it clears the
-                // reservation synchronously when this exact sign begins.
-                _nfturboPackShopLutePrimeReserved = false;
                 yield return BlockmakerAuth.Instance.SignNfturboPackShopTransaction(
                     identity,
                     challenge.unsignedTxnBase64,

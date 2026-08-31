@@ -165,6 +165,24 @@ directly inside that button's click handler before starting the request. It is a
 Defly, X-Chain and email wallets. For Lute it reserves the approval window without sending account
 or transaction data, then the exact prepared transaction reuses that window when it is ready.
 
+NFTURBO Store integrations use the matching client-level reservation so scoped
+authentication and game-owned payment/opt-in signs cannot mistake a consumed
+Lute window for a live one. Prime from the player click, consume immediately
+before the external sign, or cancel if preparation stops first. Both consume and
+cancel are successful no-ops for Pera and reject a changed identity.
+
+```csharp
+var identity = BlockmakerAuth.Instance.Identity;
+if (!BlockmakerClient.Instance.PrimeNfturboPackShopApprovalWindow()) return;
+
+// After asynchronous preparation, immediately before SignTransactions:
+if (!BlockmakerClient.Instance.TryConsumeNfturboPackShopApprovalWindow(identity)) return;
+yield return identity.SignTransactions(unsignedTxns, OnSigned, ShowStoreError);
+
+// Use this instead if preparation failed before signing:
+BlockmakerClient.Instance.CancelUnusedNfturboPackShopApprovalWindow(identity);
+```
+
 Managed email wallets can sign at most five transactions in one group. Chunk larger opt-in batches
 at five if the same integration must support both managed and self-custody wallets (Algorand itself
 allows up to sixteen transactions per atomic group).

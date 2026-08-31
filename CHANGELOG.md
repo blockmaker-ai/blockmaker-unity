@@ -10,6 +10,7 @@
 
 ### Fixed
 - Reuse an already primed Lute approval window instead of replacing it during scoped session acquisition.
+- Track when a game-owned payment/opt-in sign consumes the NFTURBO Lute window, and expose identity-bound consume/cancel helpers so the next player click really primes a fresh window.
 - Release the exact pending Pera/Lute sign on timeout, cancellation, or coroutine disposal; attempt-tagged single/group callbacks cannot complete a later retry.
 
 ### Security

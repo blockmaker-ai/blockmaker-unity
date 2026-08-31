@@ -346,6 +346,71 @@ namespace Blockmaker.Tests
         }
 
         [Test]
+        public void LutePrimeReservationIsConsumedBeforeAnExternalSign()
+        {
+            var client = CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            typeof(BlockmakerAuth).GetProperty("Instance",
+                BindingFlags.Static | BindingFlags.Public)
+                .SetValue(null, auth);
+            var identity = new LuteIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+            var reserved = PrivateField(
+                typeof(BlockmakerClient), "_nfturboPackShopLutePrimeReserved");
+            reserved.SetValue(client, true);
+
+            Assert.That(client.TryConsumeNfturboPackShopApprovalWindow(
+                new LuteIdentity(Wallet)), Is.False,
+                "A lookalike identity must not consume another sign's reservation.");
+            Assert.That(reserved.GetValue(client), Is.EqualTo(true));
+            Assert.That(client.TryConsumeNfturboPackShopApprovalWindow(identity), Is.True);
+            Assert.That(reserved.GetValue(client), Is.EqualTo(false));
+
+            // Outside WebGL an actual prime returns false. This proves the stale
+            // marker no longer short-circuits the next player-click prime attempt.
+            Assert.That(client.PrimeNfturboPackShopApprovalWindow(), Is.False);
+        }
+
+        [Test]
+        public void UnusedLutePrimeReservationCanBeCancelledByItsOwner()
+        {
+            var client = CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            typeof(BlockmakerAuth).GetProperty("Instance",
+                BindingFlags.Static | BindingFlags.Public)
+                .SetValue(null, auth);
+            var identity = new LuteIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+            var reserved = PrivateField(
+                typeof(BlockmakerClient), "_nfturboPackShopLutePrimeReserved");
+            reserved.SetValue(client, true);
+
+            Assert.That(client.CancelUnusedNfturboPackShopApprovalWindow(
+                new LuteIdentity(Wallet)), Is.False);
+            Assert.That(reserved.GetValue(client), Is.EqualTo(true));
+            Assert.That(client.CancelUnusedNfturboPackShopApprovalWindow(identity), Is.True);
+            Assert.That(reserved.GetValue(client), Is.EqualTo(false));
+        }
+
+        [Test]
+        public void PeraApprovalReservationOperationsAreSuccessfulNoOps()
+        {
+            var client = CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            typeof(BlockmakerAuth).GetProperty("Instance",
+                BindingFlags.Static | BindingFlags.Public)
+                .SetValue(null, auth);
+            var identity = new PeraIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+            var reserved = PrivateField(
+                typeof(BlockmakerClient), "_nfturboPackShopLutePrimeReserved");
+
+            Assert.That(client.TryConsumeNfturboPackShopApprovalWindow(identity), Is.True);
+            Assert.That(client.CancelUnusedNfturboPackShopApprovalWindow(identity), Is.True);
+            Assert.That(reserved.GetValue(client), Is.EqualTo(false));
+        }
+
+        [Test]
         public void CancelledPaymentCallbackCannotCompleteAFutureRetry()
         {
             CreateClient();
@@ -408,6 +473,12 @@ namespace Blockmaker.Tests
             Assert.That(typeof(BlockmakerClient).GetMethod(
                 "SubmitNfturboPackShopOptIns", BindingFlags.Instance | BindingFlags.Public),
                 Is.Not.Null);
+            Assert.That(typeof(BlockmakerClient).GetMethod(
+                "TryConsumeNfturboPackShopApprovalWindow",
+                BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
+            Assert.That(typeof(BlockmakerClient).GetMethod(
+                "CancelUnusedNfturboPackShopApprovalWindow",
+                BindingFlags.Instance | BindingFlags.Public), Is.Not.Null);
             Assert.That(typeof(NfturboPackShopOptInPrepareRequest).GetField("walletAddress"),
                 Is.Null, "The scoped token, not a caller-supplied wallet, owns the request.");
             Assert.That(typeof(NfturboPackShopOptInSubmitRequest).GetField("optInIntent"),
