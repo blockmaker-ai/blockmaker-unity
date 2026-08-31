@@ -1430,7 +1430,8 @@ namespace Blockmaker
             UnityWebRequest req,
             Action<T>       onSuccess,
             Action<string>  onError,
-            Action<BlockmakerError> onBlockmakerError = null) where T : class
+            Action<BlockmakerError> onBlockmakerError = null,
+            bool rememberSigningIntent = true) where T : class
         {
             if (req.result != UnityWebRequest.Result.Success)
             {
@@ -1478,7 +1479,7 @@ namespace Blockmaker
                     onError?.Invoke("Something went wrong. Please try again.");
                     return;
                 }
-                TryRememberSigningIntent(body);
+                if (rememberSigningIntent) TryRememberSigningIntent(body);
                 onSuccess?.Invoke(JsonUtility.FromJson<T>(body));
             }
             catch (Exception e)

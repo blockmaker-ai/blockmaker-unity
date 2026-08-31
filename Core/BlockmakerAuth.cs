@@ -317,6 +317,11 @@ namespace Blockmaker
         // could each start a Login() (duplicate signature prompts / torn SaveSession).
         private bool      _walletLoginInFlight;
 
+        // True only while ConnectNfturboPackShopWallet owns the current Pera/Lute
+        // connection attempt. CompleteWalletConnection consumes it before invoking
+        // the game's callback, keeping generic player login out of the Shop flow.
+        private bool      _nfturboPackShopConnectInFlight;
+
         // Monotonically-increasing id of the CURRENT wallet-login attempt. Every attempt
         // captures the value at start; RetryWalletLogin / CancelWalletLogin / Logout bump it,
         // which invalidates the old attempt's callbacks (a late success/error whose captured
@@ -1010,6 +1015,37 @@ namespace Blockmaker
     #endif
         }
 
+        /// <summary>
+        /// Connect Pera or Lute for NFTURBO Store access without starting the generic
+        /// Blockmaker player-login proof. The caller must next use
+        /// <see cref="BlockmakerClient.EnsureNfturboPackShopSession"/>; this method
+        /// creates no token and does not make non-Shop routes authenticated.
+        /// </summary>
+        public void ConnectNfturboPackShopWallet(
+            string provider,
+            Action<IBlockmakerIdentity> onSuccess = null,
+            Action<string> onError = null)
+        {
+            if (!string.Equals(provider, ProviderPera, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(provider, ProviderLute, StringComparison.OrdinalIgnoreCase))
+            {
+                onError?.Invoke("NFTURBO Store access supports Pera or Lute.");
+                return;
+            }
+            if (_isWalletConnecting || IsAuthenticating)
+            {
+                onError?.Invoke(_isWalletConnecting
+                    ? "A wallet connection is already in progress. Please wait."
+                    : "Another sign-in is already in progress. Please wait.");
+                return;
+            }
+
+            _nfturboPackShopConnectInFlight = true;
+            ConnectWallet(provider, onSuccess, onError);
+            if (!_isWalletConnecting)
+                _nfturboPackShopConnectInFlight = false;
+        }
+
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Preserve]
         public void OnWalletQRFromJS(string payload)
@@ -1239,6 +1275,8 @@ namespace Blockmaker
         {
             try
             {
+                bool nfturboPackShopConnection = _nfturboPackShopConnectInFlight;
+                _nfturboPackShopConnectInFlight = false;
                 var prevTier = Tier;
                 var identity = CreateWalletIdentity(provider, address);
                 if (identity is WalletConnectIdentity wcIdentity && _wcv1Client != null)
@@ -1259,9 +1297,11 @@ namespace Blockmaker
                     // browsers would block it. The step-two UI asks the player to
                     // continue, and RetryWalletLogin primes the window from that click.
                     SafeInvoke(OnAuthStatus,
-                        "Lute is connected. Continue in Lute to approve the free sign-in request.");
+                        nfturboPackShopConnection
+                            ? "Lute is connected. Continue to approve NFTURBO Store access."
+                            : "Lute is connected. Continue in Lute to approve the free sign-in request.");
                 }
-                else
+                else if (!nfturboPackShopConnection)
                 {
                     TriggerWalletLogin(identity);
                 }
@@ -1280,6 +1320,7 @@ namespace Blockmaker
 
         private void FailWalletConnection(string error)
         {
+            _nfturboPackShopConnectInFlight = false;
             BlockmakerLog.Error($"[BlockmakerAuth] Wallet error: {error}");
             SafeInvoke(OnAuthError, error);
             _pendingConnectError?.Invoke(error);
@@ -1305,6 +1346,7 @@ namespace Blockmaker
             _pendingConnectSuccess = null;
             _pendingConnectError   = null;
             _isWalletConnecting    = false;
+            _nfturboPackShopConnectInFlight = false;
     #if UNITY_WEBGL && !UNITY_EDITOR
             BlockmakerWalletBridge.CancelWalletQR();
     #endif
@@ -2169,6 +2211,7 @@ namespace Blockmaker
             _pendingMagicError     = null;
             _isWalletConnecting    = false;
             _walletLoginInFlight   = false;
+            _nfturboPackShopConnectInFlight = false;
             // Invalidate + hard-stop any in-flight wallet-signature login: without this a
             // still-polling Login() could complete AFTER logout and write a fresh session
             // (UpdateTokens/SaveSession) for an identity the user just discarded.
@@ -2251,6 +2294,16 @@ namespace Blockmaker
             var oldProvider = Identity?.ProviderName;
             var oldAddress  = Identity?.Address;
             var oldTier     = Identity?.Tier ?? IdentityTier.Guest;
+
+            // The NFTURBO Store credential is deliberately bound to one exact
+            // provider + wallet and is not part of the general player session.
+            // Drop it synchronously on an identity switch so it can never follow
+            // a later wallet through otherwise valid generic SDK requests.
+            if (!string.Equals(oldProvider, identity?.ProviderName,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(oldAddress, identity?.Address,
+                    StringComparison.OrdinalIgnoreCase))
+                BlockmakerClient.Instance?.ClearNfturboPackShopSession();
 
             if (Identity != null && Identity != identity && oldTier > IdentityTier.Guest)
             {
@@ -2561,6 +2614,45 @@ namespace Blockmaker
 
             BeginPendingSign();
             _signAwaiting = false; // invalidate, don't await, the abandoned sign
+        }
+
+        /// <summary>
+        /// Give NFTURBO's deliberately separate Pack-Shop authentication flow the
+        /// current wallet-signing slot. A freshly connected Pera identity normally
+        /// starts the generic player-login coroutine before the connection callback
+        /// returns; that legacy flow builds its proof through /v1/transactions/build.
+        /// The Shop must never depend on that builder, so its immediate connection
+        /// callback cancels the generic coroutine before it can advance from its
+        /// challenge to a build request. An approval already open in a wallet cannot
+        /// be replaced safely and therefore remains a hard stop.
+        /// </summary>
+        internal bool PrepareNfturboPackShopSigning(
+            IBlockmakerIdentity expectedIdentity,
+            out string error)
+        {
+            error = null;
+            if (expectedIdentity == null || Identity != expectedIdentity)
+            {
+                error = "The connected wallet changed. Reopen the NFTURBO Store and try again.";
+                return false;
+            }
+            if (_isWalletConnecting || IsAuthenticating)
+            {
+                error = "Finish connecting your wallet, then try the NFTURBO Store again.";
+                return false;
+            }
+            if (IsWebGLSignInFlight)
+            {
+                error = "Finish or cancel the wallet request already open, then try the NFTURBO Store again.";
+                return false;
+            }
+            if (_walletLoginInFlight)
+            {
+                BlockmakerLog.Info(
+                    "[BlockmakerAuth] Yielding the wallet-signing slot to NFTURBO Store authentication.");
+                AbandonWalletLoginAttempt();
+            }
+            return true;
         }
 
         private static IBlockmakerIdentity CreateWalletIdentity(string provider, string address)

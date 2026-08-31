@@ -206,6 +206,56 @@ The SDK includes ready-to-use UI screens built with UI Toolkit:
 
 All UI is optional — you can build your own using the `BlockmakerAuth` API directly.
 
+## NFTURBO Pack-Shop scoped access
+
+NFTURBO's WebGL Store uses a separate short-lived Pera/Lute proof. It is not a
+normal Blockmaker player session: the credential stays in memory, is never
+returned to game code, and can be attached only by the dedicated Pack-Shop
+request helpers.
+
+Use `ConnectNfturboPackShopWallet` instead of `ConnectWallet` when the Store
+needs a new wallet connection. Pera can continue to `Ensure...` from the
+connection callback. Lute needs a second player click after connecting so the
+browser can open its approval window; call `Ensure...` directly from that click.
+
+```csharp
+void ConnectStoreWallet(string provider)
+{
+    BlockmakerAuth.Instance.ConnectNfturboPackShopWallet(
+        provider,
+        identity =>
+        {
+            if (identity is LuteIdentity)
+            {
+                ShowContinueWithLuteButton(BeginStoreSession);
+                return;
+            }
+            BeginStoreSession(); // Pera
+        },
+        ShowStoreError);
+}
+
+void BeginStoreSession()
+{
+    BlockmakerClient.Instance.EnsureNfturboPackShopSession(
+        onSuccess: LoadStore,
+        onError: ShowStoreError);
+}
+
+void LoadStore()
+{
+    BlockmakerClient.Instance.GetNfturboPackShop<StoreResponse>(
+        "/v1/pack-shop/info",
+        RenderStore,
+        ShowStoreError);
+}
+```
+
+Use `GetNfturboPackShop` / `PostNfturboPackShop` for every player-facing
+`/v1/pack-shop` request. Keep all non-Shop traffic on the existing generic SDK
+methods. A 401/403 clears only the scoped credential; ask the player to approve
+Store access again rather than falling back to a generic token or API key.
+
 ## Logging
 
 SDK logs are silent in release builds by default. To adjust:
