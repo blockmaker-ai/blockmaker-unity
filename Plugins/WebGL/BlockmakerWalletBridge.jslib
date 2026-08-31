@@ -850,6 +850,36 @@ mergeInto(LibraryManager.library, {
     });
   },
 
+  /** Attempt-tagged Pera sign; late callbacks cannot complete a later retry. */
+  PeraJsSignTransactionTagged__deps: ['$bmPeraEnsureSession', '$loadAlgosdk', '$bmPeraSignError', '$bmUint8ToBase64', '$bmBase64ToUint8'],
+  PeraJsSignTransactionTagged: function(txnBase64Ptr, attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnBase64      = UTF8ToString(txnBase64Ptr);
+    var attemptId      = UTF8ToString(attemptIdPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var tagged = function(value) { return attemptId + '|' + value; };
+
+    Promise.all([bmPeraEnsureSession(), loadAlgosdk()])
+    .then(function(results) {
+      var wallet  = results[0];
+      var algosdk = results[1];
+      var group = [{ txn: algosdk.decodeUnsignedTransaction(bmBase64ToUint8(txnBase64)) }];
+      return wallet.signTransaction([group]);
+    })
+    .then(function(signed) {
+      if (!signed || signed.length !== 1 || !signed[0]) {
+        SendMessage(gameObjectName, errorCb, tagged('The transaction was not approved in your wallet. Please try again.'));
+        return;
+      }
+      var raw = signed[0] instanceof Uint8Array ? signed[0] : new Uint8Array(signed[0]);
+      SendMessage(gameObjectName, successCb, tagged(bmUint8ToBase64(raw)));
+    })
+    .catch(function(err) {
+      SendMessage(gameObjectName, errorCb, tagged(bmPeraSignError(err)));
+    });
+  },
+
   /**
    * PeraJsSignGroupTransaction — sign a group of unsigned msgpack txns
    * atomically via the Pera JS session, preserving order.
@@ -907,6 +937,55 @@ mergeInto(LibraryManager.library, {
       var msg = bmPeraSignError(err);
       console.error('[BlockmakerWalletBridge] PeraJsSignGroupTransaction error:', msg);
       SendMessage(gameObjectName, errorCb, msg);
+    });
+  },
+
+  /** Attempt-tagged Pera atomic-group sign. */
+  PeraJsSignGroupTransactionTagged__deps: ['$bmPeraEnsureSession', '$loadAlgosdk', '$bmPeraSignError', '$bmUint8ToBase64', '$bmBase64ToUint8'],
+  PeraJsSignGroupTransactionTagged: function(txnsJsonPtr, attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnsJson       = UTF8ToString(txnsJsonPtr);
+    var attemptId      = UTF8ToString(attemptIdPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var tagged = function(value) { return attemptId + '|' + value; };
+
+    var b64Array;
+    try { b64Array = JSON.parse(txnsJson); }
+    catch(e) { SendMessage(gameObjectName, errorCb, tagged('Invalid transaction data.')); return; }
+
+    if (!Array.isArray(b64Array) || b64Array.length === 0) {
+      SendMessage(gameObjectName, errorCb, tagged('No transactions provided.'));
+      return;
+    }
+
+    var expected = b64Array.length;
+    Promise.all([bmPeraEnsureSession(), loadAlgosdk()])
+    .then(function(results) {
+      var wallet  = results[0];
+      var algosdk = results[1];
+      var group = b64Array.map(function(b64) {
+        return { txn: algosdk.decodeUnsignedTransaction(bmBase64ToUint8(b64)) };
+      });
+      return wallet.signTransaction([group]);
+    })
+    .then(function(signed) {
+      if (!Array.isArray(signed) || signed.length !== expected) {
+        SendMessage(gameObjectName, errorCb, tagged('Wallet returned ' + (signed ? signed.length : 0) + ' signed transactions, expected ' + expected + '.'));
+        return;
+      }
+      var out = [];
+      for (var i = 0; i < signed.length; i++) {
+        if (!signed[i]) {
+          SendMessage(gameObjectName, errorCb, tagged('Wallet declined to sign transaction ' + (i + 1) + ' of ' + expected + '.'));
+          return;
+        }
+        out.push(bmUint8ToBase64(signed[i] instanceof Uint8Array ? signed[i] : new Uint8Array(signed[i])));
+      }
+      SendMessage(gameObjectName, successCb, tagged(JSON.stringify(out)));
+    })
+    .catch(function(err) {
+      SendMessage(gameObjectName, errorCb, tagged(bmPeraSignError(err)));
     });
   },
 
@@ -1109,6 +1188,41 @@ mergeInto(LibraryManager.library, {
       });
   },
 
+  /** Attempt-tagged Lute sign; see the tagged Pera variant above. */
+  LuteJsSignTransactionTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignTransactionTagged: function(txnBase64Ptr, attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnBase64      = UTF8ToString(txnBase64Ptr);
+    var attemptId      = UTF8ToString(attemptIdPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var wallet = getLuteWallet();
+    var tagged = function(value) { return attemptId + '|' + value; };
+
+    if (!wallet) {
+      loadLuteConnect().catch(function() {});
+      SendMessage(gameObjectName, errorCb, tagged('Lute is still loading. Wait a moment, then try again.'));
+      return;
+    }
+
+    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+    window._bmLutePrimeTimer = null;
+    window._bmLutePrimedWindow = null;
+
+    wallet.signTxns([{ txn: txnBase64 }])
+      .then(function(signed) {
+        var encoded = Array.isArray(signed) && signed.length === 1 ? bmLuteSignedBytes(signed[0]) : null;
+        if (!encoded) {
+          SendMessage(gameObjectName, errorCb, tagged('Lute did not sign the transaction. Nothing was submitted.'));
+          return;
+        }
+        SendMessage(gameObjectName, successCb, tagged(encoded));
+      })
+      .catch(function(err) {
+        SendMessage(gameObjectName, errorCb, tagged(bmLuteError(err, 'The transaction')));
+      });
+  },
+
   LuteJsSignGroupTransaction__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
   LuteJsSignGroupTransaction: function(txnsJsonPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
     var txnsJson       = UTF8ToString(txnsJsonPtr);
@@ -1153,6 +1267,56 @@ mergeInto(LibraryManager.library, {
       })
       .catch(function(err) {
         SendMessage(gameObjectName, errorCb, bmLuteError(err, 'The transaction group'));
+    });
+  },
+
+  /** Attempt-tagged Lute atomic-group sign. */
+  LuteJsSignGroupTransactionTagged__deps: ['$getLuteWallet', '$loadLuteConnect', '$bmLuteSignedBytes', '$bmLuteError'],
+  LuteJsSignGroupTransactionTagged: function(txnsJsonPtr, attemptIdPtr, gameObjectNamePtr, successCbPtr, errorCbPtr) {
+    var txnsJson       = UTF8ToString(txnsJsonPtr);
+    var attemptId      = UTF8ToString(attemptIdPtr);
+    var gameObjectName = UTF8ToString(gameObjectNamePtr);
+    var successCb      = UTF8ToString(successCbPtr);
+    var errorCb        = UTF8ToString(errorCbPtr);
+    var tagged = function(value) { return attemptId + '|' + value; };
+    var b64Array;
+    try { b64Array = JSON.parse(txnsJson); }
+    catch(e) { SendMessage(gameObjectName, errorCb, tagged('Invalid transaction data.')); return; }
+    if (!Array.isArray(b64Array) || b64Array.length === 0) {
+      SendMessage(gameObjectName, errorCb, tagged('No transactions provided.'));
+      return;
+    }
+
+    var wallet = getLuteWallet();
+    if (!wallet) {
+      loadLuteConnect().catch(function() {});
+      SendMessage(gameObjectName, errorCb, tagged('Lute is still loading. Wait a moment, then try again.'));
+      return;
+    }
+
+    if (window._bmLutePrimeTimer) clearTimeout(window._bmLutePrimeTimer);
+    window._bmLutePrimeTimer = null;
+    window._bmLutePrimedWindow = null;
+
+    wallet.signTxns(b64Array.map(function(b64) { return { txn: b64 }; }))
+      .then(function(signed) {
+        if (!Array.isArray(signed) || signed.length !== b64Array.length) {
+          SendMessage(gameObjectName, errorCb, tagged('Lute returned an incomplete transaction group. Nothing was submitted.'));
+          return;
+        }
+        var encoded = [];
+        for (var i = 0; i < signed.length; i++) {
+          var value = bmLuteSignedBytes(signed[i]);
+          if (!value) {
+            SendMessage(gameObjectName, errorCb, tagged('Lute did not approve transaction ' + (i + 1) + ' of ' + signed.length + '. Nothing was submitted.'));
+            return;
+          }
+          encoded.push(value);
+        }
+        SendMessage(gameObjectName, successCb, tagged(JSON.stringify(encoded)));
+      })
+      .catch(function(err) {
+        SendMessage(gameObjectName, errorCb, tagged(bmLuteError(err, 'The transaction group')));
       });
   },
 

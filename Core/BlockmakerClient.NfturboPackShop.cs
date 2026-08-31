@@ -49,6 +49,8 @@ namespace Blockmaker
         private Coroutine _nfturboPackShopAuthCoroutine;
         private string _nfturboPackShopAuthWallet;
         private string _nfturboPackShopAuthProvider;
+        private bool _nfturboPackShopWalletSignInFlight;
+        private bool _nfturboPackShopLutePrimeReserved;
 
         /// <summary>
         /// True only when the current Pera/Lute identity has a still-live, exact
@@ -74,11 +76,19 @@ namespace Blockmaker
             WalletConnectIdentity identity;
             string providerId;
             string ignored;
+            if (_nfturboPackShopLutePrimeReserved)
+            {
+                identity = BlockmakerAuth.Instance?.Identity as WalletConnectIdentity;
+                if (TryNfturboPackShopProvider(identity, out providerId) &&
+                    providerId == "lute") return true;
+            }
             if (!TryGetNfturboPackShopIdentity(out identity, out providerId, out ignored))
                 return false;
             if (providerId != "lute") return true;
-            return BlockmakerAuth.Instance != null &&
+            bool primed = BlockmakerAuth.Instance != null &&
                 BlockmakerAuth.Instance.PrimeWalletApprovalWindow();
+            if (primed) _nfturboPackShopLutePrimeReserved = true;
+            return primed;
         }
 
         /// <summary>
@@ -170,14 +180,23 @@ namespace Blockmaker
         public void ClearNfturboPackShopSession()
         {
             ResetNfturboPackShopSession();
-            if (!_nfturboPackShopAuthInFlight) return;
+            if (!_nfturboPackShopAuthInFlight)
+            {
+                CancelNfturboPackShopLutePrime();
+                return;
+            }
 
             _nfturboPackShopAuthGeneration++;
+            var auth = BlockmakerAuth.Instance;
+            if (_nfturboPackShopWalletSignInFlight)
+                auth?.CancelNfturboPackShopSigning();
+            CancelNfturboPackShopLutePrime();
             var coroutine = _nfturboPackShopAuthCoroutine;
             _nfturboPackShopAuthCoroutine = null;
             _nfturboPackShopAuthInFlight = false;
             _nfturboPackShopAuthWallet = null;
             _nfturboPackShopAuthProvider = null;
+            _nfturboPackShopWalletSignInFlight = false;
             if (coroutine != null) StopCoroutine(coroutine);
             CompleteNfturboPackShopAuthWaiters(false,
                 "NFTURBO Store sign-in was cancelled because the connected wallet changed.");
@@ -228,6 +247,55 @@ namespace Blockmaker
                 url, token, config.defaultTimeoutSeconds, onSuccess, onError));
         }
 
+        /// <summary>
+        /// Prepare the still-required, commit-bound ASA opt-ins for a paid NFTURBO
+        /// Pack-Shop purchase. The scoped token supplies the wallet; it is never sent
+        /// in this body and cannot be used with the generic transaction builder.
+        /// </summary>
+        public void PrepareNfturboPackShopOptIns(
+            string commitId,
+            long[] assetIds,
+            Action<NfturboPackShopOptInPrepareResult> onSuccess,
+            Action<string> onError = null)
+        {
+            PostNfturboPackShop<NfturboPackShopOptInPrepareRequest,
+                NfturboPackShopOptInPrepareResult>(
+                "/v1/pack-shop/opt-ins/prepare",
+                new NfturboPackShopOptInPrepareRequest
+                {
+                    commitId = commitId,
+                    assetIds = assetIds,
+                },
+                onSuccess,
+                onError);
+        }
+
+        /// <summary>
+        /// Submit one exact signed opt-in group prepared by
+        /// <see cref="PrepareNfturboPackShopOptIns"/>. The opaque intent binds the
+        /// bytes to the same commit, scoped wallet, and short-lived preparation.
+        /// </summary>
+        public void SubmitNfturboPackShopOptIns(
+            string commitId,
+            string[] signedTxnsBase64,
+            string optInIntent,
+            Action<NfturboPackShopOptInSubmitResult> onSuccess,
+            Action<string> onError = null)
+        {
+            PostNfturboPackShop<NfturboPackShopOptInSubmitRequest,
+                NfturboPackShopOptInSubmitResult>(
+                "/v1/pack-shop/opt-ins/submit",
+                new NfturboPackShopOptInSubmitRequest
+                {
+                    commitId = commitId,
+                    signedTxnsBase64 = signedTxnsBase64,
+                    optInIntent = optInIntent,
+                },
+                config.longRequestTimeoutSeconds,
+                onSuccess,
+                onError);
+        }
+
         private IEnumerator AcquireNfturboPackShopSession(
             WalletConnectIdentity identity,
             string wallet,
@@ -273,10 +341,16 @@ namespace Blockmaker
                 string signedTransaction = null;
                 string signingError = null;
                 bool signingCallback = false;
-                yield return identity.SignTransaction(
+                _nfturboPackShopWalletSignInFlight = true;
+                // The Lute adapter now owns/reuses the primed window; it clears the
+                // reservation synchronously when this exact sign begins.
+                _nfturboPackShopLutePrimeReserved = false;
+                yield return BlockmakerAuth.Instance.SignNfturboPackShopTransaction(
+                    identity,
                     challenge.unsignedTxnBase64,
                     value => { signedTransaction = value; signingCallback = true; },
                     value => { signingError = value; signingCallback = true; });
+                _nfturboPackShopWalletSignInFlight = false;
                 if (!NfturboPackShopAuthContextIsCurrent(identity, wallet, providerId, generation))
                     yield break;
                 if (!signingCallback || !string.IsNullOrEmpty(signingError) ||
@@ -337,7 +411,11 @@ namespace Blockmaker
             finally
             {
                 if (generation == _nfturboPackShopAuthGeneration)
+                {
+                    _nfturboPackShopWalletSignInFlight = false;
+                    if (!acquired) CancelNfturboPackShopLutePrime();
                     FinishNfturboPackShopAuthentication(acquired, failure);
+                }
             }
         }
 
@@ -421,6 +499,7 @@ namespace Blockmaker
                 uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(jsonBody)),
                 downloadHandler = new DownloadHandlerBuffer(),
                 timeout = SafeTimeout(timeout),
+                redirectLimit = 0,
             };
             ApplyCommonHeaders(request, true);
             request.SetRequestHeader("X-Blockmaker-Client",
@@ -446,6 +525,7 @@ namespace Blockmaker
         {
             var request = UnityWebRequest.Get(url);
             request.timeout = SafeTimeout(timeout);
+            request.redirectLimit = 0;
             ApplyCommonHeaders(request, false);
             request.SetRequestHeader("X-Blockmaker-Client",
                 NfturboPackShopAuthContract.ClientHeader);
@@ -514,6 +594,13 @@ namespace Blockmaker
         private void ResetNfturboPackShopSession()
         {
             _nfturboPackShopSession = null;
+        }
+
+        private void CancelNfturboPackShopLutePrime()
+        {
+            if (!_nfturboPackShopLutePrimeReserved) return;
+            _nfturboPackShopLutePrimeReserved = false;
+            BlockmakerAuth.Instance?.CancelPrimedWalletApprovalWindow();
         }
 
         private static bool TryGetNfturboPackShopIdentity(

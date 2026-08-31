@@ -153,42 +153,53 @@ namespace Blockmaker
                     yield break;
                 }
 
-                int luteSignGen = BlockmakerAuth.Instance.BeginPendingSign();
-                BlockmakerWalletBridge.LuteJsSignTransaction(
-                    unsignedTxnBase64,
-                    BlockmakerAuth.Instance.gameObject.name,
-                    nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
-                    nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS));
-
-                float luteElapsed = 0f;
-                while (BlockmakerAuth.Instance != null &&
-                       BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen) &&
-                       BlockmakerAuth.Instance.PendingSignedTxn == null &&
-                       BlockmakerAuth.Instance.PendingSignError == null &&
-                       luteElapsed < BlockmakerAuth.WalletSignTimeout)
+                var luteAuth = BlockmakerAuth.Instance;
+                string luteAttemptId;
+                int luteSignGen = luteAuth.BeginAttemptTaggedPendingSign(
+                    this, out luteAttemptId);
+                try
                 {
-                    luteElapsed += Time.unscaledDeltaTime;
-                    yield return null;
-                }
+                    BlockmakerWalletBridge.LuteJsSignTransactionTagged(
+                        unsignedTxnBase64,
+                        luteAttemptId,
+                        luteAuth.gameObject.name,
+                        nameof(luteAuth.OnTxnSignedFromJS),
+                        nameof(luteAuth.OnTxnErrorFromJS));
 
-                if (BlockmakerAuth.Instance == null ||
-                    !BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen))
+                    float luteElapsed = 0f;
+                    while (luteAuth != null &&
+                           luteAuth.IsSignGenerationCurrent(luteSignGen) &&
+                           luteAuth.PendingSignedTxn == null &&
+                           luteAuth.PendingSignError == null &&
+                           luteElapsed < BlockmakerAuth.WalletSignTimeout)
+                    {
+                        luteElapsed += Time.unscaledDeltaTime;
+                        yield return null;
+                    }
+
+                    if (luteAuth == null ||
+                        !luteAuth.IsSignGenerationCurrent(luteSignGen))
+                    {
+                        onError?.Invoke("The request was interrupted. Please try again.");
+                        yield break;
+                    }
+
+                    if (luteAuth.PendingSignedTxn == null &&
+                        luteAuth.PendingSignError == null)
+                    {
+                        onError?.Invoke("Lute did not respond in time. Nothing was submitted. Please try again.");
+                        yield break;
+                    }
+
+                    string luteResult = luteAuth.ConsumePendingSignedTxn();
+                    string luteError  = luteAuth.ConsumePendingSignError();
+                    if (luteResult != null) onSigned?.Invoke(luteResult);
+                    else onError?.Invoke(luteError ?? "Lute could not complete the request. Nothing was submitted.");
+                }
+                finally
                 {
-                    onError?.Invoke("The request was interrupted. Please try again.");
-                    yield break;
+                    if (luteAuth != null) luteAuth.CancelPendingSign(luteSignGen);
                 }
-
-                if (BlockmakerAuth.Instance.PendingSignedTxn == null &&
-                    BlockmakerAuth.Instance.PendingSignError == null)
-                {
-                    onError?.Invoke("Lute did not respond in time. Nothing was submitted. Please try again.");
-                    yield break;
-                }
-
-                string luteResult = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
-                string luteError  = BlockmakerAuth.Instance.ConsumePendingSignError();
-                if (luteResult != null) onSigned?.Invoke(luteResult);
-                else onError?.Invoke(luteError ?? "Lute could not complete the request. Nothing was submitted.");
                 yield break;
             }
     #endif
@@ -301,61 +312,75 @@ namespace Blockmaker
                 yield break;
             }
 
-            int signGen = BlockmakerAuth.Instance.BeginPendingSign();
-            if (ProviderName == BlockmakerAuth.ProviderPera &&
-                BlockmakerWalletBridge.PeraJsHasSession() == 1)
+            var jsAuth = BlockmakerAuth.Instance;
+            bool taggedPera = ProviderName == BlockmakerAuth.ProviderPera;
+            string signAttemptId = null;
+            int signGen = taggedPera
+                ? jsAuth.BeginAttemptTaggedPendingSign(this, out signAttemptId)
+                : jsAuth.BeginOwnedPendingSign(this);
+            try
             {
-                // Pera on WebGL: sign through the official @perawallet/connect JS
-                // session (established by PeraJsConnect / restored by PeraJsReconnect).
-                // Same pending-sign plumbing and callbacks as the generic bridge below.
-                BlockmakerWalletBridge.PeraJsSignTransaction(
-                    txnBase64:         unsignedTxnBase64,
-                    gameObjectName:    BlockmakerAuth.Instance.gameObject.name,
-                    successCallback:   nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
-                    errorCallback:     nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
-                );
-            }
-            else
-            BlockmakerWalletBridge.SignTransaction(
-                provider:          ProviderName,
-                txnBase64:         unsignedTxnBase64,
-                gameObjectName:    BlockmakerAuth.Instance.gameObject.name,
-                successCallback:   nameof(BlockmakerAuth.Instance.OnTxnSignedFromJS),
-                errorCallback:     nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
-            );
+                if (taggedPera)
+                {
+                    // The official Pera bridge can restore its own persisted session.
+                    // Every callback carries this attempt's opaque ID, so disposing a
+                    // timed-out sign cannot feed signed bytes into a later retry.
+                    BlockmakerWalletBridge.PeraJsSignTransactionTagged(
+                        txnBase64:         unsignedTxnBase64,
+                        attemptId:         signAttemptId,
+                        gameObjectName:    jsAuth.gameObject.name,
+                        successCallback:   nameof(jsAuth.OnTxnSignedFromJS),
+                        errorCallback:     nameof(jsAuth.OnTxnErrorFromJS)
+                    );
+                }
+                else
+                {
+                    BlockmakerWalletBridge.SignTransaction(
+                        provider:          ProviderName,
+                        txnBase64:         unsignedTxnBase64,
+                        gameObjectName:    jsAuth.gameObject.name,
+                        successCallback:   nameof(jsAuth.OnTxnSignedFromJS),
+                        errorCallback:     nameof(jsAuth.OnTxnErrorFromJS)
+                    );
+                }
 
-            float jsElapsed = 0f;
-            while (BlockmakerAuth.Instance != null &&
-                   BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen) &&
-                   BlockmakerAuth.Instance.PendingSignedTxn == null &&
-                   BlockmakerAuth.Instance.PendingSignError == null &&
-                   jsElapsed < BlockmakerAuth.WalletSignTimeout)
+                float jsElapsed = 0f;
+                while (jsAuth != null &&
+                       jsAuth.IsSignGenerationCurrent(signGen) &&
+                       jsAuth.PendingSignedTxn == null &&
+                       jsAuth.PendingSignError == null &&
+                       jsElapsed < BlockmakerAuth.WalletSignTimeout)
+                {
+                    jsElapsed += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+
+                if (jsAuth != null && !jsAuth.IsSignGenerationCurrent(signGen))
+                {
+                    onError?.Invoke("The request was interrupted. Please try again.");
+                    yield break;
+                }
+
+                if (jsAuth == null)
+                {
+                    onError?.Invoke("The request was interrupted. Please try again.");
+                    yield break;
+                }
+
+                if (jsAuth.PendingSignedTxn == null &&
+                    jsAuth.PendingSignError == null)
+                {
+                    onError?.Invoke("The request timed out. Please try again.");
+                    yield break;
+                }
+
+                result = jsAuth.ConsumePendingSignedTxn();
+                error  = jsAuth.ConsumePendingSignError();
+            }
+            finally
             {
-                jsElapsed += Time.unscaledDeltaTime;
-                yield return null;
+                if (jsAuth != null) jsAuth.CancelPendingSign(signGen);
             }
-
-            if (BlockmakerAuth.Instance != null && !BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen))
-            {
-                onError?.Invoke("The request was interrupted. Please try again.");
-                yield break;
-            }
-
-            if (BlockmakerAuth.Instance == null)
-            {
-                onError?.Invoke("The request was interrupted. Please try again.");
-                yield break;
-            }
-
-            if (BlockmakerAuth.Instance.PendingSignedTxn == null &&
-                BlockmakerAuth.Instance.PendingSignError == null)
-            {
-                onError?.Invoke("The request timed out. Please try again.");
-                yield break;
-            }
-
-            result = BlockmakerAuth.Instance.ConsumePendingSignedTxn();
-            error  = BlockmakerAuth.Instance.ConsumePendingSignError();
     #else
             BlockmakerLog.Warning($"[{ProviderName}Identity] No active WC v1/v2 session and no JS bridge available.");
             error = "Your wallet is not connected. Please connect your wallet again to continue.";
@@ -404,42 +429,53 @@ namespace Blockmaker
                 }
                 luteTxnsJson += "]";
 
-                int luteSignGen = BlockmakerAuth.Instance.BeginPendingSign();
-                BlockmakerWalletBridge.LuteJsSignGroupTransaction(
-                    luteTxnsJson,
-                    BlockmakerAuth.Instance.gameObject.name,
-                    nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
-                    nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS));
-
-                float luteElapsed = 0f;
-                while (BlockmakerAuth.Instance != null &&
-                       BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen) &&
-                       BlockmakerAuth.Instance.PendingSignedTxns == null &&
-                       BlockmakerAuth.Instance.PendingSignError == null &&
-                       luteElapsed < BlockmakerAuth.WalletSignTimeout)
+                var luteAuth = BlockmakerAuth.Instance;
+                string luteAttemptId;
+                int luteSignGen = luteAuth.BeginAttemptTaggedPendingSign(
+                    this, out luteAttemptId);
+                try
                 {
-                    luteElapsed += Time.unscaledDeltaTime;
-                    yield return null;
-                }
+                    BlockmakerWalletBridge.LuteJsSignGroupTransactionTagged(
+                        luteTxnsJson,
+                        luteAttemptId,
+                        luteAuth.gameObject.name,
+                        nameof(luteAuth.OnGroupTxnSignedFromJS),
+                        nameof(luteAuth.OnTxnErrorFromJS));
 
-                if (BlockmakerAuth.Instance == null ||
-                    !BlockmakerAuth.Instance.IsSignGenerationCurrent(luteSignGen))
+                    float luteElapsed = 0f;
+                    while (luteAuth != null &&
+                           luteAuth.IsSignGenerationCurrent(luteSignGen) &&
+                           luteAuth.PendingSignedTxns == null &&
+                           luteAuth.PendingSignError == null &&
+                           luteElapsed < BlockmakerAuth.WalletSignTimeout)
+                    {
+                        luteElapsed += Time.unscaledDeltaTime;
+                        yield return null;
+                    }
+
+                    if (luteAuth == null ||
+                        !luteAuth.IsSignGenerationCurrent(luteSignGen))
+                    {
+                        onError?.Invoke("The request was interrupted. Please try again.");
+                        yield break;
+                    }
+
+                    if (luteAuth.PendingSignedTxns == null &&
+                        luteAuth.PendingSignError == null)
+                    {
+                        onError?.Invoke("Lute did not respond in time. Nothing was submitted. Please try again.");
+                        yield break;
+                    }
+
+                    string[] luteResults = luteAuth.ConsumePendingSignedTxns();
+                    string luteError = luteAuth.ConsumePendingSignError();
+                    if (luteResults != null) onSigned?.Invoke(luteResults);
+                    else onError?.Invoke(luteError ?? "Lute could not complete the request. Nothing was submitted.");
+                }
+                finally
                 {
-                    onError?.Invoke("The request was interrupted. Please try again.");
-                    yield break;
+                    if (luteAuth != null) luteAuth.CancelPendingSign(luteSignGen);
                 }
-
-                if (BlockmakerAuth.Instance.PendingSignedTxns == null &&
-                    BlockmakerAuth.Instance.PendingSignError == null)
-                {
-                    onError?.Invoke("Lute did not respond in time. Nothing was submitted. Please try again.");
-                    yield break;
-                }
-
-                string[] luteResults = BlockmakerAuth.Instance.ConsumePendingSignedTxns();
-                string luteError = BlockmakerAuth.Instance.ConsumePendingSignError();
-                if (luteResults != null) onSigned?.Invoke(luteResults);
-                else onError?.Invoke(luteError ?? "Lute could not complete the request. Nothing was submitted.");
                 yield break;
             }
     #endif
@@ -587,61 +623,74 @@ namespace Blockmaker
             }
             txnsJson += "]";
 
-            int signGen = BlockmakerAuth.Instance.BeginPendingSign();
-            if (ProviderName == BlockmakerAuth.ProviderPera &&
-                BlockmakerWalletBridge.PeraJsHasSession() == 1)
+            var jsAuth = BlockmakerAuth.Instance;
+            bool taggedPera = ProviderName == BlockmakerAuth.ProviderPera;
+            string signAttemptId = null;
+            int signGen = taggedPera
+                ? jsAuth.BeginAttemptTaggedPendingSign(this, out signAttemptId)
+                : jsAuth.BeginOwnedPendingSign(this);
+            try
             {
-                // Pera on WebGL: sign through the official @perawallet/connect JS
-                // session. One atomic group, original order preserved; every txn is
-                // presented for signing (all-or-nothing), matching the WCv1/WC v2/
-                // bridge group paths.
-                BlockmakerWalletBridge.PeraJsSignGroupTransaction(
-                    txnsJson:          txnsJson,
-                    gameObjectName:    BlockmakerAuth.Instance.gameObject.name,
-                    successCallback:   nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
-                    errorCallback:     nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
-                );
-            }
-            else
-            BlockmakerWalletBridge.SignGroupTransaction(
-                provider:          ProviderName,
-                txnsJson:          txnsJson,
-                gameObjectName:    BlockmakerAuth.Instance.gameObject.name,
-                successCallback:   nameof(BlockmakerAuth.Instance.OnGroupTxnSignedFromJS),
-                errorCallback:     nameof(BlockmakerAuth.Instance.OnTxnErrorFromJS)
-            );
+                if (taggedPera)
+                {
+                    // One atomic group, original order preserved; every txn is
+                    // presented for signing. The attempt tag prevents a late result
+                    // from a disposed group-sign coroutine completing its retry.
+                    BlockmakerWalletBridge.PeraJsSignGroupTransactionTagged(
+                        txnsJson:          txnsJson,
+                        attemptId:         signAttemptId,
+                        gameObjectName:    jsAuth.gameObject.name,
+                        successCallback:   nameof(jsAuth.OnGroupTxnSignedFromJS),
+                        errorCallback:     nameof(jsAuth.OnTxnErrorFromJS)
+                    );
+                }
+                else
+                {
+                    BlockmakerWalletBridge.SignGroupTransaction(
+                        provider:          ProviderName,
+                        txnsJson:          txnsJson,
+                        gameObjectName:    jsAuth.gameObject.name,
+                        successCallback:   nameof(jsAuth.OnGroupTxnSignedFromJS),
+                        errorCallback:     nameof(jsAuth.OnTxnErrorFromJS)
+                    );
+                }
 
-            float jsElapsed = 0f;
-            while (BlockmakerAuth.Instance != null &&
-                   BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen) &&
-                   BlockmakerAuth.Instance.PendingSignedTxns == null &&
-                   BlockmakerAuth.Instance.PendingSignError == null &&
-                   jsElapsed < BlockmakerAuth.WalletSignTimeout)
+                float jsElapsed = 0f;
+                while (jsAuth != null &&
+                       jsAuth.IsSignGenerationCurrent(signGen) &&
+                       jsAuth.PendingSignedTxns == null &&
+                       jsAuth.PendingSignError == null &&
+                       jsElapsed < BlockmakerAuth.WalletSignTimeout)
+                {
+                    jsElapsed += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+
+                if (jsAuth == null ||
+                    !jsAuth.IsSignGenerationCurrent(signGen))
+                {
+                    onError?.Invoke("The request was interrupted. Please try again.");
+                    yield break;
+                }
+
+                if (jsAuth.PendingSignedTxns == null &&
+                    jsAuth.PendingSignError == null)
+                {
+                    onError?.Invoke("The request timed out. Please try again.");
+                    yield break;
+                }
+
+                results = jsAuth.ConsumePendingSignedTxns();
+                error   = jsAuth.ConsumePendingSignError();
+
+                if (results != null) onSigned?.Invoke(results);
+                else if (error != null) onError?.Invoke(error);
+                else onError?.Invoke("The request could not be completed. Please try again.");
+            }
+            finally
             {
-                jsElapsed += Time.unscaledDeltaTime;
-                yield return null;
+                if (jsAuth != null) jsAuth.CancelPendingSign(signGen);
             }
-
-            if (BlockmakerAuth.Instance == null ||
-                !BlockmakerAuth.Instance.IsSignGenerationCurrent(signGen))
-            {
-                onError?.Invoke("The request was interrupted. Please try again.");
-                yield break;
-            }
-
-            if (BlockmakerAuth.Instance.PendingSignedTxns == null &&
-                BlockmakerAuth.Instance.PendingSignError == null)
-            {
-                onError?.Invoke("The request timed out. Please try again.");
-                yield break;
-            }
-
-            results = BlockmakerAuth.Instance.ConsumePendingSignedTxns();
-            error   = BlockmakerAuth.Instance.ConsumePendingSignError();
-
-            if (results != null) onSigned?.Invoke(results);
-            else if (error != null) onError?.Invoke(error);
-            else onError?.Invoke("The request could not be completed. Please try again.");
             yield break;
     #endif
 

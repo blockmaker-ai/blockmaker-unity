@@ -144,6 +144,15 @@ yield return identity.SignTransactions(unsignedTxnsBase64,
 );
 ```
 
+If game code owns a signing deadline and stops either coroutine, release that
+exact wallet's pending WebGL callback first. The identity check prevents an
+unrelated wallet request from being cancelled:
+
+```csharp
+BlockmakerAuth.Instance.CancelPendingWalletSign(identity);
+StopCoroutine(signCoroutine);
+```
+
 Use transaction bytes returned by a Blockmaker builder (`BuildAssetOptIn`, a shop prepare call,
 and similar purpose-built endpoints). For server-managed email wallets, the SDK automatically
 binds the builder's short-lived `signingIntent` to those exact bytes and echoes it when signing.
@@ -213,6 +222,15 @@ normal Blockmaker player session: the credential stays in memory, is never
 returned to game code, and can be attached only by the dedicated Pack-Shop
 request helpers.
 
+The built-in prompt is the narrowest integration for a Store entry button. It
+shows only Pera and Lute and fires its own success event; the normal auth event
+and Email/Defly/EVM choices are unchanged:
+
+```csharp
+AuthPromptController.OnNfturboPackShopAuthSucceeded += LoadStore;
+AuthPromptController.Instance.ShowNfturboPackShopWallets();
+```
+
 Use `ConnectNfturboPackShopWallet` instead of `ConnectWallet` when the Store
 needs a new wallet connection. Pera can continue to `Ensure...` from the
 connection callback. Lute needs a second player click after connecting so the
@@ -255,6 +273,31 @@ Use `GetNfturboPackShop` / `PostNfturboPackShop` for every player-facing
 `/v1/pack-shop` request. Keep all non-Shop traffic on the existing generic SDK
 methods. A 401/403 clears only the scoped credential; ask the player to approve
 Store access again rather than falling back to a generic token or API key.
+
+Paid purchases that still need ASA acceptance must use the scoped, commit-bound
+opt-in pair. Sign only `unsignedTxnsBase64`, validate against the returned
+`assetIds` subset, and echo the opaque `optInIntent` unchanged. When that subset
+is empty, every asset is already opted in and no wallet prompt is needed.
+
+```csharp
+BlockmakerClient.Instance.PrepareNfturboPackShopOptIns(
+    commitId, requestedAssetIds,
+    prepared =>
+    {
+        if (prepared.assetIds.Length == 0) { ResumeReveal(); return; }
+        StartCoroutine(BlockmakerAuth.Instance.Identity.SignTransactions(
+            prepared.unsignedTxnsBase64,
+            signed => BlockmakerClient.Instance.SubmitNfturboPackShopOptIns(
+                commitId, signed, prepared.optInIntent,
+                submitted => ResumeReveal(), ShowStoreError),
+            ShowStoreError));
+    },
+    ShowStoreError);
+```
+
+Scoped challenge, verification, GET, and POST requests do not follow redirects,
+so the signed proof and short-lived credential remain bound to the configured
+Blockmaker origin.
 
 ## Logging
 

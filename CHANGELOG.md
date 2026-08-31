@@ -5,11 +5,18 @@
 ### Added
 - Add NFTURBO-only Pera/Lute WebGL authentication using the server-authored Pack-Shop challenge transaction and a memory-only 15-minute Shop credential.
 - Add dedicated Pack-Shop GET/POST helpers and a Shop-only wallet connection entry point that does not start generic player login.
+- Add a built-in Shop-purpose Pera/Lute chooser and commit-bound scoped ASA opt-in prepare/submit APIs.
+- Add an identity-bound cancellation hook for game-owned transaction signing deadlines.
+
+### Fixed
+- Reuse an already primed Lute approval window instead of replacing it during scoped session acquisition.
+- Release the exact pending Pera/Lute sign on timeout, cancellation, or coroutine disposal; attempt-tagged single/group callbacks cannot complete a later retry.
 
 ### Security
 - Attach the scoped credential only to the exact `/v1/pack-shop` route family; reject absolute, traversal, encoded-path, and non-Shop targets.
 - Keep the Shop credential out of generic session storage, refresh, request builders, public getters, and signing-intent caches.
 - Sign the exact challenge bytes returned by `/v1/auth/wallet/nfturbo-pack-shop/challenge`; never use the generic transaction builder in this flow.
+- Refuse redirects for scoped challenge, verification, and bearer-token requests.
 
 ## [2.0.1] - 2026-08-15
 

@@ -52,7 +52,34 @@ function createBridge(FakeLute) {
     if (!name.startsWith("$") && typeof value === "function") context[`_${name}`] = value;
   }
 
-  return { library, messages, opened, windowObject };
+  return { library, messages, opened, windowObject, context };
+}
+
+{
+  class UnusedLute {}
+  const { library, messages, context } = createBridge(UnusedLute);
+  context.bmPeraEnsureSession = () => Promise.resolve({
+    signTransaction(groups) {
+      return Promise.resolve(groups[0].map((_, i) => new Uint8Array([i + 1, 2, 3])));
+    },
+  });
+  context.loadAlgosdk = () => Promise.resolve({
+    decodeUnsignedTransaction(bytes) { return bytes; },
+  });
+
+  library.PeraJsSignTransactionTagged(
+    "AQID", "pera-attempt-1", "Auth", "signed", "failed",
+  );
+  await settle();
+  assert.equal(messages.pop().payload, "pera-attempt-1|AQID");
+
+  library.PeraJsSignGroupTransactionTagged(
+    '["AQID","BAUG"]', "pera-group-1", "Auth", "group", "failed",
+  );
+  await settle();
+  const taggedGroup = messages.pop().payload;
+  assert.ok(taggedGroup.startsWith("pera-group-1|"));
+  assert.deepEqual(JSON.parse(taggedGroup.slice(taggedGroup.indexOf("|") + 1)), ["AQID", "AgID"]);
 }
 
 async function settle() {
@@ -84,9 +111,27 @@ async function settle() {
   await settle();
   assert.equal(messages.pop().payload, "AQID");
 
+  library.LuteJsSignTransactionTagged(
+    "AQID", "shop-attempt-1", "Auth", "shopSigned", "shopFailed",
+  );
+  await settle();
+  assert.deepEqual(messages.pop(), {
+    gameObject: "Auth",
+    callback: "shopSigned",
+    payload: "shop-attempt-1|AQID",
+  });
+
   library.LuteJsSignGroupTransaction('["AQID","BAUG"]', "Auth", "group", "failed");
   await settle();
   assert.deepEqual(JSON.parse(messages.pop().payload), ["AQID", "AgID"]);
+
+  library.LuteJsSignGroupTransactionTagged(
+    '["AQID","BAUG"]', "group-attempt-1", "Auth", "group", "failed",
+  );
+  await settle();
+  const taggedGroup = messages.pop().payload;
+  assert.ok(taggedGroup.startsWith("group-attempt-1|"));
+  assert.deepEqual(JSON.parse(taggedGroup.slice(taggedGroup.indexOf("|") + 1)), ["AQID", "AgID"]);
   library.LuteJsDisconnect();
 }
 
@@ -119,4 +164,4 @@ async function settle() {
   assert.equal(messages.pop().payload, "Lute returned an incomplete transaction group. Nothing was submitted.");
 }
 
-console.log("Lute WebGL bridge tests passed (connect, popup, single sign, group sign, rejection, incomplete group).");
+console.log("Pera/Lute WebGL bridge tests passed (connect, popup, tagged single/group sign, rejection, incomplete group).");

@@ -82,4 +82,55 @@ namespace Blockmaker
         public string gameId;
         public string network;
     }
+
+    [Serializable]
+    public sealed class NfturboPackShopOptInPrepareRequest
+    {
+        public string commitId;
+        public long[] assetIds;
+    }
+
+    /// <summary>
+    /// Exact commit-bound ASA acceptance group prepared by the Pack Shop. A zero
+    /// length <see cref="assetIds"/> / <see cref="unsignedTxnsBase64"/> pair means
+    /// every requested asset is already opted in and no wallet signature is needed.
+    /// JsonUtility represents the backend's null round values as zero in that case.
+    /// </summary>
+    [Serializable]
+    public sealed class NfturboPackShopOptInPrepareResult
+    {
+        public bool     success;
+        public string   commitId;
+        public string   walletAddress;
+        public long[]   assetIds;
+        public long[]   alreadyOptedAssetIds;
+        public string[] unsignedTxnsBase64;
+        public string   txType;
+        public string   from;
+        public long     firstValidRound;
+        public long     lastValidRound;
+        public string   optInIntent;
+        public string   code;
+        public string   error;
+    }
+
+    [Serializable]
+    public sealed class NfturboPackShopOptInSubmitRequest
+    {
+        public string   commitId;
+        public string[] signedTxnsBase64;
+        public string   optInIntent;
+    }
+
+    [Serializable]
+    public sealed class NfturboPackShopOptInSubmitResult
+    {
+        public bool   success;
+        public string commitId;
+        public string txId;
+        public bool   alreadySubmitted;
+        public bool   confirmationPending;
+        public string code;
+        public string error;
+    }
 }

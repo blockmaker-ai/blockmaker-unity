@@ -245,6 +245,17 @@ namespace Blockmaker
         internal string   PendingSignError  { get; private set; }
         private int _signGeneration;
         private int _pendingSignGeneration;
+        private string _pendingSignAttemptId;
+        private IBlockmakerIdentity _pendingSignOwner;
+
+        // NFTURBO Pack-Shop signing deliberately does not share the generic JS
+        // callback slots above. Its opaque attempt ID is echoed by the WebGL bridge,
+        // so a response from a cancelled wallet window cannot satisfy a later Shop
+        // attempt even if it arrives after that retry has already started.
+        private string _nfturboPackShopSignAttemptId;
+        private string _nfturboPackShopSignedTxn;
+        private string _nfturboPackShopSignError;
+        private IBlockmakerIdentity _nfturboPackShopSigningIdentity;
 
         internal string   ConsumePendingSignedTxn()  { var v = PendingSignedTxn;  PendingSignedTxn  = null; _signAwaiting = false; return v; }
         internal string[] ConsumePendingSignedTxns() { var v = PendingSignedTxns; PendingSignedTxns = null; _signAwaiting = false; return v; }
@@ -260,9 +271,67 @@ namespace Blockmaker
             PendingSignedTxn  = null;
             PendingSignedTxns = null;
             PendingSignError  = null;
+            _pendingSignAttemptId = null;
+            _pendingSignOwner = null;
             _pendingSignGeneration = ++_signGeneration;
             _signAwaiting = true;
             return _signGeneration;
+        }
+
+        /// <summary>
+        /// Start an attempt-tagged WebGL sign. Pera/Lute echo the opaque ID in
+        /// every callback, so a result from a disposed coroutine cannot populate a
+        /// later retry's shared pending-sign slots.
+        /// </summary>
+        internal int BeginAttemptTaggedPendingSign(
+            IBlockmakerIdentity owner,
+            out string attemptId)
+        {
+            int generation = BeginPendingSign();
+            attemptId = Guid.NewGuid().ToString("N");
+            _pendingSignAttemptId = attemptId;
+            _pendingSignOwner = owner;
+            return generation;
+        }
+
+        internal int BeginOwnedPendingSign(IBlockmakerIdentity owner)
+        {
+            int generation = BeginPendingSign();
+            _pendingSignOwner = owner;
+            return generation;
+        }
+
+        /// <summary>
+        /// Release only the pending-sign generation owned by the caller. This is
+        /// safe from an iterator finally block: if a callback synchronously began a
+        /// successor sign, its newer generation is left untouched.
+        /// </summary>
+        internal bool CancelPendingSign(int generation)
+        {
+            if (_pendingSignGeneration != generation ||
+                _signGeneration != generation) return false;
+
+            PendingSignedTxn = null;
+            PendingSignedTxns = null;
+            PendingSignError = null;
+            _pendingSignAttemptId = null;
+            _pendingSignOwner = null;
+            _signAwaiting = false;
+            _signGeneration++;
+            return true;
+        }
+
+        /// <summary>
+        /// Cancel the active WebGL transaction/group signature only when it belongs
+        /// to <paramref name="expectedIdentity"/>. Call this immediately before
+        /// stopping a game-owned signing coroutine on timeout or player cancel.
+        /// Successful signs and unrelated/newer wallet requests are unchanged.
+        /// </summary>
+        public bool CancelPendingWalletSign(IBlockmakerIdentity expectedIdentity)
+        {
+            if (expectedIdentity == null || _pendingSignOwner != expectedIdentity)
+                return false;
+            return CancelPendingSign(_pendingSignGeneration);
         }
 
         internal bool IsSignGenerationCurrent(int gen) => _signGeneration == gen;
@@ -2149,18 +2218,20 @@ namespace Blockmaker
         [Preserve]
         public void OnTxnSignedFromJS(string signedTxnBase64)
         {
-            if (_pendingSignGeneration == _signGeneration)
-                PendingSignedTxn = signedTxnBase64;
+            string value;
+            if (TryConsumePendingSignCallback(signedTxnBase64, out value))
+                PendingSignedTxn = value;
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
         [Preserve]
         public void OnGroupTxnSignedFromJS(string signedTxnsJson)
         {
-            if (_pendingSignGeneration != _signGeneration) return;
+            string value;
+            if (!TryConsumePendingSignCallback(signedTxnsJson, out value)) return;
             try
             {
-                var wrapper = JsonUtility.FromJson<StringArrayWrapper>("{\"items\":" + signedTxnsJson + "}");
+                var wrapper = JsonUtility.FromJson<StringArrayWrapper>("{\"items\":" + value + "}");
                 if (wrapper?.items == null)
                 {
                     PendingSignError = "Your wallet did not return a signed transaction. Please try again.";
@@ -2179,8 +2250,48 @@ namespace Blockmaker
         [Preserve]
         public void OnTxnErrorFromJS(string error)
         {
-            if (_pendingSignGeneration == _signGeneration)
-                PendingSignError = error;
+            string value;
+            if (TryConsumePendingSignCallback(error, out value))
+                PendingSignError = value;
+        }
+
+        private bool TryConsumePendingSignCallback(string payload, out string value)
+        {
+            value = null;
+            if (!_signAwaiting || _pendingSignGeneration != _signGeneration ||
+                string.IsNullOrEmpty(payload) || PendingSignedTxn != null ||
+                PendingSignedTxns != null || PendingSignError != null) return false;
+
+            if (string.IsNullOrEmpty(_pendingSignAttemptId))
+            {
+                value = payload;
+                return true;
+            }
+
+            int separator = payload.IndexOf('|');
+            if (separator <= 0 ||
+                !string.Equals(payload.Substring(0, separator),
+                    _pendingSignAttemptId, StringComparison.Ordinal)) return false;
+            value = payload.Substring(separator + 1);
+            return !string.IsNullOrEmpty(value);
+        }
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnNfturboPackShopTxnSignedFromJS(string payload)
+        {
+            string value;
+            if (TryConsumeNfturboPackShopCallback(payload, out value))
+                _nfturboPackShopSignedTxn = value;
+        }
+
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [Preserve]
+        public void OnNfturboPackShopTxnErrorFromJS(string payload)
+        {
+            string value;
+            if (TryConsumeNfturboPackShopCallback(payload, out value))
+                _nfturboPackShopSignError = value;
         }
 
         [EditorBrowsable(EditorBrowsableState.Never)]
@@ -2198,6 +2309,7 @@ namespace Blockmaker
             StopTokenRefreshTimer();
             _isRefreshing = false;
             CancelWebGLTimeout();
+            CancelNfturboPackShopSigning();
             BeginPendingSign();
             _signAwaiting = false; // logout invalidates any in-flight sign rather than awaiting it
 
@@ -2653,6 +2765,155 @@ namespace Blockmaker
                 AbandonWalletLoginAttempt();
             }
             return true;
+        }
+
+        /// <summary>
+        /// Sign NFTURBO's server-returned Store challenge bytes on a callback channel
+        /// isolated from generic transaction/login signing. Pera and Lute echo an
+        /// opaque attempt ID with their result, which makes cancellation and retry
+        /// deterministic even when an old wallet responds late.
+        /// </summary>
+        internal IEnumerator SignNfturboPackShopTransaction(
+            WalletConnectIdentity expectedIdentity,
+            string unsignedTxnBase64,
+            Action<string> onSigned,
+            Action<string> onError)
+        {
+            string providerId = expectedIdentity is PeraIdentity &&
+                string.Equals(expectedIdentity.ProviderName, ProviderPera,
+                    StringComparison.Ordinal) ? "pera" :
+                expectedIdentity is LuteIdentity &&
+                string.Equals(expectedIdentity.ProviderName, ProviderLute,
+                    StringComparison.Ordinal) ? "lute" : null;
+            if (expectedIdentity == null || Identity != expectedIdentity ||
+                string.IsNullOrEmpty(providerId))
+            {
+                onError?.Invoke("The connected wallet changed. Reopen the NFTURBO Store and try again.");
+                yield break;
+            }
+            if (string.IsNullOrEmpty(unsignedTxnBase64))
+            {
+                onError?.Invoke("NFTURBO Store returned an invalid sign-in request. Nothing was signed.");
+                yield break;
+            }
+            if (!string.IsNullOrEmpty(_nfturboPackShopSignAttemptId))
+            {
+                onError?.Invoke("Finish or cancel the NFTURBO Store wallet request already open.");
+                yield break;
+            }
+
+            string attemptId = BeginNfturboPackShopSigningAttempt(expectedIdentity);
+#if UNITY_WEBGL && !UNITY_EDITOR
+            if (providerId == "pera")
+            {
+                BlockmakerWalletBridge.PeraJsSignTransactionTagged(
+                    unsignedTxnBase64,
+                    attemptId,
+                    gameObject.name,
+                    nameof(OnNfturboPackShopTxnSignedFromJS),
+                    nameof(OnNfturboPackShopTxnErrorFromJS));
+            }
+            else
+            {
+                BlockmakerWalletBridge.LuteJsSignTransactionTagged(
+                    unsignedTxnBase64,
+                    attemptId,
+                    gameObject.name,
+                    nameof(OnNfturboPackShopTxnSignedFromJS),
+                    nameof(OnNfturboPackShopTxnErrorFromJS));
+            }
+
+            float elapsed = 0f;
+            while (Identity == expectedIdentity &&
+                   string.Equals(_nfturboPackShopSignAttemptId, attemptId,
+                       StringComparison.Ordinal) &&
+                   _nfturboPackShopSignedTxn == null &&
+                   _nfturboPackShopSignError == null &&
+                   elapsed < WalletSignTimeout)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (Identity != expectedIdentity)
+            {
+                CancelNfturboPackShopSigning(expectedIdentity);
+                onError?.Invoke("The connected wallet changed. Reopen the NFTURBO Store and try again.");
+                yield break;
+            }
+            if (!string.Equals(_nfturboPackShopSignAttemptId, attemptId,
+                    StringComparison.Ordinal))
+            {
+                onError?.Invoke("The NFTURBO Store wallet request was cancelled. Please try again.");
+                yield break;
+            }
+
+            string signed = _nfturboPackShopSignedTxn;
+            string error = _nfturboPackShopSignError;
+            FinishNfturboPackShopSigningAttempt(attemptId);
+            if (!string.IsNullOrEmpty(signed)) onSigned?.Invoke(signed);
+            else if (!string.IsNullOrEmpty(error)) onError?.Invoke(error);
+            else onError?.Invoke(providerId == "lute"
+                ? "Lute did not respond in time. Nothing was submitted. Please try again."
+                : "Pera did not respond in time. Nothing was submitted. Please try again.");
+#else
+            FinishNfturboPackShopSigningAttempt(attemptId);
+            onError?.Invoke("NFTURBO Store wallet access is available in the WebGL game.");
+            yield return null;
+#endif
+        }
+
+        internal bool CancelNfturboPackShopSigning(
+            IBlockmakerIdentity expectedIdentity = null)
+        {
+            if (string.IsNullOrEmpty(_nfturboPackShopSignAttemptId) ||
+                (expectedIdentity != null &&
+                 _nfturboPackShopSigningIdentity != expectedIdentity)) return false;
+            _nfturboPackShopSignAttemptId = null;
+            _nfturboPackShopSignedTxn = null;
+            _nfturboPackShopSignError = null;
+            var signingIdentity = _nfturboPackShopSigningIdentity;
+            _nfturboPackShopSigningIdentity = null;
+            if (signingIdentity is LuteIdentity) CancelPrimedWalletApprovalWindow();
+            return true;
+        }
+
+        private string BeginNfturboPackShopSigningAttempt(
+            IBlockmakerIdentity expectedIdentity)
+        {
+            _nfturboPackShopSignAttemptId = Guid.NewGuid().ToString("N");
+            _nfturboPackShopSignedTxn = null;
+            _nfturboPackShopSignError = null;
+            _nfturboPackShopSigningIdentity = expectedIdentity;
+            return _nfturboPackShopSignAttemptId;
+        }
+
+        private void FinishNfturboPackShopSigningAttempt(string attemptId)
+        {
+            if (!string.Equals(_nfturboPackShopSignAttemptId, attemptId,
+                    StringComparison.Ordinal)) return;
+            _nfturboPackShopSignAttemptId = null;
+            _nfturboPackShopSignedTxn = null;
+            _nfturboPackShopSignError = null;
+            _nfturboPackShopSigningIdentity = null;
+        }
+
+        private bool TryConsumeNfturboPackShopCallback(
+            string payload,
+            out string value)
+        {
+            value = null;
+            if (string.IsNullOrEmpty(payload)) return false;
+            int separator = payload.IndexOf('|');
+            if (separator <= 0) return false;
+            string attemptId = payload.Substring(0, separator);
+            if (string.IsNullOrEmpty(_nfturboPackShopSignAttemptId) ||
+                !string.Equals(attemptId, _nfturboPackShopSignAttemptId,
+                    StringComparison.Ordinal) ||
+                _nfturboPackShopSignedTxn != null ||
+                _nfturboPackShopSignError != null) return false;
+            value = payload.Substring(separator + 1);
+            return !string.IsNullOrEmpty(value);
         }
 
         private static IBlockmakerIdentity CreateWalletIdentity(string provider, string address)

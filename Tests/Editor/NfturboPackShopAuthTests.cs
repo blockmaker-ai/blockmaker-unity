@@ -51,6 +51,23 @@ namespace Blockmaker.Tests
                 name, BindingFlags.Static | BindingFlags.NonPublic);
         }
 
+        private static FieldInfo PrivateField(Type type, string name)
+        {
+            return type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+
+        private static PropertyInfo PrivateAuthProperty(string name)
+        {
+            return typeof(BlockmakerAuth).GetProperty(
+                name, BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+
+        private static MethodInfo PrivateAuthMethod(string name)
+        {
+            return typeof(BlockmakerAuth).GetMethod(
+                name, BindingFlags.Instance | BindingFlags.NonPublic);
+        }
+
         private static NfturboPackShopChallengeResult ValidChallenge()
         {
             long expiresAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5 * 60_000;
@@ -141,6 +158,7 @@ namespace Blockmaker.Tests
                 Assert.That(request.GetRequestHeader("X-Blockmaker-Client"),
                     Is.EqualTo("unity-webgl"));
                 Assert.That(request.GetRequestHeader("Authorization"), Is.Null.Or.Empty);
+                Assert.That(request.redirectLimit, Is.EqualTo(0));
             }
         }
 
@@ -159,6 +177,18 @@ namespace Blockmaker.Tests
                     Is.EqualTo("Bearer " + scopedToken));
                 Assert.That(request.GetRequestHeader("X-Blockmaker-Client"),
                     Is.EqualTo("unity-webgl"));
+                Assert.That(request.redirectLimit, Is.EqualTo(0));
+            }
+
+            using (var request = (UnityWebRequest)PrivateMethod("BuildNfturboPackShopGet")
+                .Invoke(client, new object[]
+                {
+                    client.BaseUrl + "/v1/pack-shop/info", 10f, scopedToken,
+                }))
+            {
+                Assert.That(request.GetRequestHeader("Authorization"),
+                    Is.EqualTo("Bearer " + scopedToken));
+                Assert.That(request.redirectLimit, Is.EqualTo(0));
             }
 
             using (var generic = (UnityWebRequest)PrivateMethod("BuildPost")
@@ -254,6 +284,140 @@ namespace Blockmaker.Tests
             Assert.That(luteArgs[1], Is.EqualTo("lute"));
             Assert.That((bool)method.Invoke(null, deflyArgs), Is.False);
             Assert.That(deflyArgs[1], Is.Null);
+        }
+
+        [Test]
+        public void CancelledScopedWalletCallbackCannotCompleteAFutureRetry()
+        {
+            CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            var identity = new PeraIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+
+            var begin = PrivateAuthMethod("BeginNfturboPackShopSigningAttempt");
+            var cancel = PrivateAuthMethod("CancelNfturboPackShopSigning");
+            var signedField = PrivateField(
+                typeof(BlockmakerAuth), "_nfturboPackShopSignedTxn");
+
+            string cancelledAttempt = (string)begin.Invoke(auth, new object[] { identity });
+            Assert.That(cancel.Invoke(auth, new object[] { identity }), Is.EqualTo(true));
+            string currentAttempt = (string)begin.Invoke(auth, new object[] { identity });
+
+            auth.OnNfturboPackShopTxnSignedFromJS(cancelledAttempt + "|late-signed-bytes");
+            Assert.That(signedField.GetValue(auth), Is.Null,
+                "A cancelled callback must not populate the next attempt's result slot.");
+
+            auth.OnNfturboPackShopTxnSignedFromJS(currentAttempt + "|current-signed-bytes");
+            Assert.That(signedField.GetValue(auth), Is.EqualTo("current-signed-bytes"));
+            cancel.Invoke(auth, new object[] { identity });
+        }
+
+        [Test]
+        public void ClearingScopedAuthReleasesAPreSignLuteWindowReservation()
+        {
+            var client = CreateClient();
+            var reserved = PrivateField(
+                typeof(BlockmakerClient), "_nfturboPackShopLutePrimeReserved");
+            reserved.SetValue(client, true);
+
+            client.ClearNfturboPackShopSession();
+
+            Assert.That(reserved.GetValue(client), Is.EqualTo(false));
+        }
+
+        [Test]
+        public void ExistingLutePrimeReservationIsReusedInsteadOfReplaced()
+        {
+            var client = CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            typeof(BlockmakerAuth).GetProperty("Instance",
+                BindingFlags.Static | BindingFlags.Public)
+                .SetValue(null, auth);
+            var identity = new LuteIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+            var reserved = PrivateField(
+                typeof(BlockmakerClient), "_nfturboPackShopLutePrimeReserved");
+            reserved.SetValue(client, true);
+
+            // The non-WebGL bridge returns false. A true result here proves the
+            // already-reserved browser window was reused without calling it again.
+            Assert.That(client.PrimeNfturboPackShopApprovalWindow(), Is.True);
+            Assert.That(reserved.GetValue(client), Is.EqualTo(true));
+        }
+
+        [Test]
+        public void CancelledPaymentCallbackCannotCompleteAFutureRetry()
+        {
+            CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            var identity = new PeraIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+            var begin = PrivateAuthMethod("BeginAttemptTaggedPendingSign");
+
+            var firstArgs = new object[] { identity, null };
+            begin.Invoke(auth, firstArgs);
+            string cancelledAttempt = (string)firstArgs[1];
+            Assert.That(auth.CancelPendingWalletSign(new LuteIdentity(Wallet)), Is.False,
+                "An unrelated identity must not cancel the owned payment sign.");
+            Assert.That(auth.CancelPendingWalletSign(identity), Is.True);
+
+            var retryArgs = new object[] { identity, null };
+            begin.Invoke(auth, retryArgs);
+            string retryAttempt = (string)retryArgs[1];
+            auth.OnTxnSignedFromJS(cancelledAttempt + "|late-payment");
+            Assert.That(PrivateAuthProperty("PendingSignedTxn").GetValue(auth), Is.Null);
+
+            auth.OnTxnSignedFromJS(retryAttempt + "|current-payment");
+            Assert.That(PrivateAuthProperty("PendingSignedTxn").GetValue(auth),
+                Is.EqualTo("current-payment"));
+            Assert.That(auth.CancelPendingWalletSign(identity), Is.True);
+        }
+
+        [Test]
+        public void CancelledGroupCallbackCannotCompleteAFutureRetry()
+        {
+            CreateClient();
+            var auth = _gameObject.AddComponent<BlockmakerAuth>();
+            var identity = new LuteIdentity(Wallet);
+            PrivateAuthMethod("SetIdentity").Invoke(auth, new object[] { identity });
+            var begin = PrivateAuthMethod("BeginAttemptTaggedPendingSign");
+
+            var firstArgs = new object[] { identity, null };
+            begin.Invoke(auth, firstArgs);
+            string cancelledAttempt = (string)firstArgs[1];
+            Assert.That(auth.CancelPendingWalletSign(identity), Is.True);
+
+            var retryArgs = new object[] { identity, null };
+            begin.Invoke(auth, retryArgs);
+            string retryAttempt = (string)retryArgs[1];
+            auth.OnGroupTxnSignedFromJS(cancelledAttempt + "|[\"late-group\"]");
+            Assert.That(PrivateAuthProperty("PendingSignedTxns").GetValue(auth), Is.Null);
+
+            auth.OnGroupTxnSignedFromJS(retryAttempt + "|[\"current-group\"]");
+            Assert.That(PrivateAuthProperty("PendingSignedTxns").GetValue(auth),
+                Is.EqualTo(new[] { "current-group" }));
+            Assert.That(auth.CancelPendingWalletSign(identity), Is.True);
+        }
+
+        [Test]
+        public void ScopedOptInApiUsesOnlyCommitBoundPackShopContracts()
+        {
+            Assert.That(typeof(BlockmakerClient).GetMethod(
+                "PrepareNfturboPackShopOptIns", BindingFlags.Instance | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(typeof(BlockmakerClient).GetMethod(
+                "SubmitNfturboPackShopOptIns", BindingFlags.Instance | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(typeof(NfturboPackShopOptInPrepareRequest).GetField("walletAddress"),
+                Is.Null, "The scoped token, not a caller-supplied wallet, owns the request.");
+            Assert.That(typeof(NfturboPackShopOptInSubmitRequest).GetField("optInIntent"),
+                Is.Not.Null);
+            Assert.That(typeof(AuthPromptController).GetMethod(
+                "ShowNfturboPackShopWallets", BindingFlags.Instance | BindingFlags.Public),
+                Is.Not.Null);
+            Assert.That(typeof(AuthPromptController).GetEvent(
+                "OnNfturboPackShopAuthSucceeded", BindingFlags.Static | BindingFlags.Public),
+                Is.Not.Null);
         }
     }
 }

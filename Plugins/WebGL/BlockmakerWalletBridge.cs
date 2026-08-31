@@ -101,9 +101,31 @@ namespace Blockmaker
             string successCallback,
             string errorCallback);
 
+        /// <summary>
+        /// Pera single-transaction signing with an opaque attempt ID echoed in
+        /// either callback payload. This keeps a cancelled response from satisfying
+        /// a later signing retry.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void PeraJsSignTransactionTagged(
+            string txnBase64,
+            string attemptId,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
         [DllImport("__Internal")]
         public static extern void PeraJsSignGroupTransaction(
             string txnsJson,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>Attempt-tagged Pera atomic-group signing.</summary>
+        [DllImport("__Internal")]
+        public static extern void PeraJsSignGroupTransactionTagged(
+            string txnsJson,
+            string attemptId,
             string gameObjectName,
             string successCallback,
             string errorCallback);
@@ -145,9 +167,30 @@ namespace Blockmaker
             string successCallback,
             string errorCallback);
 
+        /// <summary>
+        /// Lute single-transaction signing with an opaque attempt ID. See
+        /// <see cref="PeraJsSignTransactionTagged"/>.
+        /// </summary>
+        [DllImport("__Internal")]
+        public static extern void LuteJsSignTransactionTagged(
+            string txnBase64,
+            string attemptId,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
         [DllImport("__Internal")]
         public static extern void LuteJsSignGroupTransaction(
             string txnsJson,
+            string gameObjectName,
+            string successCallback,
+            string errorCallback);
+
+        /// <summary>Attempt-tagged Lute atomic-group signing.</summary>
+        [DllImport("__Internal")]
+        public static extern void LuteJsSignGroupTransactionTagged(
+            string txnsJson,
+            string attemptId,
             string gameObjectName,
             string successCallback,
             string errorCallback);
@@ -343,8 +386,16 @@ namespace Blockmaker
         public static void PeraJsSignTransaction(string txn, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsSignTransaction — not in WebGL.");
 
+        public static void PeraJsSignTransactionTagged(
+            string txn, string attemptId, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] Tagged Pera signing — not in WebGL.");
+
         public static void PeraJsSignGroupTransaction(string txnsJson, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] PeraJsSignGroupTransaction — not in WebGL.");
+
+        public static void PeraJsSignGroupTransactionTagged(
+            string txnsJson, string attemptId, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] Tagged Pera group signing — not in WebGL.");
 
         public static void PeraJsDisconnect() { }
 
@@ -362,8 +413,16 @@ namespace Blockmaker
         public static void LuteJsSignTransaction(string txn, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsSignTransaction — Lute is available in WebGL builds only.");
 
+        public static void LuteJsSignTransactionTagged(
+            string txn, string attemptId, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] Tagged Lute signing — not in WebGL.");
+
         public static void LuteJsSignGroupTransaction(string txnsJson, string go, string s, string e)
             => BlockmakerLog.Warning("[BlockmakerWalletBridge] LuteJsSignGroupTransaction — Lute is available in WebGL builds only.");
+
+        public static void LuteJsSignGroupTransactionTagged(
+            string txnsJson, string attemptId, string go, string s, string e)
+            => BlockmakerLog.Warning("[BlockmakerWalletBridge] Tagged Lute group signing — not in WebGL.");
 
         public static void LuteJsDisconnect() { }
 

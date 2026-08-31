@@ -46,10 +46,18 @@ namespace Blockmaker
         {
             Instance = null;
             OnAuthSucceeded = null;
+            OnNfturboPackShopAuthSucceeded = null;
         }
 
         /// <summary>Fired when the player successfully authenticates (any tier > Guest).</summary>
         public static event Action OnAuthSucceeded;
+
+        /// <summary>
+        /// Fired only after the separate NFTURBO Pack-Shop credential is ready.
+        /// It never substitutes for <see cref="OnAuthSucceeded"/> and grants no
+        /// access to non-Shop Blockmaker routes.
+        /// </summary>
+        public static event Action OnNfturboPackShopAuthSucceeded;
 
         // ── Inspector ──────────────────────────────────────────────────────────────
 
@@ -98,6 +106,7 @@ namespace Blockmaker
         private IVisualElementScheduledItem _step2DotAnim;
         private int  _step2DotIndex;
         private bool _authAnnounced;   // OnAuthSucceeded already fired this prompt session
+        private bool _nfturboPackShopMode;
 
         // Step 2 recovery controls (resend the sign request / cancel the login)
         private Button _btnStep2Resend;
@@ -394,6 +403,7 @@ namespace Blockmaker
 
         public void Show()
         {
+            _nfturboPackShopMode = false;
             ResetState();
             ShowOptionsPage();
 
@@ -401,6 +411,36 @@ namespace Blockmaker
                 _overlay.style.display = DisplayStyle.Flex;
             else
                 BlockmakerLog.Error("[AuthPromptController] auth-overlay not found in AuthPrompt.uxml");
+        }
+
+        /// <summary>
+        /// Open the wallet prompt in NFTURBO Pack-Shop mode. An already connected
+        /// Pera/Lute identity is approved immediately from this player click;
+        /// otherwise the picker shows only Pera and Lute and connects through the
+        /// Shop-only auth entry point. Email, Defly, and EVM remain available only in
+        /// the unchanged generic <see cref="Show"/> flow.
+        /// </summary>
+        public void ShowNfturboPackShopWallets()
+        {
+            _nfturboPackShopMode = true;
+            ResetState();
+            if (_overlay != null)
+                _overlay.style.display = DisplayStyle.Flex;
+            else
+            {
+                BlockmakerLog.Error("[AuthPromptController] auth-overlay not found in AuthPrompt.uxml");
+                _nfturboPackShopMode = false;
+                return;
+            }
+
+            var identity = BlockmakerAuth.Instance?.Identity as WalletConnectIdentity;
+            if (identity is PeraIdentity || identity is LuteIdentity)
+            {
+                ShowNfturboPackShopApprovalPage(identity);
+                BeginNfturboPackShopSession(identity);
+                return;
+            }
+            BeginNfturboPackShopWalletFlow();
         }
 
         /// The x button. During the step-2 wait it must also abort the pending wallet
@@ -414,7 +454,9 @@ namespace Blockmaker
                 (_peraCtrl != null && _peraCtrl.IsShowingStepTwo);
 
             var auth = BlockmakerAuth.Instance;
-            if (stepTwoActive && auth != null && NeedsLoginSignature(auth.Identity))
+            if (_nfturboPackShopMode)
+                BlockmakerClient.Instance?.ClearNfturboPackShopSession();
+            else if (stepTwoActive && auth != null && NeedsLoginSignature(auth.Identity))
                 auth.CancelWalletLogin();
 
             Hide();
@@ -422,6 +464,10 @@ namespace Blockmaker
 
         public void Hide()
         {
+            bool shopMode = _nfturboPackShopMode;
+            if (shopMode && BlockmakerClient.Instance != null &&
+                !BlockmakerClient.Instance.HasNfturboPackShopSession)
+                BlockmakerClient.Instance.ClearNfturboPackShopSession();
             _peraCtrl?.Close();
             StopConnectTimeout();
             // Cancel any in-flight email/Magic login too — otherwise backing out mid-flight
@@ -432,6 +478,7 @@ namespace Blockmaker
             BlockmakerAuth.Instance?.CancelWalletConnect();
             BlockmakerAuth.Instance?.CancelEvmConnect();
             if (_overlay != null) _overlay.style.display = DisplayStyle.None;
+            _nfturboPackShopMode = false;
             ResetState();
         }
 
@@ -439,6 +486,11 @@ namespace Blockmaker
 
         private void ShowOptionsPage()
         {
+            if (_nfturboPackShopMode)
+            {
+                BeginNfturboPackShopWalletFlow();
+                return;
+            }
             // Backing out to the options page must also cancel a pending email/Magic login,
             // or IsAuthenticating stays true and locks out every other method for ~120s.
             // Safe no-op when nothing is pending. (Mirrors BlockmakerAuthUI's OTP back handler.)
@@ -588,14 +640,19 @@ namespace Blockmaker
         /// EnterStepTwoState again, and this must not wipe the "SENT" cooldown state.
         private void RefreshStepTwoActions()
         {
-            bool canRetry = BlockmakerAuth.CanRetryWalletLogin;
+            bool canRetry = _nfturboPackShopMode
+                ? BlockmakerAuth.Instance?.Identity is PeraIdentity ||
+                  BlockmakerAuth.Instance?.Identity is LuteIdentity
+                : BlockmakerAuth.CanRetryWalletLogin;
 
             if (_btnStep2Resend != null)
             {
                 _btnStep2Resend.style.display = canRetry ? DisplayStyle.Flex : DisplayStyle.None;
                 if (!_step2ResendCoolingDown)
                 {
-                    _btnStep2Resend.text = IsCurrentLuteIdentity() ? ContinueLuteLabel : ResendRequestLabel;
+                    _btnStep2Resend.text = _nfturboPackShopMode
+                        ? IsCurrentLuteIdentity() ? ContinueLuteLabel : "TRY AGAIN"
+                        : IsCurrentLuteIdentity() ? ContinueLuteLabel : ResendRequestLabel;
                     _btnStep2Resend.SetEnabled(canRetry);
                 }
             }
@@ -607,6 +664,23 @@ namespace Blockmaker
         private void OnStep2ResendClicked()
         {
             var auth = BlockmakerAuth.Instance;
+            if (_nfturboPackShopMode)
+            {
+                var identity = auth?.Identity as WalletConnectIdentity;
+                if (!(identity is PeraIdentity) && !(identity is LuteIdentity)) return;
+                if (_btnStep2Resend != null)
+                {
+                    _step2ResendCoolingDown = true;
+                    _btnStep2Resend.text = identity is LuteIdentity
+                        ? "LUTE OPENED — FINISH THERE"
+                        : "REQUEST SENT — CHECK PERA";
+                    _btnStep2Resend.SetEnabled(false);
+                }
+                // Set the pending state first: popup blocking and other preflight
+                // failures report synchronously and ResetStepTwoResend must win.
+                BeginNfturboPackShopSession(identity);
+                return;
+            }
             if (auth == null || !BlockmakerAuth.CanRetryWalletLogin) return;
 
             auth.RetryWalletLogin();
@@ -642,6 +716,13 @@ namespace Blockmaker
 
         private void OnStep2CancelClicked()
         {
+            if (_nfturboPackShopMode)
+            {
+                BlockmakerClient.Instance?.ClearNfturboPackShopSession();
+                BeginNfturboPackShopWalletFlow();
+                SetStatus("NFTURBO Store sign-in cancelled.");
+                return;
+            }
             // Abort the pending wallet login (logs out the half-authenticated wallet
             // identity). HandleIdentityChanged ignores the resulting Guest identity,
             // so route back to the sign-in options explicitly — with a neutral note,
@@ -713,6 +794,168 @@ namespace Blockmaker
         // ── Wallet connect ─────────────────────────────────────────────────────────
 
         private const float WalletConnectTimeoutSeconds = 45f;
+
+        private void BeginNfturboPackShopWalletFlow()
+        {
+            if (!_nfturboPackShopMode) return;
+            if (BlockmakerAuth.Instance == null || BlockmakerClient.Instance == null)
+            {
+                SetStatus("NFTURBO Store wallet access is unavailable. Please restart the game.",
+                    isError: true);
+                return;
+            }
+            if (_pageEvmWallets == null || _evmWalletList == null)
+            {
+                SetPage(_pageOptions);
+                SetStatus("This game build cannot show the NFTURBO Store wallet choices. Please update the game.",
+                    isError: true);
+                return;
+            }
+
+            SetPage(_pageEvmWallets);
+            ClearStatus();
+            ClearEvmWalletState();
+            _evmWalletList.Add(BuildWalletRow(
+                "Pera Wallet", "NFTURBO Store", WalletBadge.Recommended,
+                (icon, glyph) => icon.AddToClassList("auth-btn-icon--pera"),
+                () => BeginNfturboPackShopPeraConnect()));
+            _evmWalletList.Add(BuildWalletRow(
+                "Lute Wallet", "Browser or extension", WalletBadge.None,
+                (icon, glyph) => ApplyCuratedWalletIcon(icon, glyph, "L", 285f),
+                BeginNfturboPackShopLuteConnect));
+            ShowEvmState(EvmPageState.List);
+            if (_lblEvmHeading != null) _lblEvmHeading.text = "Open NFTURBO Store";
+            if (_lblEvmSubheading != null)
+            {
+                _lblEvmSubheading.text = "Choose the wallet that will buy and receive your pack.";
+                _lblEvmSubheading.style.display = DisplayStyle.Flex;
+            }
+        }
+
+        private void BeginNfturboPackShopPeraConnect()
+        {
+            if (!_nfturboPackShopMode || WalletConnectBusy()) return;
+            var auth = BlockmakerAuth.Instance;
+            if (auth == null) return;
+            ShowQrPage(BlockmakerAuth.ProviderPera);
+            StartConnectTimeout(message =>
+            {
+                if (this != null && _nfturboPackShopMode) SetStatus(message);
+            });
+            auth.ConnectNfturboPackShopWallet(
+                BlockmakerAuth.ProviderPera,
+                identity =>
+                {
+                    if (this == null || !_nfturboPackShopMode) return;
+                    StopConnectTimeout();
+                    var wallet = identity as WalletConnectIdentity;
+                    ShowNfturboPackShopApprovalPage(wallet);
+                    BeginNfturboPackShopSession(wallet);
+                },
+                error =>
+                {
+                    if (this == null || !_nfturboPackShopMode) return;
+                    StopConnectTimeout();
+                    BeginNfturboPackShopWalletFlow();
+                    SetStatus(error, isError: true);
+                });
+        }
+
+        private void BeginNfturboPackShopLuteConnect()
+        {
+            if (!_nfturboPackShopMode || WalletConnectBusy()) return;
+            var auth = BlockmakerAuth.Instance;
+            if (auth == null) return;
+            var lute = new EvmWalletEntry
+            {
+                rdns = "blockmaker:lute",
+                name = "Lute",
+                icon = string.Empty,
+            };
+            _evmSelectedWallet = lute;
+            if (_evmConnectIcon != null && _lblEvmConnectGlyph != null)
+                ApplyCuratedWalletIcon(_evmConnectIcon, _lblEvmConnectGlyph, "L", 285f);
+            if (_lblEvmConnectTitle != null) _lblEvmConnectTitle.text = "Opening Lute…";
+            SetEvmConnectBody(
+                "Choose the Algorand account that will buy and receive your NFTURBO pack.",
+                isError: false);
+            if (_btnEvmRetry != null) _btnEvmRetry.style.display = DisplayStyle.None;
+            if (_btnEvmCancel != null) _btnEvmCancel.text = "CANCEL";
+            ShowEvmState(EvmPageState.Connecting);
+            StartConnectTimeout(message =>
+            {
+                if (this != null && _nfturboPackShopMode &&
+                    _evmState == EvmPageState.Connecting)
+                    SetEvmConnectBody(message, isError: false);
+            });
+            auth.ConnectNfturboPackShopWallet(
+                BlockmakerAuth.ProviderLute,
+                identity =>
+                {
+                    if (this == null || !_nfturboPackShopMode) return;
+                    StopConnectTimeout();
+                    ShowNfturboPackShopApprovalPage(identity as WalletConnectIdentity);
+                },
+                error =>
+                {
+                    if (this == null || !_nfturboPackShopMode) return;
+                    StopConnectTimeout();
+                    if (_evmState == EvmPageState.Connecting)
+                        ShowEvmConnectError(error, lute);
+                });
+        }
+
+        private void ShowNfturboPackShopApprovalPage(
+            WalletConnectIdentity identity,
+            string error = null)
+        {
+            if (!_nfturboPackShopMode) return;
+            if (_pageStep2 == null)
+            {
+                SetStatus(error ?? "Approve NFTURBO Store access in your wallet.",
+                    isError: !string.IsNullOrEmpty(error));
+                return;
+            }
+            SetPage(_pageStep2);
+            ClearStatus();
+            bool lute = identity is LuteIdentity;
+            if (_lblStep2Body != null)
+            {
+                _lblStep2Body.enableRichText = false;
+                _lblStep2Body.text = !string.IsNullOrEmpty(error)
+                    ? error
+                    : lute
+                        ? "Lute is connected. Select CONTINUE WITH LUTE, then approve the harmless 0 ALGO NFTURBO Store sign-in."
+                        : "Approve the harmless 0 ALGO NFTURBO Store sign-in in Pera. Nothing is purchased yet.";
+                _lblStep2Body.EnableInClassList("auth-step2-body--error",
+                    !string.IsNullOrEmpty(error));
+            }
+            RefreshStepTwoActions();
+            if (!string.IsNullOrEmpty(error)) StopStepTwoDots();
+            else StartStepTwoDots();
+        }
+
+        private void BeginNfturboPackShopSession(WalletConnectIdentity identity)
+        {
+            if (!_nfturboPackShopMode || identity == null ||
+                BlockmakerClient.Instance == null) return;
+            BlockmakerClient.Instance.EnsureNfturboPackShopSession(
+                () =>
+                {
+                    if (this == null || !_nfturboPackShopMode) return;
+                    StopConnectTimeout();
+                    StopStepTwoDots();
+                    Hide();
+                    OnNfturboPackShopAuthSucceeded?.Invoke();
+                },
+                error =>
+                {
+                    if (this == null || !_nfturboPackShopMode) return;
+                    StopConnectTimeout();
+                    ResetStepTwoResend();
+                    ShowNfturboPackShopApprovalPage(identity, error);
+                });
+        }
 
         /// True while a wallet connect/sign-in is already pending — used to debounce
         /// wallet-row clicks. Without this, a double-click re-enters the connect flow,
@@ -1509,7 +1752,8 @@ namespace Blockmaker
             if (_evmSelectedWallet.rdns == "blockmaker:lute")
             {
                 BlockmakerAuth.Instance?.CancelWalletConnect();
-                BeginLuteConnect();
+                if (_nfturboPackShopMode) BeginNfturboPackShopLuteConnect();
+                else BeginLuteConnect();
                 return;
             }
             BlockmakerAuth.Instance?.CancelEvmConnect();
@@ -1542,7 +1786,8 @@ namespace Blockmaker
                     OnEvmCancelClicked();
                     break;
                 default:
-                    ShowOptionsPage();
+                    if (_nfturboPackShopMode) Hide();
+                    else ShowOptionsPage();
                     break;
             }
         }
@@ -1686,6 +1931,9 @@ namespace Blockmaker
         {
             // Session restores also trigger wallet logins — only react while visible.
             if (_overlay == null || _overlay.style.display == DisplayStyle.None) return;
+            // Shop-purpose connection and approval callbacks own their dedicated UI.
+            // Do not route them through the generic "approval 2 of 2" state machine.
+            if (_nfturboPackShopMode) return;
 
             // Only take over the screen when the user is actually in a wallet-connect
             // flow (a background reconnect must not hijack the email page).
@@ -1940,6 +2188,9 @@ namespace Blockmaker
             if (identity == null || identity.Tier == IdentityTier.Guest) return;
             // Only react if the overlay is currently visible — ignore session restores on scene load
             if (_overlay == null || _overlay.style.display == DisplayStyle.None) return;
+            // A Shop-only wallet connection intentionally has no generic player JWT;
+            // its explicit connection callback starts scoped Ensure and owns success.
+            if (_nfturboPackShopMode) return;
 
             // A wallet just connected but still owes the login signature (approval 2 of 2,
             // fired via TriggerWalletLogin right after this event). Keep the prompt open in
@@ -1965,6 +2216,13 @@ namespace Blockmaker
 
         private void HandleAuthError(string error)
         {
+            if (_nfturboPackShopMode)
+            {
+                _peraCtrl?.Close();
+                BeginNfturboPackShopWalletFlow();
+                SetStatus(error, isError: true);
+                return;
+            }
             // If the connect modal is up (including its step-2 state), drop it so the
             // error is visible on the options page.
             _peraCtrl?.Close();
