@@ -1,5 +1,18 @@
 # Changelog
 
+## WebGL preview — 2026-09-16
+
+- Publish the current complete Pera/Lute and optional TxnLab/MetaMask Embedded
+  Wallets package under `WebGL~`, with configurable in-game presentation and
+  verified C# session acknowledgment. Runtime members remain identical to the
+  canonical September integration; this is a reusable distribution update.
+- Add a dependency-free, offline installer that verifies hashes, preserves
+  Unity metadata, binds game receipts and refuses unreviewed replacements.
+- Add an email/shared-identity setup guide, fullscreen sample and explicit
+  validation limits. Native exports remain outside this package.
+- Preserve the legacy v1 root UPM package, archive its documentation and pin its
+  installer to v1.2.0. Existing legacy pull requests are unchanged.
+
 ## [1.2.0] - 2026-07-10
 
 ### Added

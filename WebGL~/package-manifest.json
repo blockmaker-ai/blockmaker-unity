@@ -1,0 +1,259 @@
+{
+  "schemaVersion": "blockmaker-unity-webgl-package/v3",
+  "packageId": "unity-webgl-package-sha256-cicBnjQf1cPzH5Sz3Gt7wX8seHXG9Cj1VTf6eRIAFlQ",
+  "releaseVersion": "0.2.5",
+  "target": "unity_webgl",
+  "clientKind": "unity_webgl",
+  "complete": true,
+  "activation": "requires_game_qualification",
+  "network": {
+    "chain": "algorand",
+    "network": "mainnet",
+    "genesisId": "mainnet-v1.0",
+    "genesisHashBase64": "wGHE2Pwdvd7S12BL5FaOP20EGYesN73ktiC1qzkkit8="
+  },
+  "providerPolicy": {
+    "mode": "exact_runtime_profile",
+    "selection": {
+      "discriminator": "txnlab_web3auth_public_client_id",
+      "absent": "pera_lute",
+      "valid": "pera_lute_txnlab_web3auth",
+      "invalid": "reject"
+    },
+    "profiles": [
+      {
+        "id": "pera_lute",
+        "clientId": "absent",
+        "providerIds": [
+          "pera",
+          "lute"
+        ],
+        "requiredEconomicProviders": [
+          "pera",
+          "lute"
+        ],
+        "authOnlyProvider": null,
+        "fundingGuide": {
+          "optional": true,
+          "accountKind": "algorand_wallet",
+          "authProviders": [
+            "pera",
+            "lute"
+          ],
+          "authOnlyEmailAddressExposed": false
+        }
+      },
+      {
+        "id": "pera_lute_txnlab_web3auth",
+        "clientId": "valid_public",
+        "providerIds": [
+          "pera",
+          "lute",
+          "txnlab_web3auth"
+        ],
+        "requiredEconomicProviders": [
+          "pera",
+          "lute",
+          "txnlab_web3auth"
+        ],
+        "authOnlyProvider": null,
+        "fundingGuide": {
+          "optional": true,
+          "accountKind": "algorand_wallet",
+          "authProviders": [
+            "pera",
+            "lute",
+            "txnlab_web3auth"
+          ],
+          "authOnlyEmailAddressExposed": false
+        }
+      }
+    ],
+    "unlistedAdaptersAllowed": false
+  },
+  "playerRequestOnce": {
+    "method": "RequestPlayerOnce",
+    "routeScope": "caller_validated_game_routes",
+    "callerValidationRequired": true,
+    "requiresExistingSession": true,
+    "maximumTransmissions": 1,
+    "minimumTimeoutSeconds": 35,
+    "automaticRefresh": false,
+    "automaticRetry": false,
+    "mutatesPlayerSession": false,
+    "copiesResponse": true,
+    "pathPolicy": "origin_locked_relative_path_without_fragment_or_game_id",
+    "excludedStoreRoute": "/v1/pack-shop/submit",
+    "bodyHandling": "caller_supplied_unchanged",
+    "contentType": "application_json_when_body_present",
+    "outcomeMetadata": [
+      "TransmissionAttempted",
+      "MayHaveApplied"
+    ]
+  },
+  "storeSubmissionOnce": {
+    "methods": [
+      "SubmitStorePaymentOnce",
+      "SubmitStoreAssetAcceptanceOnce"
+    ],
+    "requiresExistingSession": true,
+    "maximumTransmissions": 1,
+    "minimumTimeoutSeconds": 35,
+    "automaticRefresh": false,
+    "automaticRetry": false,
+    "mutatesPlayerSession": false,
+    "copiesResponse": true,
+    "validation": {
+      "commitId": "canonical_store_commit_id",
+      "signedTransactions": "canonical_base64_group",
+      "paymentMaximumTransactions": 4,
+      "assetAcceptanceMaximumTransactions": 16
+    },
+    "outcomeMetadata": [
+      "TransmissionAttempted",
+      "MayHaveApplied"
+    ]
+  },
+  "dependencies": [
+    {
+      "package": "algosdk",
+      "version": "3.6.0",
+      "delivery": "embedded"
+    },
+    {
+      "package": "@txnlab/use-wallet",
+      "version": "5.0.0",
+      "delivery": "embedded"
+    },
+    {
+      "package": "@txnlab/use-wallet-pera",
+      "version": "5.0.0",
+      "delivery": "embedded"
+    },
+    {
+      "package": "@txnlab/use-wallet-lute",
+      "version": "5.0.0",
+      "delivery": "embedded"
+    },
+    {
+      "package": "@txnlab/use-wallet-web3auth",
+      "version": "5.0.0",
+      "delivery": "embedded"
+    }
+  ],
+  "members": [
+    {
+      "file": "blockmaker.js",
+      "installPath": "Assets/StreamingAssets/Blockmaker/blockmaker.js",
+      "role": "browser_runtime",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-e5RS4bdQnySWxUMeksBqL35Jhsn9Ti9ta3e4vI5EheE/blockmaker.js",
+      "release": "sha256-e5RS4bdQnySWxUMeksBqL35Jhsn9Ti9ta3e4vI5EheE",
+      "sha256": "e5RS4bdQnySWxUMeksBqL35Jhsn9Ti9ta3e4vI5EheE",
+      "integrity": "sha256-e5RS4bdQnySWxUMeksBqL35Jhsn9Ti9ta3e4vI5EheE=",
+      "rawBytes": 476539,
+      "gzipBytes": 104260,
+      "mediaType": "text/javascript; charset=utf-8"
+    },
+    {
+      "file": "blockmaker-unity-webgl-wallet-host.mjs",
+      "installPath": "Assets/StreamingAssets/Blockmaker/blockmaker-unity-webgl-wallet-host.mjs",
+      "role": "wallet_host",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-uATv6woy_zZe4yDTQCeIDtbV405yNUSLHhFIS-pcOV8/blockmaker-unity-webgl-wallet-host.mjs",
+      "release": "sha256-uATv6woy_zZe4yDTQCeIDtbV405yNUSLHhFIS-pcOV8",
+      "sha256": "uATv6woy_zZe4yDTQCeIDtbV405yNUSLHhFIS-pcOV8",
+      "integrity": "sha256-uATv6woy/zZe4yDTQCeIDtbV405yNUSLHhFIS+pcOV8=",
+      "rawBytes": 11191,
+      "gzipBytes": 3827,
+      "mediaType": "text/javascript; charset=utf-8"
+    },
+    {
+      "file": "blockmaker-txnlab-wallet.mjs",
+      "installPath": "Assets/StreamingAssets/Blockmaker/blockmaker-txnlab-wallet.mjs",
+      "role": "wallet_runtime",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-3mZBZ6PO-tOCIYkGSaFjOY6ew2GeonepYn9QvdDmqjg/blockmaker-txnlab-wallet.mjs",
+      "release": "sha256-3mZBZ6PO-tOCIYkGSaFjOY6ew2GeonepYn9QvdDmqjg",
+      "sha256": "3mZBZ6PO-tOCIYkGSaFjOY6ew2GeonepYn9QvdDmqjg",
+      "integrity": "sha256-3mZBZ6PO+tOCIYkGSaFjOY6ew2GeonepYn9QvdDmqjg=",
+      "rawBytes": 2915457,
+      "gzipBytes": 689363,
+      "mediaType": "text/javascript; charset=utf-8"
+    },
+    {
+      "file": "blockmaker-txnlab-wallet.d.mts",
+      "installPath": "Assets/StreamingAssets/Blockmaker/blockmaker-txnlab-wallet.d.mts",
+      "role": "wallet_runtime_declarations",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-R378u3YJu29i8c-an9zI20uUiW1pBpv_vFQx-AAe74k/blockmaker-txnlab-wallet.d.mts",
+      "release": "sha256-R378u3YJu29i8c-an9zI20uUiW1pBpv_vFQx-AAe74k",
+      "sha256": "R378u3YJu29i8c-an9zI20uUiW1pBpv_vFQx-AAe74k",
+      "integrity": "sha256-R378u3YJu29i8c+an9zI20uUiW1pBpv/vFQx+AAe74k=",
+      "rawBytes": 5785,
+      "gzipBytes": 1703,
+      "mediaType": "text/plain; charset=utf-8"
+    },
+    {
+      "file": "BlockmakerClient.cs",
+      "installPath": "Assets/Blockmaker/Runtime/BlockmakerClient.cs",
+      "role": "unity_client",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-ugfBZ07ukSH8yj3Yz8vlAvo8n-et_cSzRguWUl5NWEc/BlockmakerClient.cs",
+      "release": "sha256-ugfBZ07ukSH8yj3Yz8vlAvo8n-et_cSzRguWUl5NWEc",
+      "sha256": "ugfBZ07ukSH8yj3Yz8vlAvo8n-et_cSzRguWUl5NWEc",
+      "integrity": "sha256-ugfBZ07ukSH8yj3Yz8vlAvo8n+et/cSzRguWUl5NWEc=",
+      "rawBytes": 94715,
+      "gzipBytes": 17510,
+      "mediaType": "text/plain; charset=utf-8"
+    },
+    {
+      "file": "BlockmakerWalletPackageWebGL.cs",
+      "installPath": "Assets/Blockmaker/Runtime/BlockmakerWalletPackageWebGL.cs",
+      "role": "unity_wallet_facade",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-IiRm2a95WYu2HfdelY_xoseTGyygNb9eHg7A3Yl6tjg/BlockmakerWalletPackageWebGL.cs",
+      "release": "sha256-IiRm2a95WYu2HfdelY_xoseTGyygNb9eHg7A3Yl6tjg",
+      "sha256": "IiRm2a95WYu2HfdelY_xoseTGyygNb9eHg7A3Yl6tjg",
+      "integrity": "sha256-IiRm2a95WYu2HfdelY/xoseTGyygNb9eHg7A3Yl6tjg=",
+      "rawBytes": 69767,
+      "gzipBytes": 10691,
+      "mediaType": "text/plain; charset=utf-8"
+    },
+    {
+      "file": "BlockmakerWalletPackageWebGL.jslib",
+      "installPath": "Assets/Plugins/WebGL/BlockmakerWalletPackageWebGL.jslib",
+      "role": "unity_webgl_bridge",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-3YSgAc9yn1g2KydfaZq2LWBmYdyw53ookdkGVPJhDKE/BlockmakerWalletPackageWebGL.jslib",
+      "release": "sha256-3YSgAc9yn1g2KydfaZq2LWBmYdyw53ookdkGVPJhDKE",
+      "sha256": "3YSgAc9yn1g2KydfaZq2LWBmYdyw53ookdkGVPJhDKE",
+      "integrity": "sha256-3YSgAc9yn1g2KydfaZq2LWBmYdyw53ookdkGVPJhDKE=",
+      "rawBytes": 53756,
+      "gzipBytes": 9437,
+      "mediaType": "text/plain; charset=utf-8"
+    },
+    {
+      "file": "blockmaker-txnlab-wallet.NOTICES.txt",
+      "installPath": "Assets/StreamingAssets/Blockmaker/blockmaker-txnlab-wallet.NOTICES.txt",
+      "role": "third_party_notices",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-TPVYzrDf5Q2zVyYlgyq-kBi3EcVD1e9CTUlmDjKXagk/blockmaker-txnlab-wallet.NOTICES.txt",
+      "release": "sha256-TPVYzrDf5Q2zVyYlgyq-kBi3EcVD1e9CTUlmDjKXagk",
+      "sha256": "TPVYzrDf5Q2zVyYlgyq-kBi3EcVD1e9CTUlmDjKXagk",
+      "integrity": "sha256-TPVYzrDf5Q2zVyYlgyq+kBi3EcVD1e9CTUlmDjKXagk=",
+      "rawBytes": 154956,
+      "gzipBytes": 13546,
+      "mediaType": "text/plain; charset=utf-8"
+    },
+    {
+      "file": "BlockmakerUnityPresentation.cs",
+      "installPath": "Assets/Blockmaker/Runtime/BlockmakerUnityPresentation.cs",
+      "role": "unity_presentation",
+      "url": "https://blockmaker.polaris.city/sdk/sha256-o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E/BlockmakerUnityPresentation.cs",
+      "release": "sha256-o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E",
+      "sha256": "o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E",
+      "integrity": "sha256-o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E=",
+      "rawBytes": 37963,
+      "gzipBytes": 8304,
+      "mediaType": "text/plain; charset=utf-8"
+    }
+  ],
+  "provenance": {
+    "sourceCommit": "226bd9136b268cd1c7005efdb3bccf23be50e607",
+    "contentAddressing": "sha256",
+    "allMembersVerifiedBeforePublication": true
+  }
+}

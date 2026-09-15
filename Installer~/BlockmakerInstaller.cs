@@ -5,7 +5,7 @@ using UnityEngine;
 
 /// <summary>
 /// Drop this file into your Unity project's Assets folder.
-/// It will install the Blockmaker SDK and its dependencies automatically.
+/// Legacy v1.2.0 installer. New WebGL games should use WebGL~/README.md.
 /// You can delete this file after installation.
 /// </summary>
 [InitializeOnLoad]
@@ -79,7 +79,7 @@ public static class BlockmakerInstaller
             var braceIdx = content.IndexOf('{', depsIdx);
             if (braceIdx >= 0)
             {
-                var insert = "\n    \"com.blockmaker.sdk\": \"https://github.com/blockmaker-ai/blockmaker-unity.git\",\n    \"com.nethereum.unity\": \"4.19.2\",\n    \"com.reown.sign.nethereum\": \"1.6.0\",\n    \"com.reown.sign.unity\": \"1.6.0\",";
+                var insert = "\n    \"com.blockmaker.sdk\": \"https://github.com/blockmaker-ai/blockmaker-unity.git#v1.2.0\",\n    \"com.nethereum.unity\": \"4.19.2\",\n    \"com.reown.sign.nethereum\": \"1.6.0\",\n    \"com.reown.sign.unity\": \"1.6.0\",";
                 content = content.Substring(0, braceIdx + 1) + insert + content.Substring(braceIdx + 1);
             }
         }
