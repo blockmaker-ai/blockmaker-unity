@@ -9,8 +9,10 @@ runtime manifest retains backend release version `0.2.5`.
 
 ## Checked for this distribution
 
-- The root package resolves in Unity 6000.3.15f1 using Unity Package Manager.
-  It compiles without Reown or separately installed wallet dependencies.
+- The root package resolves from its public Git revision in Unity 6000.3.15f1
+  using Unity Package Manager. It compiles without Reown or separately installed
+  wallet dependencies. The imported sample scene retains its document, panel,
+  theme and camera references, with no game ID or email client ID prefilled.
 - The setup menu creates a scene with a UI document, panel, camera and wallet
   demo. Repeating setup does not create a second demo. The `.jslib` plugin is
   enabled for WebGL and disabled for Editor.
