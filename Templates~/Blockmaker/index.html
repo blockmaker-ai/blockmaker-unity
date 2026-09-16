@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{{ PRODUCT_NAME }}}</title>
+  <style>
+    html,body{margin:0;width:100%;height:100%;background:#141c2b;color:#fff;font:16px system-ui}
+    #unity-canvas{display:block;width:100%;height:100%;background:#141c2b}
+    #game-status{position:fixed;left:16px;bottom:16px;pointer-events:none}
+    #fullscreen{position:fixed;right:16px;bottom:16px;border:1px solid #bac4d8;border-radius:8px;background:#25364b;color:#fff;padding:10px 14px;cursor:pointer}
+  </style>
+</head>
+<body>
+<canvas id="unity-canvas" tabindex="-1"></canvas>
+<div id="game-status" role="status">Loading…</div>
+<button id="fullscreen" type="button">Fullscreen</button>
+<script>
+  const statusLabel = document.getElementById('game-status');
+  document.getElementById('fullscreen').addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+      else if (document.documentElement.webkitRequestFullscreen) document.documentElement.webkitRequestFullscreen();
+      else statusLabel.textContent = 'Fullscreen is unavailable in this browser.';
+    } catch { statusLabel.textContent = 'Fullscreen could not open. Please try again.'; }
+  });
+  const script = document.createElement('script');
+  script.src = 'Build/{{{ LOADER_FILENAME }}}';
+  script.onload = () => createUnityInstance(document.getElementById('unity-canvas'), {
+    dataUrl: 'Build/{{{ DATA_FILENAME }}}',
+    frameworkUrl: 'Build/{{{ FRAMEWORK_FILENAME }}}',
+    codeUrl: 'Build/{{{ CODE_FILENAME }}}',
+    streamingAssetsUrl: 'StreamingAssets',
+    companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
+    productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
+    productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}}
+  }, progress => { statusLabel.textContent = 'Loading… ' + Math.round(progress * 100) + '%'; })
+    .then(() => { statusLabel.textContent = ''; })
+    .catch(() => { statusLabel.textContent = 'The game could not load. Please refresh to try again.'; });
+  script.onerror = () => { statusLabel.textContent = 'The game could not load. Please refresh to try again.'; };
+  document.body.appendChild(script);
+</script>
+</body>
+</html>

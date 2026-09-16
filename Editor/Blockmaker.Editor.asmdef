@@ -1,18 +1,11 @@
 {
-    "name": "Blockmaker.Editor",
-    "rootNamespace": "",
-    "references": [
-        "Blockmaker"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": false,
-    "precompiledReferences": [],
-    "autoReferenced": false,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
+  "name": "Blockmaker.Editor",
+  "rootNamespace": "Blockmaker.Editor",
+  "references": [
+    "Blockmaker"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "autoReferenced": true
 }

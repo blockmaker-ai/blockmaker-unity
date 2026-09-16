@@ -1,24 +1,20 @@
-# Wallet Demo
+# Wallet demo
 
-A minimal sample showing the Blockmaker wallet system in action.
+Open the imported **WalletDemo.unity** scene, select **Blockmaker Wallet Demo**
+and set its public Game ID, optional public email client ID and app name in the
+Inspector. Then choose **Blockmaker → Install Fullscreen Web Template**, add the
+scene to a Web build profile and build for your game's approved origin.
 
-## How to use
+Alternatively, **Blockmaker → Setup Wallet Demo** creates the same UI document,
+panel and `BlockmakerWalletDemo` component in your current scene. Use one route;
+do not create a second wallet manager alongside an existing integration.
 
-1. Create an empty scene
-2. Create an empty GameObject
-3. Add the `WalletDemo` component to it
-4. Hit Play
+The sample signs in, signs out and reads the shared profile. It never prepares,
+signs or submits economic transactions. Fullscreen/browser authentication needs
+a WebGL build; Editor Play mode explains this. No game ID, email project, player
+wallet or licensed font is embedded in the sample.
 
-You'll see a "Connect Wallet" button. Click it to open the wallet selection modal. Connect with Pera, Defly, X-Chain (MetaMask etc.), or email.
-
-## What this demo does
-
-- Creates a BlockmakerConfig at runtime (no asset needed)
-- Sets up BlockmakerAuth with all defaults
-- Adds the auth prompt modal (wallet selection UI)
-- Adds a connect button in the top-right corner
-- Logs wallet connection events to the console
-
-## For production
-
-Use **Blockmaker > Setup Scene** instead of this script. It creates proper assets and wires everything through the Inspector.
+For cross-game identity, use two existing approved game contexts in the same
+reviewed provider group, each with its own Game ID and origin. Compare the exact
+wallet and shared profile after using the same login method. Read the package's
+email setup and validation guides before onboarding players.
