@@ -33,7 +33,7 @@ These are integration fragments; the complete working component is
 keep the receiving GameObject's name unique, and dispose the view at teardown.
 `RuntimeSupported` lets the game show a friendly message in Editor/native builds.
 A blank public email client ID selects `pera_lute`; a configured ID selects
-`pera_lute_txnlab_web3auth`. The Unity presentation shows Pera and optional email;
+`pera_lute_txnlab_web3auth`. The Unity presentation shows Email first when enabled, then Wallet → Pera;
 `OpenAccount` is available for the broader account UI. The older
 `web3auth_avm_email` authentication-only broker is separate and remains restricted.
 
@@ -105,3 +105,8 @@ this package locally without claiming provider or game qualification.
 Commit scene/template changes and Unity metadata. Use complete tagged releases,
 not individual vendor-file patches. Required setup and attended acceptance remain
 in [email setup](email-setup.md) and [validation](validation.md).
+
+The original Pera logo is bundled in the shared presentation. Set `PeraLogo` in
+`BlockmakerUnityWalletAppearance` to provide your own texture, or call
+`BlockmakerUnityWalletIcons.CreatePeraLogo()` for a caller-owned copy. Destroy
+that texture when finished. Pera branding remains its owner's mark.

@@ -1,13 +1,31 @@
-# Validation — Unity Package Manager SDK 2.0.0
+# Validation — Unity Package Manager SDK 2.0.1
 
 The package contains canonical wallet runtime
-`unity-webgl-package-sha256-cicBnjQf1cPzH5Sz3Gt7wX8seHXG9Cj1VTf6eRIAFlQ`, from
-runtime revision `226bd9136b268cd1c7005efdb3bccf23be50e607`. All nine runtime files
-are unchanged from the package used by NFTURBO build `20260915-6f70eb687b39`.
-Version 2.0.0 describes the public UPM distribution and setup tools; the canonical
+`unity-webgl-package-sha256-__-tqLYjkYy9Vb6vY_mx5BlxdUun1GRW73T0PCN2I3U`, from
+runtime revision `d3e79dc9b68d14e0ba62138dcba3df2e9f84085a`. The presentation adds the Email/Wallet submenu and original Pera logo; the
+other eight runtime files are unchanged. This candidate is not in a new NFTURBO
+build yet.
+Version 2.0.1 describes the public UPM distribution and setup tools; the canonical
 runtime manifest retains backend release version `0.2.5`.
 
-## Checked for this distribution
+## Local 2.0.1 candidate checks
+
+- Unity 6000.3.15f1 imported the complete package in a small isolated consumer.
+  Nineteen UI checks passed: Email/Wallet order, the Pera submenu and decoded
+  400×400 original logo, Back, cancellation once, Pera-only configuration and
+  duplicate-open protection. Browsing choices made no authentication request.
+- The shared C# code and NFTURBO's current runtime C# compiled against Unity's
+  assemblies. The complete canonical package and existing Unity GUIDs were
+  verified after installation into NFTURBO.
+- Forty-five existing shared-package/release checks and the five public-package
+  checks passed. Existing NFTURBO lobby/profile and host compatibility checks
+  passed.
+
+These are import, compile and UI checks. No new WebGL build, attended wallet
+approval or live transaction was performed for this candidate. Publication and
+NFTURBO's next build are being held while David tests the current live game.
+
+## Previous 2.0.0 distribution checks (before these UI changes)
 
 - The root package resolves from its public Git revision in Unity 6000.3.15f1
   using Unity Package Manager. It compiles without Reown or separately installed
@@ -33,7 +51,9 @@ integration. These earlier checks do not prove every game or device works.
 
 ## Still requires attended player testing
 
-Actual email/OTP and Pera wallet approval, C# acknowledgment after a real login,
+David reported a successful email login in the live NFTURBO build on 16 September
+2026. This was an owner report using the prior presentation. Automated checks
+did not complete email/OTP or Pera wallet approval. C# acknowledgment after a real login,
 returning login/recovery and stable identity across two actual game origins
 remain player acceptance checks. The packaging test did not enter an email or
 create a wallet. Opening a provider form is not proof of a completed login.

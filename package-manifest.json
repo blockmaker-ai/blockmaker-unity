@@ -1,6 +1,6 @@
 {
   "schemaVersion": "blockmaker-unity-webgl-package/v3",
-  "packageId": "unity-webgl-package-sha256-cicBnjQf1cPzH5Sz3Gt7wX8seHXG9Cj1VTf6eRIAFlQ",
+  "packageId": "unity-webgl-package-sha256-__-tqLYjkYy9Vb6vY_mx5BlxdUun1GRW73T0PCN2I3U",
   "releaseVersion": "0.2.5",
   "target": "unity_webgl",
   "clientKind": "unity_webgl",
@@ -242,17 +242,17 @@
       "file": "BlockmakerUnityPresentation.cs",
       "installPath": "Assets/Blockmaker/Runtime/BlockmakerUnityPresentation.cs",
       "role": "unity_presentation",
-      "url": "https://blockmaker.polaris.city/sdk/sha256-o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E/BlockmakerUnityPresentation.cs",
-      "release": "sha256-o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E",
-      "sha256": "o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E",
-      "integrity": "sha256-o3V6YFGJnthppEacqS4h1mCYYPQhwTGZarTzyh1o25E=",
-      "rawBytes": 37963,
-      "gzipBytes": 8304,
+      "url": "https://blockmaker.polaris.city/sdk/sha256-_ouXEpJpoq77lEHtaS6vG0UTLMGoEaPsuv1LFbbLMrA/BlockmakerUnityPresentation.cs",
+      "release": "sha256-_ouXEpJpoq77lEHtaS6vG0UTLMGoEaPsuv1LFbbLMrA",
+      "sha256": "_ouXEpJpoq77lEHtaS6vG0UTLMGoEaPsuv1LFbbLMrA",
+      "integrity": "sha256-/ouXEpJpoq77lEHtaS6vG0UTLMGoEaPsuv1LFbbLMrA=",
+      "rawBytes": 53749,
+      "gzipBytes": 18487,
       "mediaType": "text/plain; charset=utf-8"
     }
   ],
   "provenance": {
-    "sourceCommit": "226bd9136b268cd1c7005efdb3bccf23be50e607",
+    "sourceCommit": "d3e79dc9b68d14e0ba62138dcba3df2e9f84085a",
     "contentAddressing": "sha256",
     "allMembersVerifiedBeforePublication": true
   }

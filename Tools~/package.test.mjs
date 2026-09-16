@@ -20,7 +20,7 @@ async function allFiles(path = '') {
 
 test('UPM root is version 2 with only Unity module dependencies and current installer', async () => {
   const pkg = await json('package.json')
-  assert.equal(pkg.name, 'com.blockmaker.sdk'); assert.equal(pkg.version, '2.0.0')
+  assert.equal(pkg.name, 'com.blockmaker.sdk'); assert.equal(pkg.version, '2.0.1')
   assert.ok(Object.keys(pkg.dependencies).every(name => name.startsWith('com.unity.modules.')))
   const runtime = await json('Runtime/Blockmaker.asmdef')
   assert.equal(runtime.name, 'Blockmaker'); assert.deepEqual(runtime.references, [])
@@ -28,13 +28,13 @@ test('UPM root is version 2 with only Unity module dependencies and current inst
   assert.deepEqual(editor.includePlatforms, ['Editor']); assert.ok(editor.references.includes('Blockmaker'))
   const installer = await text('Installer~/BlockmakerInstaller.cs')
   assert.ok(installer.includes('Client.Add(PackageUrl)'))
-  assert.ok(installer.includes('https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0'))
+  assert.ok(installer.includes('https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.1'))
 })
 
 test('UPM carries the complete unmodified canonical runtime and matching build map', async () => {
   const value = await json('package-manifest.json')
   const manifest = parseWalletPackageManifest(value, { apiOrigin: new URL(value.members[0].url).origin, target: 'unity_webgl' })
-  assert.equal(manifest.packageId, 'unity-webgl-package-sha256-cicBnjQf1cPzH5Sz3Gt7wX8seHXG9Cj1VTf6eRIAFlQ')
+  assert.equal(manifest.packageId, 'unity-webgl-package-sha256-__-tqLYjkYy9Vb6vY_mx5BlxdUun1GRW73T0PCN2I3U')
   assert.equal(manifest.members.length, 9)
   const hook = await text('Editor/BlockmakerWebGLBuild.cs')
   for (const member of manifest.members) {

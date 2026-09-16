@@ -9,7 +9,7 @@ using UnityEngine;
 [InitializeOnLoad]
 public static class BlockmakerInstaller
 {
-    private const string PackageUrl = "https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0";
+    private const string PackageUrl = "https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.1";
     private static AddRequest request;
     static BlockmakerInstaller()
     {

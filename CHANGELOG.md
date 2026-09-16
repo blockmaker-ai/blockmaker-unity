@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1 (local candidate)
+
+- Email-first sign-in, a Wallet submenu, and Pera with its original reusable logo.
+- Configurable labels and logo; browsing/back/cancel keeps the existing wallet manager.
+- No backend/proof/provider changes. Awaiting the next NFTURBO build.
+
 ## [2.0.0] - 2026-09-16
 
 - Make the current WebGL Pera/optional email SDK the root Unity Package Manager
