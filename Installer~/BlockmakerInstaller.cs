@@ -1,93 +1,50 @@
 #if UNITY_EDITOR
 using System.IO;
 using UnityEditor;
+using UnityEditor.PackageManager;
+using UnityEditor.PackageManager.Requests;
 using UnityEngine;
 
-/// <summary>
-/// Drop this file into your Unity project's Assets folder.
-/// Legacy v1.2.0 installer. New WebGL games should use WebGL~/README.md.
-/// You can delete this file after installation.
-/// </summary>
+/// <summary>Optional drop-in installer for the same pinned UPM release.</summary>
 [InitializeOnLoad]
 public static class BlockmakerInstaller
 {
+    private const string PackageUrl = "https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0";
+    private static AddRequest request;
     static BlockmakerInstaller()
     {
-        var manifestPath = Path.Combine(Application.dataPath, "..", "Packages", "manifest.json");
-        if (!File.Exists(manifestPath)) return;
-
-        var content = File.ReadAllText(manifestPath);
-        if (content.Contains("com.blockmaker.sdk")) return; // Already installed
-
-        EditorApplication.delayCall += () =>
-        {
-            if (EditorUtility.DisplayDialog(
-                "Install Blockmaker SDK",
-                "This will install the Blockmaker wallet SDK and the Reown dependency.\n\nYour project will reload after installation.",
-                "Install",
-                "Cancel"))
-            {
-                Install(manifestPath);
-            }
+        // Offer once per Editor session. A cancelled dialog never repeats on reload.
+        if (SessionState.GetBool("BlockmakerInstaller.offered", false)) return;
+        SessionState.SetBool("BlockmakerInstaller.offered", true);
+        EditorApplication.delayCall += () => {
+            if (HasPackage()) return;
+            if (EditorUtility.DisplayDialog("Install Blockmaker Wallets", "Install the current Pera and optional email wallet package for Unity WebGL?", "Install", "Cancel")) Install();
         };
     }
-
-    [MenuItem("Blockmaker/Install SDK")]
-    public static void InstallFromMenu()
+    private static bool HasPackage()
     {
-        var manifestPath = Path.Combine(Application.dataPath, "..", "Packages", "manifest.json");
-        if (!File.Exists(manifestPath))
-        {
-            EditorUtility.DisplayDialog("Error", "Could not find Packages/manifest.json", "OK");
-            return;
-        }
-
-        var content = File.ReadAllText(manifestPath);
-        if (content.Contains("com.blockmaker.sdk"))
-        {
-            EditorUtility.DisplayDialog("Blockmaker SDK", "Already installed!", "OK");
-            return;
-        }
-
-        Install(manifestPath);
+        var manifest = Path.Combine(Application.dataPath, "../Packages/manifest.json");
+        return File.Exists(manifest) && File.ReadAllText(manifest).Contains("\"com.blockmaker.sdk\"");
     }
-
-    static void Install(string manifestPath)
+    [MenuItem("Blockmaker/Install or Update Wallet Package")]
+    public static void Install()
     {
-        var content = File.ReadAllText(manifestPath);
-
-        // Add scoped registry if not present
-        if (!content.Contains("package.openupm.com"))
-        {
-            var lastBrace = content.LastIndexOf('}');
-            var registry = @",
-  ""scopedRegistries"": [
-    {
-      ""name"": ""OpenUPM"",
-      ""url"": ""https://package.openupm.com"",
-      ""scopes"": [""com.reown"", ""com.nethereum"", ""com.cysharp""]
+        if (request != null) return;
+        if (Directory.GetFiles(Application.dataPath, "BlockmakerWalletPackageWebGL.cs", SearchOption.AllDirectories).Length > 0 ||
+            Directory.GetFiles(Application.dataPath, "BlockmakerAuth.cs", SearchOption.AllDirectories).Length > 0) {
+            EditorUtility.DisplayDialog("Existing Blockmaker files", "Blockmaker scripts already exist in Assets. Follow the README migration steps before installing the package. Your files were not changed.", "OK"); return;
+        }
+        request = Client.Add(PackageUrl);
+        EditorApplication.update += Progress;
     }
-  ]
-}";
-            content = content.Substring(0, lastBrace) + registry;
-        }
-
-        // Add dependencies
-        var depsIdx = content.IndexOf("\"dependencies\"");
-        if (depsIdx >= 0)
-        {
-            var braceIdx = content.IndexOf('{', depsIdx);
-            if (braceIdx >= 0)
-            {
-                var insert = "\n    \"com.blockmaker.sdk\": \"https://github.com/blockmaker-ai/blockmaker-unity.git#v1.2.0\",\n    \"com.nethereum.unity\": \"4.19.2\",\n    \"com.reown.sign.nethereum\": \"1.6.0\",\n    \"com.reown.sign.unity\": \"1.6.0\",";
-                content = content.Substring(0, braceIdx + 1) + insert + content.Substring(braceIdx + 1);
-            }
-        }
-
-        File.WriteAllText(manifestPath, content);
-        Debug.Log("[Blockmaker] SDK installed! Unity is resolving packages...");
-
-        UnityEditor.PackageManager.Client.Resolve();
+    private static void Progress()
+    {
+        if (request == null || !request.IsCompleted) return;
+        EditorApplication.update -= Progress;
+        if (request.Status == StatusCode.Success)
+            Debug.Log("Blockmaker Wallets installed. Use Blockmaker > Setup Wallet Demo. You can delete this installer file.");
+        else Debug.LogError("Blockmaker installation failed: " + request.Error.message);
+        request = null;
     }
 }
 #endif

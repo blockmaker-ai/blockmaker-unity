@@ -1,47 +1,96 @@
 # Blockmaker Unity SDK
 
-Add Pera and optional passwordless email wallets to Unity WebGL games on
-Algorand MainNet. The current package provides an in-game Pera QR/approval UI,
-provider-owned email authentication, verified player sessions and exact-group
-transaction signing. Fonts, colours, wording, game ID and API are configurable.
+Add **Pera and optional passwordless email wallets** to Unity WebGL games on
+Algorand MainNet. Email uses TxnLab with MetaMask Embedded Wallets. Players can
+use an email wallet for the same supported game actions as a Pera wallet,
+subject to balances, asset ownership and the game's rules.
 
-**Current release: [WebGL Pera + email preview, 16 September 2026](https://github.com/blockmaker-ai/blockmaker-unity/releases/tag/webgl-preview-20260916).**
+**Version 2.0.0 is the current SDK.** It replaces the previous integration.
+This package supports **Unity WebGL**, including compatible desktop and mobile
+browsers. It does not provide native Windows, macOS, Android or iOS wallet exports.
 
-- [Install and integrate](WebGL~/README.md)
-- [Configure email and shared player identity](WebGL~/EMAIL_SETUP.md)
-- [Minimal Unity sample and fullscreen host](WebGL~/Samples~/EmailWallet/README.md)
-- [Validation and remaining checks](WebGL~/VALIDATION.md)
+## Install through Unity Package Manager
 
-| Profile | Wallets |
-| --- | --- |
-| `pera_lute` | Pera and Lute; email is disabled |
-| `pera_lute_txnlab_web3auth` | Pera, Lute and TxnLab/MetaMask Embedded Wallets email; all are economic Algorand wallets |
+Requires **Unity 6** with Web Build Support and **Git** installed.
 
-Email requires a reviewed provider project and the game's exact approved
-origin. It is optional, does not fund a wallet and does not bypass game rules.
-The older `web3auth_avm_email` authentication-only broker remains separate.
+1. In Unity, open **Window → Package Management → Package Manager**.
+2. Choose **+ → Install package from Git URL** (called “Add package from Git URL”
+   in some versions).
+3. Paste this URL and select **Install**:
 
-Shared usernames and profile pictures follow the connected **owner wallet**
-across games. Game sessions, progress and assets retain their existing scope.
-Equal email addresses alone never establish the same wallet or merge accounts.
+   ```text
+   https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0
+   ```
 
-This release is for **Unity WebGL/MainNet**. Unity Editor can check C# and UI;
-wallet authentication and browser fullscreen require an actual WebGL build.
-Native Windows, macOS, Android and iOS exports are not supported by this package.
+Unity installs the SDK and its required Unity modules. No Node.js, separate
+Reown installation or manual browser-file copying is needed. The package adds
+its verified wallet browser files to WebGL builds automatically.
 
-## Existing v1 projects
+Prefer the previous drag-in method? [Download BlockmakerInstaller.cs](https://raw.githubusercontent.com/blockmaker-ai/blockmaker-unity/main/Installer~/BlockmakerInstaller.cs),
+place it in `Assets/Editor`, and choose **Install**. It installs the same version
+through Package Manager. You can delete that installer afterward.
 
-The repository's root UPM package and `Installer~` remain **legacy v1.2.0**.
-Installing the root Git URL does not install the current WebGL package. Existing
-projects can stay pinned to `#v1.2.0`; see the [historical guide](LEGACY_V1.md).
-Migrate the old APIs and scene objects explicitly before installing the new
-package. Never run both wallet managers in one game. Unrelated legacy work is
-preserved in its existing branches and pull requests.
+A [`.tgz` download](https://github.com/blockmaker-ai/blockmaker-unity/releases/tag/v2.0.0)
+is also available for Package Manager's **Install package from tarball** option.
+Projects using an earlier SDK should read [upgrading](Documentation~/upgrading.md)
+before installing. The SDK never deletes your existing integration or player data.
 
-## Licensing
+## Try the wallet demo
 
-Blockmaker contributions use the [MIT licence](LICENSE). Bundled dependencies
-retain their own licences and provider terms, including MetaMask's terms.
-Distribute the complete [third-party notices](WebGL~/Assets/StreamingAssets/Blockmaker/blockmaker-txnlab-wallet.NOTICES.txt).
-No game artwork, commercial fonts, provider credentials or player data are
-included.
+1. Choose **Blockmaker → Setup Wallet Demo** to add a small wallet UI to your
+   current scene. It creates a UI document and panel settings for you.
+2. On the new **Blockmaker Wallet Demo** component, set your **public Game ID**
+   from your registered Blockmaker game. The API defaults to
+   `https://blockmaker.polaris.city`; set the app name and your own font if desired.
+3. Leave **Public Email Client ID** empty for Pera. To enable email, complete
+   [email setup](Documentation~/email-setup.md) and enter the reviewed **public**
+   provider client ID. Email is optional; installing the SDK does not provision it.
+4. Choose **Blockmaker → Install Fullscreen Web Template**, save the scene, add
+   it to your Web build profile and build. Host it on the exact origin registered
+   for your game and, for email, allowed by the provider project.
+5. Open the browser build and select **Sign in**. With email configured, the
+   game offers **Continue with Pera** and **Continue with email**.
+
+Unity Editor is useful for scene/UI checks. Wallet sign-in runs in the **WebGL
+browser build**, not Editor Play mode. The demo performs no transactions.
+If you already have a wallet integration, use its existing receiver rather than
+adding a second demo/manager. An importable demo is also in Package Manager's
+**Samples** section.
+
+## What is included
+
+- A reusable C# client and wallet bridge with verified player-session acknowledgment.
+- In-game Pera QR, approval progress and cancellation; configurable fonts,
+  colours and wording.
+- Provider-owned email, verification and recovery UI. A popup may be required by
+  the provider/browser; the included template uses document-root fullscreen.
+- Transaction signing and shared-profile APIs. Your game supplies transaction
+  review, submission/recovery and its own gameplay rules.
+
+The wallet manager also supports Lute through its lower-level account path;
+the included in-game picker presents Pera and optional email.
+Registered usernames and profile pictures follow the connected **owner wallet**.
+Game sessions and game progress stay scoped to the game. Using the same email
+in unrelated provider projects does **not** guarantee the same wallet; see
+[email identity setup](Documentation~/email-setup.md).
+
+## Integration and current validation
+
+Use the [integration guide](Documentation~/integration.md) for custom UI,
+profiles, transaction signing and hosting. Never put server keys or wallet
+recovery material in Unity. Email login does not fund a wallet or enable paused
+trading/rewards.
+
+[Validation details](Documentation~/validation.md) distinguish package/build/UI
+checks from attended wallet tests. Real email verification, returning-wallet
+recovery, cross-game identity and live economic operations still need player
+acceptance checks. A successful install or visible sign-in form does not prove
+those flows are complete.
+
+## Licence
+
+Blockmaker code uses the [MIT licence](LICENSE). Dependencies retain their own
+licences and provider terms. Keep the bundled
+[third-party notices](Browser~/blockmaker-txnlab-wallet.NOTICES.txt), which are
+included automatically in the build. No game assets, commercial fonts, private
+credentials or player data are distributed in this SDK.

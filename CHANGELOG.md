@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.0] - 2026-09-16
+
+- Make the current WebGL Pera/optional email SDK the root Unity Package Manager
+  package; remove the obsolete v1 runtime and its external dependencies.
+- Include verified browser assets automatically through Unity’s build API.
+- Restore a one-file installer using `PackageManager.Client.Add`, plus demo
+  scene setup and a fullscreen WebGL template. No Node.js install step.
+- Preserve the nine canonical wallet runtime files and their script/plugin
+  GUIDs. Document the major-version migration and pending attended wallet checks.
+
 ## WebGL preview — 2026-09-16
 
 - Publish the current complete Pera/Lute and optional TxnLab/MetaMask Embedded

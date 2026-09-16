@@ -1,10 +1,8 @@
-name: WebGL package
+name: Unity package
 on:
   pull_request:
-    paths: ['WebGL~/**', '.github/workflows/webgl-package.yml']
   push:
     branches: [main]
-    paths: ['WebGL~/**', '.github/workflows/webgl-package.yml']
 permissions:
   contents: read
 jobs:
@@ -15,4 +13,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test 'WebGL~/Tools/install.test.mjs'
+      - run: node --test 'Tools~/package.test.mjs'
