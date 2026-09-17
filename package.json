@@ -1,6 +1,6 @@
 {
   "name": "com.blockmaker.sdk",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "displayName": "Blockmaker Wallets",
   "description": "Unity WebGL wallets on Algorand MainNet: Pera, Lute and optional passwordless email via TxnLab/MetaMask Embedded Wallets. Includes in-game wallet UI and shared player profiles.",
   "unity": "6000.0",

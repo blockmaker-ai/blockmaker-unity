@@ -75882,17 +75882,20 @@ function E6(e) {
 		icon: t.metadata.icon,
 		providerId: r,
 		networkGenesisId: o6
-	}), o = null, s = !1, c = null, l = async (e) => {
+	}), o = null, s = null, c = null, l = async (e) => {
 		if (C6(t), s) throw Error(`A signing request is already waiting in ${n}.`);
 		if (r === l6 && !t.web3auth?.connected) {
 			let e = /* @__PURE__ */ Error("Your email wallet session expired. Sign out and sign in again before reviewing another transaction.");
 			throw Object.assign(e, { code: "SESSION_EXPIRED" }), e;
 		}
-		s = !0;
+		let i, a = new Promise((e, t) => {
+			i = t;
+		}), o = { cancel: () => i(Object.assign(/* @__PURE__ */ Error("The player cancelled the wallet request."), { code: "PLAYER_CANCELLED" })) };
+		s = o;
 		try {
-			return await e();
+			return await Promise.race([e(), a]);
 		} finally {
-			s = !1;
+			s === o && (s = null);
 		}
 	};
 	return Object.freeze({
@@ -75902,8 +75905,10 @@ function E6(e) {
 		networkGenesisId: o6,
 		...r === u6 || r === l6 ? { beginUnityPresentation: (e) => {
 			if (c) throw Error("A Unity wallet presentation is already active.");
-			let n = r === u6 ? m(t, e) : p(t, e), i = n.dispose;
-			return n.dispose = () => {
+			let n = r === u6 ? m(t, e) : p(t, e), i = n.dispose, a = n.cancel;
+			return n.cancel = async () => {
+				s?.cancel(), await a();
+			}, n.dispose = () => {
 				i(), c === n && (c = null);
 			}, c = n, n;
 		} } : {},
@@ -75917,7 +75922,9 @@ function E6(e) {
 			o = null;
 		}), o)),
 		resumeSession: async () => (C6(t), await t.resumeSession(), C6(t), S6(t)),
-		disconnect: () => t.disconnect(),
+		disconnect: async () => {
+			s?.cancel(), await t.disconnect();
+		},
 		signTransactions: (e, n) => l(() => t.signTransactions(T6(e, i), n?.slice())),
 		transactionSigner: (e, n) => l(async () => (await t.signTransactions(T6(e, i), n.slice())).reduce((e, t) => (t !== null && e.push(t), e), [])),
 		canSignData: t.canSignData,
@@ -76004,7 +76011,11 @@ async function O6(e) {
 		algorandWallets: m,
 		algosdk: i,
 		resumeError: u,
-		disconnectAll: () => e.exposeExternalWallets ? o.disconnect() : s.disconnect()
+		disconnectAll: async () => {
+			let t = (await Promise.allSettled(m.filter((e) => (e.wallet.accounts?.length ?? 0) > 0).map((e) => e.wallet.disconnect()))).find((e) => e.status === "rejected");
+			if (t?.status === "rejected") throw t.reason;
+			e.exposeExternalWallets && await o.disconnect();
+		}
 	});
 }
 async function k6(e) {

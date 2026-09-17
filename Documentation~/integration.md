@@ -33,7 +33,7 @@ These are integration fragments; the complete working component is
 keep the receiving GameObject's name unique, and dispose the view at teardown.
 `RuntimeSupported` lets the game show a friendly message in Editor/native builds.
 A blank public email client ID selects `pera_lute`; a configured ID selects
-`pera_lute_txnlab_web3auth`. The Unity presentation shows Pera and optional email;
+`pera_lute_txnlab_web3auth`. The Unity presentation shows Email first when enabled, then Wallet → Pera;
 `OpenAccount` is available for the broader account UI. The older
 `web3auth_avm_email` authentication-only broker is separate and remains restricted.
 
@@ -105,3 +105,22 @@ this package locally without claiming provider or game qualification.
 Commit scene/template changes and Unity metadata. Use complete tagged releases,
 not individual vendor-file patches. Required setup and attended acceptance remain
 in [email setup](email-setup.md) and [validation](validation.md).
+
+The original Pera logo is bundled in the shared presentation. Set `PeraLogo` in
+`BlockmakerUnityWalletAppearance` to provide your own texture, or call
+`BlockmakerUnityWalletIcons.CreatePeraLogo()` for a caller-owned copy. Destroy
+that texture when finished. Pera branding remains its owner's mark.
+
+Use **Use another account** in the chooser to cancel sign-in and disconnect a
+remembered connection, then choose Email or Wallet again. `Logout` also handles
+remembered connections when no game session has been acknowledged. Wait for its
+confirmed result; retain your game's economic recovery records when changing accounts.
+
+## Phone and high-DPI layout
+
+The demo clones its panel settings at runtime and sizes the UI in visible canvas
+pixels. Your authored settings remain intact. In a custom integration, supply a
+full-screen UI Toolkit root with the same visible-pixel sizing; a gameplay panel
+scaled from a 1920×1080 design can make wallet controls too small on phones.
+The wallet view keeps Cancel and account switching outside its scrolling area.
+Use a short landscape phone viewport when checking your integration.

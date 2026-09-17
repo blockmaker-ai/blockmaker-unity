@@ -654,15 +654,14 @@ namespace Blockmaker
             if (!IsReady)
                 throw new InvalidOperationException(
                     "PACKAGE_NOT_READY: Wait for wallet-package readiness before signing out.");
+            // Explicit sign-out also cancels an incomplete account attempt.
+            // Economic requests retain their own cancellation/recovery boundary.
+            if (accountPending && !accountHandoffInstalled && !accountRejecting) Cancel();
             if (HasActiveOperation())
                 throw new InvalidOperationException(
                     "REQUEST_ALREADY_PENDING: Close the active wallet-package window before signing out.");
             var snapshot = SnapshotClientSession();
-            if (snapshot == null) {
-                done?.Invoke(BlockmakerWalletPackageWebGLResult.Completed());
-                return;
-            }
-            if (!ValidSession(snapshot))
+            if (snapshot != null && !ValidSession(snapshot))
                 throw new InvalidOperationException(
                     "SESSION_CONFLICT: The current player session is not owned by this wallet package.");
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -672,9 +671,9 @@ namespace Blockmaker
             logoutPending = true;
             BlockmakerWalletPackageWebGL_Logout(
                 gameObject.name, lifecycleId, operationId,
-                snapshot.SessionToken, snapshot.RefreshToken,
-                snapshot.WalletAddress, snapshot.AccountKind,
-                snapshot.AuthProvider);
+                snapshot?.SessionToken ?? "", snapshot?.RefreshToken ?? "",
+                snapshot?.WalletAddress ?? "", snapshot?.AccountKind ?? "",
+                snapshot?.AuthProvider ?? "");
 #else
             throw new PlatformNotSupportedException(NativeUnavailableCode);
 #endif

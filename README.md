@@ -5,7 +5,7 @@ Algorand MainNet. Email uses TxnLab with MetaMask Embedded Wallets. Players can
 use an email wallet for the same supported game actions as a Pera wallet,
 subject to balances, asset ownership and the game's rules.
 
-**Version 2.0.0 is the current SDK.** It replaces the previous integration.
+**Version 2.0.1 is the current SDK.**
 This package supports **Unity WebGL**, including compatible desktop and mobile
 browsers. It does not provide native Windows, macOS, Android or iOS wallet exports.
 
@@ -19,7 +19,7 @@ Requires **Unity 6** with Web Build Support and **Git** installed.
 3. Paste this URL and select **Install**:
 
    ```text
-   https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0
+   https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.1
    ```
 
 Unity installs the SDK and its required Unity modules. No Node.js, separate
@@ -30,8 +30,8 @@ Prefer the previous drag-in method? [Download BlockmakerInstaller.cs](https://ra
 place it in `Assets/Editor`, and choose **Install**. It installs the same version
 through Package Manager. You can delete that installer afterward.
 
-A [`.tgz` download](https://github.com/blockmaker-ai/blockmaker-unity/releases/tag/v2.0.0)
-is also available for Package Manager's **Install package from tarball** option.
+The release also provides a [`.tgz` download](https://github.com/blockmaker-ai/blockmaker-unity/releases/tag/v2.0.1)
+for Package Manager's **Install package from tarball** option.
 Projects using an earlier SDK should read [upgrading](Documentation~/upgrading.md)
 before installing. The SDK never deletes your existing integration or player data.
 
@@ -49,7 +49,8 @@ before installing. The SDK never deletes your existing integration or player dat
    it to your Web build profile and build. Host it on the exact origin registered
    for your game and, for email, allowed by the provider project.
 5. Open the browser build and select **Sign in**. With email configured, the
-   game offers **Continue with Pera** and **Continue with email**.
+   game offers **Email** first and **Wallet** second. Choose **Wallet → Pera**
+   to connect Pera; its original logo is included.
 
 Unity Editor is useful for scene/UI checks. Wallet sign-in runs in the **WebGL
 browser build**, not Editor Play mode. The demo performs no transactions.
@@ -68,7 +69,7 @@ adding a second demo/manager. An importable demo is also in Package Manager's
   review, submission/recovery and its own gameplay rules.
 
 The wallet manager also supports Lute through its lower-level account path;
-the included in-game picker presents Pera and optional email.
+the included in-game picker presents Email and Wallet → Pera.
 Registered usernames and profile pictures follow the connected **owner wallet**.
 Game sessions and game progress stay scoped to the game. Using the same email
 in unrelated provider projects does **not** guarantee the same wallet; see

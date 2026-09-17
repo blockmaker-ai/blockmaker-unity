@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Runtime.InteropServices;
 using UnityEngine.Networking;
 using Blockmaker;
 using UnityEngine;
@@ -23,11 +24,34 @@ public sealed class BlockmakerWalletDemo : MonoBehaviour
     private Image picture;
     private Texture2D pictureTexture;
     private int profileRead;
+    private PanelSettings originalPanel, displayPanel;
+#if UNITY_WEBGL && !UNITY_EDITOR
+    [DllImport("__Internal")] private static extern int BlockmakerDemoViewportWidth();
+    [DllImport("__Internal")] private static extern int BlockmakerDemoViewportHeight();
+#endif
+
+    private void Update()
+    {
+        if (displayPanel == null) return;
+        int width = Screen.width, height = Screen.height;
+#if UNITY_WEBGL && !UNITY_EDITOR
+        width = BlockmakerDemoViewportWidth(); height = BlockmakerDemoViewportHeight();
+#endif
+        var size = new Vector2Int(Mathf.Max(1, width), Mathf.Max(1, height));
+        if (displayPanel.referenceResolution != size) displayPanel.referenceResolution = size;
+    }
 
     private void Start()
     {
         if (Document == null) Document = GetComponent<UIDocument>();
         if (Document == null) { Debug.LogError("Assign a UIDocument to the wallet demo."); return; }
+        originalPanel = Document.panelSettings;
+        if (originalPanel == null) { Debug.LogError("Assign PanelSettings to the wallet demo document."); return; }
+        displayPanel = Instantiate(originalPanel);
+        displayPanel.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+        displayPanel.scale = 1;
+        Document.panelSettings = displayPanel;
+        Update();
         gameObject.name = "Blockmaker wallet demo receiver";
         var root = Document.rootVisualElement;
         root.style.paddingTop = root.style.paddingLeft = root.style.paddingRight = 24;
@@ -42,6 +66,9 @@ public sealed class BlockmakerWalletDemo : MonoBehaviour
             connect.SetEnabled(result.Success); profile.SetEnabled(!result.Success); logout.SetEnabled(!result.Success);
         })) { text = "Sign out" }; root.Add(logout); logout.SetEnabled(false);
         profile = new Button(LoadProfile) { text = "Refresh shared profile" }; root.Add(profile); profile.SetEnabled(false);
+        foreach (var button in new[] { connect, logout, profile }) {
+            button.style.minHeight = 48; button.style.fontSize = 18; button.style.marginTop = 8;
+        }
         if (string.IsNullOrWhiteSpace(GameId)) { status.text = "Set your public Game ID in the Wallet Demo Inspector."; return; }
         client = new BlockmakerClient(ApiOrigin, GameId);
         package = gameObject.AddComponent<BlockmakerWalletPackageWebGL>();
@@ -93,5 +120,8 @@ public sealed class BlockmakerWalletDemo : MonoBehaviour
         }
     }
     private void ClearPicture() { if (picture != null) { picture.image = null; picture.style.display = DisplayStyle.None; } if (pictureTexture != null) Destroy(pictureTexture); pictureTexture = null; }
-    private void OnDestroy() { profileRead++; view?.Dispose(); ClearPicture(); if (package != null && package.IsReady) package.Cancel(); }
+    private void OnDestroy() { profileRead++; view?.Dispose(); ClearPicture(); if (package != null && package.IsReady) package.Cancel();
+        if (Document != null && Document.panelSettings == displayPanel) Document.panelSettings = originalPanel;
+        if (displayPanel != null) Destroy(displayPanel);
+    }
 }

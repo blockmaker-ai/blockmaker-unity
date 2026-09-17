@@ -14,7 +14,7 @@ current installation route.
    the client, wallet facade and presentation shown in the [integration guide](integration.md).
    Remove obsolete scene objects after wiring their replacements. Existing API
    callers will need changes; the package does not rewrite gameplay code.
-3. Install `https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0` through
+3. Follow the [current installation instructions](../README.md) in
    Package Manager. Keep one wallet manager. Old Reown/Nethereum dependencies can
    be removed through Package Manager only if no other project code uses them.
 4. Confirm the same owner wallet/profile, cancellation and pending-operation
@@ -22,8 +22,9 @@ current installation route.
 
 ## From the September Assets/ZIP package
 
-The nine wallet runtime files are unchanged. The new package manages their paths
-and WebGL build inclusion. Close Unity and back up the complete existing SDK
+The version 2 package manages the nine wallet runtime files and their WebGL
+build inclusion. The local 2.0.1 candidate changes only the presentation file;
+the other eight runtime files retain their 2.0.0 contents. Close Unity and back up the complete existing SDK
 files and their `.meta` files outside Assets before removing their old copies
 from compilation. Preserve your own game UI, configuration and recovery data.
 

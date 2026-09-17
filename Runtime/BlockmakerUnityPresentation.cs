@@ -630,7 +630,22 @@ namespace Blockmaker
 }
 namespace Blockmaker
 {
-    /// <summary>Game-owned branding. No game navigation or assets are built into the package.</summary>
+    /// <summary>Reusable wallet marks. Returned textures are owned and destroyed by the caller.</summary>
+    public static class BlockmakerUnityWalletIcons
+    {
+        // Original Pera mark from the previous Unity SDK (e86c1ba); not game branding.
+        // Pera's logo remains its owner's mark. Keep it unmodified when identifying Pera.
+        private const string PeraImage = "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";
+        public static Texture2D CreatePeraLogo()
+        {
+            var icon = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = "Pera logo" };
+            if (ImageConversion.LoadImage(icon, Convert.FromBase64String(PeraImage), true)) return icon;
+            UnityEngine.Object.Destroy(icon);
+            return null;
+        }
+    }
+
+    /// <summary>Game-owned branding and wording; game navigation stays outside the package.</summary>
     [Serializable]
     public sealed class BlockmakerUnityWalletAppearance
     {
@@ -640,21 +655,28 @@ namespace Blockmaker
         public Color Accent = new Color(.93f, .96f, .3f);
         public Color Text = Color.white;
         public string ChooseTitle = "Sign in";
-        public string ChooseMessage = "Choose your wallet. Sign-in approves a zero-ALGO proof; no payment is sent.";
-        public string PeraLabel = "Continue with Pera";
-        public string EmailLabel = "Continue with email";
+        public string ChooseMessage = "How would you like to sign in?";
+        public string PeraLabel = "Pera";
+        public Texture2D PeraLogo;
+        public string WalletLabel = "Wallet";
+        public string WalletsTitle = "Choose a wallet";
+        public string WalletsMessage = "Select the wallet you use.";
+        public string BackLabel = "Back";
+        public string EmailLabel = "Email";
         public string EmailTitle = "Your email wallet";
-        public string EmailMessage = "Complete email verification or recovery in the wallet window. Return here when finished.";
+        public string EmailMessage = "Follow the email steps to sign in.";
         public string ConnectTitle = "Connect Pera Wallet";
         public string ConnectMessage = "Scan this code with Pera to connect your wallet.";
         public string ApprovalTitle = "One more approval";
-        public string ApprovalMessage = "Approve the sign-in request in Pera. This signs a zero-ALGO proof; it does not send a payment.";
+        public string ApprovalMessage = "Approve the sign-in request in Pera. There is no charge.";
         public string ConnectingMessage = "Opening Pera…";
         public string VerifyingMessage = "Checking your sign-in…";
         public string ConnectStep = "STEP 1 OF 2";
         public string ApprovalStep = "STEP 2 OF 2";
         public string CancelLabel = "Cancel";
-        public string OpenWalletLabel = "Open Pera";
+        public string OpenWalletLabel = "Confirm";
+        public string ChangeAccountLabel = "Use another account";
+        public string DisconnectingMessage = "Disconnecting…";
     }
 
     /// <summary>
@@ -668,7 +690,12 @@ namespace Blockmaker
         private readonly BlockmakerUnityWalletAppearance appearance;
         private readonly VisualElement overlay, qr;
         private readonly Label title, message, step;
-        private readonly Button openWallet, peraChoice, emailChoice;
+        private readonly Button openWallet, peraChoice, emailChoice, walletChoice, backChoice, changeAccount, cancel;
+        private Texture2D ownedPeraLogo;
+        private bool opened, resetting;
+        private Action<BlockmakerWalletPackageWebGLResult> completion;
+        public bool IsOpen => !disposed;
+        public void Focus() { if (!disposed) overlay.BringToFront(); }
         private Action<BlockmakerWalletPackageWebGLResult> choiceCompletion;
 #if UNITY_WEBGL && !UNITY_EDITOR
         private bool keyboardReleased;
@@ -694,27 +721,30 @@ namespace Blockmaker
             overlay.style.color = appearance.Text;
             if (appearance.Font != null) overlay.style.unityFontDefinition = FontDefinition.FromFont(appearance.Font);
             var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.style.width = Length.Percent(94);
-            scroll.style.maxWidth = 520;
-            scroll.style.maxHeight = Length.Percent(96);
+            scroll.style.width = Length.Percent(100);
             scroll.style.flexShrink = 1;
+            scroll.contentContainer.style.alignItems = Align.Center;
             var card = new VisualElement();
+            card.style.width = Length.Percent(94);
+            card.style.maxWidth = 520;
+            card.style.maxHeight = Length.Percent(96);
+            card.style.flexShrink = 1;
             card.style.backgroundColor = appearance.Surface;
-            card.style.paddingLeft = card.style.paddingRight = 24;
-            card.style.paddingTop = card.style.paddingBottom = 20;
+            card.style.paddingLeft = card.style.paddingRight = 16;
+            card.style.paddingTop = card.style.paddingBottom = 16;
             card.style.borderTopLeftRadius = card.style.borderTopRightRadius =
                 card.style.borderBottomLeftRadius = card.style.borderBottomRightRadius = 20;
             card.style.alignItems = Align.Center;
-            var brand = Text(appearance.AppName, 20);
+            var brand = Text(appearance.AppName, 16);
             brand.style.color = appearance.Accent;
-            title = Text(appearance.ConnectTitle, 30);
+            title = Text(appearance.ConnectTitle, 24);
             step = Text(appearance.ConnectStep, 16);
             qr = new VisualElement { name = "blockmaker-wallet-qr" };
             qr.style.width = qr.style.height = 240;
             qr.style.flexShrink = 0;
             qr.style.backgroundColor = Color.white;
             qr.style.display = DisplayStyle.None;
-            message = Text(appearance.ConnectingMessage, 19);
+            message = Text(appearance.ConnectingMessage, 18);
             openWallet = Button(appearance.OpenWalletLabel, () => {
                 if (disposed) return;
                 // Explicit player action; no automatic app switch or fullscreen request.
@@ -725,45 +755,147 @@ namespace Blockmaker
                 Application.OpenURL(android ? hinted : "perawallet-wc://wc?uri=" + Uri.EscapeDataString(hinted));
             });
             openWallet.style.display = Application.isMobilePlatform ? DisplayStyle.Flex : DisplayStyle.None;
-            peraChoice = Button(appearance.PeraLabel, () => Choose("pera"));
+            peraChoice = Button("", () => Choose("pera"));
+            peraChoice.name = "blockmaker-pera-choice";
+            peraChoice.style.flexDirection = FlexDirection.Row;
+            peraChoice.style.alignItems = Align.Center;
+            peraChoice.style.justifyContent = Justify.Center;
+            var logo = appearance.PeraLogo;
+            if (logo == null) logo = ownedPeraLogo = BlockmakerUnityWalletIcons.CreatePeraLogo();
+            var logoImage = new Image { image = logo, pickingMode = PickingMode.Ignore };
+            logoImage.style.width = logoImage.style.height = 32;
+            logoImage.style.marginRight = 12;
+            peraChoice.Add(logoImage);
+            peraChoice.Add(new Label(appearance.PeraLabel) { pickingMode = PickingMode.Ignore });
             emailChoice = Button(appearance.EmailLabel, () => Choose(BlockmakerWalletPackageWebGL.TxnLabWeb3AuthProvider));
-            peraChoice.style.display = emailChoice.style.display = DisplayStyle.None;
-            var cancel = Button(appearance.CancelLabel, () => {
+            emailChoice.name = "blockmaker-email-choice";
+            walletChoice = Button(appearance.WalletLabel, ShowWalletChoices);
+            walletChoice.name = "blockmaker-wallet-choice";
+            backChoice = Button(appearance.BackLabel, ShowSignInChoices);
+            backChoice.name = "blockmaker-wallet-back";
+            peraChoice.style.display = emailChoice.style.display = walletChoice.style.display = backChoice.style.display = DisplayStyle.None;
+            changeAccount = Button(appearance.ChangeAccountLabel, ChangeAccount);
+            changeAccount.name = "blockmaker-change-account";
+            changeAccount.style.backgroundColor = new Color(.22f, .23f, .28f);
+            changeAccount.style.color = appearance.Text;
+            cancel = Button(appearance.CancelLabel, () => {
                 if (disposed) return;
                 if (choiceCompletion != null) {
                     var done = choiceCompletion; choiceCompletion = null;
                     Dispose(); done(BlockmakerWalletPackageWebGLResult.Failed("PLAYER_CANCELLED"));
                 } else package.Cancel();
             });
-            card.Add(brand); card.Add(title); card.Add(step); card.Add(qr);
-            card.Add(message); card.Add(peraChoice); card.Add(emailChoice); card.Add(openWallet); card.Add(cancel);
-            scroll.Add(card); overlay.Add(scroll); parent.Add(overlay);
+            scroll.Add(brand); scroll.Add(title); scroll.Add(step); scroll.Add(qr);
+            scroll.Add(message); scroll.Add(emailChoice); scroll.Add(walletChoice); scroll.Add(peraChoice); scroll.Add(backChoice);
+            // Keep cancellation and account switching reachable when the QR or
+            // instructions need to scroll on a short phone viewport.
+            var actions = new VisualElement { name = "blockmaker-wallet-actions" };
+            actions.style.width = Length.Percent(100);
+            actions.style.flexDirection = FlexDirection.Row;
+            actions.style.flexWrap = Wrap.Wrap;
+            actions.style.flexShrink = 0;
+            foreach (var button in new[] { openWallet, changeAccount, cancel }) {
+                button.style.width = 0;
+                button.style.minWidth = 140;
+                button.style.flexGrow = 1;
+                button.style.marginLeft = button.style.marginRight = 4;
+                button.style.whiteSpace = WhiteSpace.Normal;
+                actions.Add(button);
+            }
+            changeAccount.style.fontSize = 16;
+            card.Add(scroll); card.Add(actions); overlay.Add(card); parent.Add(overlay);
             overlay.BringToFront();
             package.PresentationChanged += Progress;
+            overlay.RegisterCallback<DetachFromPanelEvent>(e => {
+                // Editor hierarchy previews temporarily detach/re-attach documents.
+                if (disposed || e.target != overlay || !Application.isPlaying) return;
+                // A scene leaving must not strand a hidden provider request.
+                package.Cancel();
+                Finish(BlockmakerWalletPackageWebGLResult.Failed("PLAYER_CANCELLED"));
+            });
         }
 
-        /// <summary>Show optional email alongside Pera using the supplied game styling.</summary>
+        /// <summary>Offer Email first when configured, then Wallet and its supported choices.</summary>
         public void OpenAccount(Action<BlockmakerWalletPackageWebGLResult> done)
         {
-            if (disposed || choiceCompletion != null) throw new InvalidOperationException("Wallet choices are already closed or open.");
-            choiceCompletion = done ?? (_ => { });
+            if (disposed || opened) throw new InvalidOperationException("Wallet choices are already closed or open.");
+            opened = true;
+            completion = done ?? (_ => { });
+            choiceCompletion = Finish;
             package.UseUnityPresentation = true;
-            if (!package.EmailEnabled) { Choose("pera"); return; }
+            if (package.EmailEnabled) ShowSignInChoices(); else ShowWalletChoices();
+        }
+
+        private void Finish(BlockmakerWalletPackageWebGLResult result)
+        {
+            if (resetting) return;
+            var done = completion; completion = null;
+            choiceCompletion = null;
+            Dispose();
+            done?.Invoke(result);
+        }
+
+        private void ChangeAccount()
+        {
+            if (disposed || resetting) return;
+            resetting = true;
+            choiceCompletion = null;
+            changeAccount.SetEnabled(false);
+            cancel.SetEnabled(false);
+            peraChoice.style.display = emailChoice.style.display = walletChoice.style.display =
+                backChoice.style.display = openWallet.style.display = qr.style.display = DisplayStyle.None;
+            title.text = appearance.ChooseTitle;
+            step.text = "";
+            step.style.display = DisplayStyle.None;
+            message.text = appearance.DisconnectingMessage;
+            try {
+                package.Logout(result => {
+                    if (disposed) return;
+                    resetting = false;
+                    changeAccount.SetEnabled(true);
+                    cancel.SetEnabled(true);
+                    if (!result.Success) { Finish(result); return; }
+                    choiceCompletion = Finish;
+                    if (package.EmailEnabled) ShowSignInChoices(); else ShowWalletChoices();
+                });
+            } catch {
+                resetting = false;
+                Finish(BlockmakerWalletPackageWebGLResult.Failed("PROVIDER_CLEANUP_REQUIRED"));
+            }
+        }
+
+        private void ShowSignInChoices()
+        {
+            if (disposed || choiceCompletion == null) return;
             title.text = appearance.ChooseTitle;
             message.text = appearance.ChooseMessage;
             step.text = "";
-            openWallet.style.display = DisplayStyle.None;
-            peraChoice.style.display = emailChoice.style.display = DisplayStyle.Flex;
+            step.style.display = DisplayStyle.None;
+            openWallet.style.display = qr.style.display = peraChoice.style.display = backChoice.style.display = DisplayStyle.None;
+            emailChoice.style.display = walletChoice.style.display = DisplayStyle.Flex;
+        }
+
+        private void ShowWalletChoices()
+        {
+            if (disposed || choiceCompletion == null) return;
+            title.text = appearance.WalletsTitle;
+            message.text = appearance.WalletsMessage;
+            step.text = "";
+            step.style.display = DisplayStyle.None;
+            openWallet.style.display = qr.style.display = emailChoice.style.display = walletChoice.style.display = DisplayStyle.None;
+            peraChoice.style.display = DisplayStyle.Flex;
+            backChoice.style.display = package.EmailEnabled ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
         private void Choose(string providerId)
         {
             if (disposed || choiceCompletion == null) return;
             var done = choiceCompletion; choiceCompletion = null;
-            peraChoice.style.display = emailChoice.style.display = DisplayStyle.None;
+            peraChoice.style.display = emailChoice.style.display = walletChoice.style.display = backChoice.style.display = DisplayStyle.None;
             title.text = providerId == "pera" ? appearance.ConnectTitle : appearance.EmailTitle;
             message.text = providerId == "pera" ? appearance.ConnectingMessage : appearance.EmailMessage;
             step.text = appearance.ConnectStep;
+            step.style.display = string.IsNullOrEmpty(step.text) ? DisplayStyle.None : DisplayStyle.Flex;
             openWallet.style.display = providerId == "pera" && Application.isMobilePlatform ? DisplayStyle.Flex : DisplayStyle.None;
             try { package.OpenAccount(providerId, done); }
             catch { Dispose(); done(BlockmakerWalletPackageWebGLResult.Failed("PROVIDER_UNAVAILABLE")); }
@@ -775,7 +907,7 @@ namespace Blockmaker
             label.style.fontSize = size;
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
-            label.style.marginTop = label.style.marginBottom = 8;
+            label.style.marginTop = label.style.marginBottom = 4;
             label.style.flexShrink = 0;
             return label;
         }
@@ -785,7 +917,8 @@ namespace Blockmaker
             var button = new Button(clicked) { text = value };
             button.style.minHeight = 48;
             button.style.width = Length.Percent(100);
-            button.style.marginTop = 10;
+            button.style.marginTop = 8;
+            button.style.flexShrink = 0;
             button.style.fontSize = 20;
             button.style.backgroundColor = appearance.Accent;
             button.style.color = Color.black;
@@ -794,7 +927,7 @@ namespace Blockmaker
 
         private void Progress(BlockmakerUnityWalletProgress value)
         {
-            if (disposed || value == null) return;
+            if (disposed || resetting || value == null) return;
             if (value.phase == "authenticated" || value.phase == "cancelled" || value.phase == "error") {
                 Dispose(); return;
             }
@@ -811,7 +944,7 @@ namespace Blockmaker
 #endif
             } else if (value.phase == "qr") {
                 uri = value.walletConnectUri;
-                if (texture != null) UnityEngine.Object.Destroy(texture);
+                if (texture != null) ReleaseTexture(texture);
                 texture = UnityPeraQRTextureGenerator.Generate(uri, 512);
                 qr.style.backgroundImage = new StyleBackground(texture);
                 qr.style.display = DisplayStyle.Flex;
@@ -820,10 +953,17 @@ namespace Blockmaker
                 uri = null;
                 qr.style.display = DisplayStyle.None;
                 step.text = appearance.ApprovalStep;
+                step.style.display = string.IsNullOrEmpty(step.text) ? DisplayStyle.None : DisplayStyle.Flex;
                 title.text = appearance.ApprovalTitle;
                 message.text = value.phase == "verifying" || value.providerId == BlockmakerWalletPackageWebGL.TxnLabWeb3AuthProvider
                     ? appearance.VerifyingMessage : appearance.ApprovalMessage;
             }
+        }
+
+        private static void ReleaseTexture(Texture2D value)
+        {
+            if (Application.isPlaying) UnityEngine.Object.Destroy(value);
+            else UnityEngine.Object.DestroyImmediate(value);
         }
 
         public void Dispose()
@@ -837,8 +977,10 @@ namespace Blockmaker
             pending?.Invoke(BlockmakerWalletPackageWebGLResult.Failed("PLAYER_CANCELLED"));
             package.PresentationChanged -= Progress;
             overlay.RemoveFromHierarchy();
-            if (texture != null) UnityEngine.Object.Destroy(texture);
+            if (texture != null) ReleaseTexture(texture);
             texture = null;
+            if (ownedPeraLogo != null) ReleaseTexture(ownedPeraLogo);
+            ownedPeraLogo = null;
             uri = null;
         }
     }

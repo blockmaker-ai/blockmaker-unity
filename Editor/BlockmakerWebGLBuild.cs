@@ -12,7 +12,7 @@ namespace Blockmaker.Editor
     /// <summary>Adds the package's exact browser payload without modifying Assets.</summary>
     public sealed class BlockmakerWebGLBuild : BuildPlayerProcessor
     {
-        public const string CanonicalPackageId = "unity-webgl-package-sha256-cicBnjQf1cPzH5Sz3Gt7wX8seHXG9Cj1VTf6eRIAFlQ";
+        public const string CanonicalPackageId = "unity-webgl-package-sha256-ABEU4Xw6yrr_x5QxD0RBoncEqP2IStnSSnbbfQhI-5k";
         public override int callbackOrder => 0;
         private static readonly Dictionary<string, string> Paths = new Dictionary<string, string> {
             { "BlockmakerClient.cs", "Runtime/BlockmakerClient.cs" },

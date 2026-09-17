@@ -252,6 +252,7 @@ mergeInto(LibraryManager.library, {
         },
         setOwner: function (owner) {
           if (Object.prototype.hasOwnProperty.call(root, ownerKey)) return false;
+          owner.released = new Promise(function (resolve) { owner.release = resolve; });
           try {
             Object.defineProperty(root, ownerKey, {
               value: owner,
@@ -265,7 +266,9 @@ mergeInto(LibraryManager.library, {
         clearOwner: function (owner) {
           if (root[ownerKey] !== owner) return false;
           try { delete root[ownerKey]; } catch (_) { return false; }
-          return root[ownerKey] !== owner;
+          var cleared = root[ownerKey] !== owner;
+          if (cleared && owner.release) owner.release();
+          return cleared;
         },
         finishCancelledTransaction: function (owner) {
           if (root[ownerKey] !== owner || owner.kind !== 'sign_transaction_group'
@@ -1122,13 +1125,21 @@ mergeInto(LibraryManager.library, {
         code: confirmed === true ? null : 'LOGOUT_UNCONFIRMED'
       });
     };
+    var emptySession = Object.keys(session).every(function (key) { return session[key] === ''; });
     if (!runtime || !runtime.ready || runtime.cleanupRequired()
       || !runtime.validOperation(operationId) || !runtime.validTarget(target)
-      || !runtime.validLifecycle(lifecycleId) || !runtime.safeSession(session)
+      || !runtime.validLifecycle(lifecycleId) || (!emptySession && !runtime.safeSession(session))
       || runtime.facade !== root.__blockmakerUnityWebGlWalletPackageV1) {
       send(false);
       return;
     }
+    var previous = root[ownerKey];
+    var drain = previous && previous.kind === 'open_account'
+      && previous.lifecycleId === lifecycleId && previous.target === target
+      && (previous.state === 'cancelling' || previous.state === 'rejecting')
+      ? previous.released : null;
+    var startLogout = function () {
+      if (runtime.cleanupRequired()) { send(false); return; }
     var owner = {
       lifecycleId: lifecycleId,
       operationId: operationId,
@@ -1141,7 +1152,7 @@ mergeInto(LibraryManager.library, {
       return;
     }
     var confirmation;
-    try { confirmation = runtime.facade.logout(Object.freeze(session)); }
+    try { confirmation = runtime.facade.logout(emptySession ? null : Object.freeze(session)); }
     catch (_) { confirmation = Promise.reject(new Error('logout failed')); }
     Promise.resolve(confirmation).then(function (value) {
       if (root[ownerKey] !== owner) return;
@@ -1154,6 +1165,9 @@ mergeInto(LibraryManager.library, {
       runtime.clearOwner(owner);
       send(false);
     });
+    };
+    if (drain) Promise.resolve(drain).then(startLogout).catch(function () { send(false); });
+    else startLogout();
   },
 
   BlockmakerWalletPackageWebGL_OpenFunding: function (
