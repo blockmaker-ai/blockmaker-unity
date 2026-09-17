@@ -2611,7 +2611,7 @@ export function createBlockmaker(options = {}) {
   }
 
   const completePreparedAlgorandWalletLogin = prepared => {
-    if (!preparedAlgorandWalletLogins.has(prepared)) {
+    if (!preparedAlgorandWalletLogins.has(prepared) || prepared.attemptId !== loginAttemptSequence) {
       return Promise.reject(new BlockmakerError('This wallet sign-in approval is no longer current.', {
         code: 'AUTH_SUPERSEDED',
       }))
@@ -2629,6 +2629,8 @@ export function createBlockmaker(options = {}) {
       return Promise.reject(error)
     }
     return Promise.resolve(signing).then(async signed => {
+      if (prepared.attemptId !== loginAttemptSequence)
+        throw new BlockmakerError('This wallet sign-in was cancelled.', { code: 'AUTH_SUPERSEDED' })
       const signedTxn = Array.isArray(signed)
         ? signed.find(value => value instanceof Uint8Array && value.byteLength > 0)
         : null
@@ -8387,34 +8389,37 @@ export function createBlockmaker(options = {}) {
 
     const logoutUnitySession = async value => {
       requireUnityWalletCleanupIdle()
-      const target = packageSession(value)
+      const target = value == null ? null : packageSession(value)
+      if (!target && (activeOpen || pendingHandoff || session || acknowledgedUnitySigner || preparedTransactionGroup))
+        throw new BlockmakerError('Finish cancelling the current request before disconnecting.', { code: 'REQUEST_ALREADY_PENDING' })
       beginUnityWalletCleanup()
       try {
-        await rawRequest('/v1/auth/logout', {
+        if (target) await rawRequest('/v1/auth/logout', {
           method: 'POST', auth: false, keepalive: true,
           body: { refreshToken: target.refreshToken, gameId },
         })
         await walletSetup.disconnectAll()
       } catch (error) {
-        if (session?.refreshToken === target.refreshToken) storeSession(null)
-        if (pendingHandoff?.refreshToken === target.refreshToken) {
+        if (session?.refreshToken === target?.refreshToken) storeSession(null)
+        if (pendingHandoff?.refreshToken === target?.refreshToken) {
           pendingHandoff = null
           clearPendingHandoffPageHide()
         }
-        if (rememberedAlgorandSigner?.walletAddress === target.walletAddress)
+        if (rememberedAlgorandSigner?.walletAddress === target?.walletAddress)
           rememberedAlgorandSigner = null
         latchUnityWalletPackageCleanup()
         throw error
       }
       confirmUnityWalletCleanup()
-      if (session?.refreshToken === target.refreshToken) storeSession(null)
-      if (pendingHandoff?.refreshToken === target.refreshToken) {
+      invalidateLoginAttempts()
+      if (session?.refreshToken === target?.refreshToken) storeSession(null)
+      if (pendingHandoff?.refreshToken === target?.refreshToken) {
         pendingHandoff = null
         clearPendingHandoffPageHide()
       }
-      if (rememberedAlgorandSigner?.walletAddress === target.walletAddress)
+      if (rememberedAlgorandSigner?.walletAddress === target?.walletAddress)
         rememberedAlgorandSigner = null
-      if (acknowledgedUnitySigner?.walletAddress === target.walletAddress)
+      if (acknowledgedUnitySigner?.walletAddress === target?.walletAddress)
         acknowledgedUnitySigner = null
       if (preparedTransactionGroup) {
         if (preparedTransactionGroup.state === 'signing') preparedTransactionGroup.state = 'abandoned'

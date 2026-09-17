@@ -5,20 +5,13 @@ Algorand MainNet. Email uses TxnLab with MetaMask Embedded Wallets. Players can
 use an email wallet for the same supported game actions as a Pera wallet,
 subject to balances, asset ownership and the game's rules.
 
-**Version 2.0.1 is a local release candidate.** The published SDK is still 2.0.0.
+**Version 2.0.1 is the current SDK.**
 This package supports **Unity WebGL**, including compatible desktop and mobile
 browsers. It does not provide native Windows, macOS, Android or iOS wallet exports.
 
 ## Install through Unity Package Manager
 
 Requires **Unity 6** with Web Build Support and **Git** installed.
-
-For this local candidate, choose **Install package from disk** and select its
-`package.json`. The `v2.0.1` Git tag and tarball below are release targets, not
-published downloads. To install the current public release now, use
-`https://github.com/blockmaker-ai/blockmaker-unity.git#v2.0.0`.
-
-After version 2.0.1 is published:
 
 1. In Unity, open **Window → Package Management → Package Manager**.
 2. Choose **+ → Install package from Git URL** (called “Add package from Git URL”
@@ -37,7 +30,7 @@ Prefer the previous drag-in method? [Download BlockmakerInstaller.cs](https://ra
 place it in `Assets/Editor`, and choose **Install**. It installs the same version
 through Package Manager. You can delete that installer afterward.
 
-The release will also provide a [`.tgz` download](https://github.com/blockmaker-ai/blockmaker-unity/releases/tag/v2.0.1)
+The release also provides a [`.tgz` download](https://github.com/blockmaker-ai/blockmaker-unity/releases/tag/v2.0.1)
 for Package Manager's **Install package from tarball** option.
 Projects using an earlier SDK should read [upgrading](Documentation~/upgrading.md)
 before installing. The SDK never deletes your existing integration or player data.

@@ -674,7 +674,9 @@ namespace Blockmaker
         public string ConnectStep = "STEP 1 OF 2";
         public string ApprovalStep = "STEP 2 OF 2";
         public string CancelLabel = "Cancel";
-        public string OpenWalletLabel = "Open Pera";
+        public string OpenWalletLabel = "Confirm";
+        public string ChangeAccountLabel = "Use another account";
+        public string DisconnectingMessage = "Disconnecting…";
     }
 
     /// <summary>
@@ -688,9 +690,12 @@ namespace Blockmaker
         private readonly BlockmakerUnityWalletAppearance appearance;
         private readonly VisualElement overlay, qr;
         private readonly Label title, message, step;
-        private readonly Button openWallet, peraChoice, emailChoice, walletChoice, backChoice;
+        private readonly Button openWallet, peraChoice, emailChoice, walletChoice, backChoice, changeAccount, cancel;
         private Texture2D ownedPeraLogo;
-        private bool opened;
+        private bool opened, resetting;
+        private Action<BlockmakerWalletPackageWebGLResult> completion;
+        public bool IsOpen => !disposed;
+        public void Focus() { if (!disposed) overlay.BringToFront(); }
         private Action<BlockmakerWalletPackageWebGLResult> choiceCompletion;
 #if UNITY_WEBGL && !UNITY_EDITOR
         private bool keyboardReleased;
@@ -716,27 +721,30 @@ namespace Blockmaker
             overlay.style.color = appearance.Text;
             if (appearance.Font != null) overlay.style.unityFontDefinition = FontDefinition.FromFont(appearance.Font);
             var scroll = new ScrollView(ScrollViewMode.Vertical);
-            scroll.style.width = Length.Percent(94);
-            scroll.style.maxWidth = 520;
-            scroll.style.maxHeight = Length.Percent(96);
+            scroll.style.width = Length.Percent(100);
             scroll.style.flexShrink = 1;
+            scroll.contentContainer.style.alignItems = Align.Center;
             var card = new VisualElement();
+            card.style.width = Length.Percent(94);
+            card.style.maxWidth = 520;
+            card.style.maxHeight = Length.Percent(96);
+            card.style.flexShrink = 1;
             card.style.backgroundColor = appearance.Surface;
-            card.style.paddingLeft = card.style.paddingRight = 24;
-            card.style.paddingTop = card.style.paddingBottom = 20;
+            card.style.paddingLeft = card.style.paddingRight = 16;
+            card.style.paddingTop = card.style.paddingBottom = 16;
             card.style.borderTopLeftRadius = card.style.borderTopRightRadius =
                 card.style.borderBottomLeftRadius = card.style.borderBottomRightRadius = 20;
             card.style.alignItems = Align.Center;
-            var brand = Text(appearance.AppName, 20);
+            var brand = Text(appearance.AppName, 16);
             brand.style.color = appearance.Accent;
-            title = Text(appearance.ConnectTitle, 30);
+            title = Text(appearance.ConnectTitle, 24);
             step = Text(appearance.ConnectStep, 16);
             qr = new VisualElement { name = "blockmaker-wallet-qr" };
             qr.style.width = qr.style.height = 240;
             qr.style.flexShrink = 0;
             qr.style.backgroundColor = Color.white;
             qr.style.display = DisplayStyle.None;
-            message = Text(appearance.ConnectingMessage, 19);
+            message = Text(appearance.ConnectingMessage, 18);
             openWallet = Button(appearance.OpenWalletLabel, () => {
                 if (disposed) return;
                 // Explicit player action; no automatic app switch or fullscreen request.
@@ -766,18 +774,45 @@ namespace Blockmaker
             backChoice = Button(appearance.BackLabel, ShowSignInChoices);
             backChoice.name = "blockmaker-wallet-back";
             peraChoice.style.display = emailChoice.style.display = walletChoice.style.display = backChoice.style.display = DisplayStyle.None;
-            var cancel = Button(appearance.CancelLabel, () => {
+            changeAccount = Button(appearance.ChangeAccountLabel, ChangeAccount);
+            changeAccount.name = "blockmaker-change-account";
+            changeAccount.style.backgroundColor = new Color(.22f, .23f, .28f);
+            changeAccount.style.color = appearance.Text;
+            cancel = Button(appearance.CancelLabel, () => {
                 if (disposed) return;
                 if (choiceCompletion != null) {
                     var done = choiceCompletion; choiceCompletion = null;
                     Dispose(); done(BlockmakerWalletPackageWebGLResult.Failed("PLAYER_CANCELLED"));
                 } else package.Cancel();
             });
-            card.Add(brand); card.Add(title); card.Add(step); card.Add(qr);
-            card.Add(message); card.Add(emailChoice); card.Add(walletChoice); card.Add(peraChoice); card.Add(backChoice); card.Add(openWallet); card.Add(cancel);
-            scroll.Add(card); overlay.Add(scroll); parent.Add(overlay);
+            scroll.Add(brand); scroll.Add(title); scroll.Add(step); scroll.Add(qr);
+            scroll.Add(message); scroll.Add(emailChoice); scroll.Add(walletChoice); scroll.Add(peraChoice); scroll.Add(backChoice);
+            // Keep cancellation and account switching reachable when the QR or
+            // instructions need to scroll on a short phone viewport.
+            var actions = new VisualElement { name = "blockmaker-wallet-actions" };
+            actions.style.width = Length.Percent(100);
+            actions.style.flexDirection = FlexDirection.Row;
+            actions.style.flexWrap = Wrap.Wrap;
+            actions.style.flexShrink = 0;
+            foreach (var button in new[] { openWallet, changeAccount, cancel }) {
+                button.style.width = 0;
+                button.style.minWidth = 140;
+                button.style.flexGrow = 1;
+                button.style.marginLeft = button.style.marginRight = 4;
+                button.style.whiteSpace = WhiteSpace.Normal;
+                actions.Add(button);
+            }
+            changeAccount.style.fontSize = 16;
+            card.Add(scroll); card.Add(actions); overlay.Add(card); parent.Add(overlay);
             overlay.BringToFront();
             package.PresentationChanged += Progress;
+            overlay.RegisterCallback<DetachFromPanelEvent>(e => {
+                // Editor hierarchy previews temporarily detach/re-attach documents.
+                if (disposed || e.target != overlay || !Application.isPlaying) return;
+                // A scene leaving must not strand a hidden provider request.
+                package.Cancel();
+                Finish(BlockmakerWalletPackageWebGLResult.Failed("PLAYER_CANCELLED"));
+            });
         }
 
         /// <summary>Offer Email first when configured, then Wallet and its supported choices.</summary>
@@ -785,9 +820,48 @@ namespace Blockmaker
         {
             if (disposed || opened) throw new InvalidOperationException("Wallet choices are already closed or open.");
             opened = true;
-            choiceCompletion = done ?? (_ => { });
+            completion = done ?? (_ => { });
+            choiceCompletion = Finish;
             package.UseUnityPresentation = true;
             if (package.EmailEnabled) ShowSignInChoices(); else ShowWalletChoices();
+        }
+
+        private void Finish(BlockmakerWalletPackageWebGLResult result)
+        {
+            if (resetting) return;
+            var done = completion; completion = null;
+            choiceCompletion = null;
+            Dispose();
+            done?.Invoke(result);
+        }
+
+        private void ChangeAccount()
+        {
+            if (disposed || resetting) return;
+            resetting = true;
+            choiceCompletion = null;
+            changeAccount.SetEnabled(false);
+            cancel.SetEnabled(false);
+            peraChoice.style.display = emailChoice.style.display = walletChoice.style.display =
+                backChoice.style.display = openWallet.style.display = qr.style.display = DisplayStyle.None;
+            title.text = appearance.ChooseTitle;
+            step.text = "";
+            step.style.display = DisplayStyle.None;
+            message.text = appearance.DisconnectingMessage;
+            try {
+                package.Logout(result => {
+                    if (disposed) return;
+                    resetting = false;
+                    changeAccount.SetEnabled(true);
+                    cancel.SetEnabled(true);
+                    if (!result.Success) { Finish(result); return; }
+                    choiceCompletion = Finish;
+                    if (package.EmailEnabled) ShowSignInChoices(); else ShowWalletChoices();
+                });
+            } catch {
+                resetting = false;
+                Finish(BlockmakerWalletPackageWebGLResult.Failed("PROVIDER_CLEANUP_REQUIRED"));
+            }
         }
 
         private void ShowSignInChoices()
@@ -796,6 +870,7 @@ namespace Blockmaker
             title.text = appearance.ChooseTitle;
             message.text = appearance.ChooseMessage;
             step.text = "";
+            step.style.display = DisplayStyle.None;
             openWallet.style.display = qr.style.display = peraChoice.style.display = backChoice.style.display = DisplayStyle.None;
             emailChoice.style.display = walletChoice.style.display = DisplayStyle.Flex;
         }
@@ -806,6 +881,7 @@ namespace Blockmaker
             title.text = appearance.WalletsTitle;
             message.text = appearance.WalletsMessage;
             step.text = "";
+            step.style.display = DisplayStyle.None;
             openWallet.style.display = qr.style.display = emailChoice.style.display = walletChoice.style.display = DisplayStyle.None;
             peraChoice.style.display = DisplayStyle.Flex;
             backChoice.style.display = package.EmailEnabled ? DisplayStyle.Flex : DisplayStyle.None;
@@ -819,6 +895,7 @@ namespace Blockmaker
             title.text = providerId == "pera" ? appearance.ConnectTitle : appearance.EmailTitle;
             message.text = providerId == "pera" ? appearance.ConnectingMessage : appearance.EmailMessage;
             step.text = appearance.ConnectStep;
+            step.style.display = string.IsNullOrEmpty(step.text) ? DisplayStyle.None : DisplayStyle.Flex;
             openWallet.style.display = providerId == "pera" && Application.isMobilePlatform ? DisplayStyle.Flex : DisplayStyle.None;
             try { package.OpenAccount(providerId, done); }
             catch { Dispose(); done(BlockmakerWalletPackageWebGLResult.Failed("PROVIDER_UNAVAILABLE")); }
@@ -830,7 +907,7 @@ namespace Blockmaker
             label.style.fontSize = size;
             label.style.whiteSpace = WhiteSpace.Normal;
             label.style.unityTextAlign = TextAnchor.MiddleCenter;
-            label.style.marginTop = label.style.marginBottom = 8;
+            label.style.marginTop = label.style.marginBottom = 4;
             label.style.flexShrink = 0;
             return label;
         }
@@ -840,7 +917,8 @@ namespace Blockmaker
             var button = new Button(clicked) { text = value };
             button.style.minHeight = 48;
             button.style.width = Length.Percent(100);
-            button.style.marginTop = 10;
+            button.style.marginTop = 8;
+            button.style.flexShrink = 0;
             button.style.fontSize = 20;
             button.style.backgroundColor = appearance.Accent;
             button.style.color = Color.black;
@@ -849,7 +927,7 @@ namespace Blockmaker
 
         private void Progress(BlockmakerUnityWalletProgress value)
         {
-            if (disposed || value == null) return;
+            if (disposed || resetting || value == null) return;
             if (value.phase == "authenticated" || value.phase == "cancelled" || value.phase == "error") {
                 Dispose(); return;
             }
@@ -866,7 +944,7 @@ namespace Blockmaker
 #endif
             } else if (value.phase == "qr") {
                 uri = value.walletConnectUri;
-                if (texture != null) UnityEngine.Object.Destroy(texture);
+                if (texture != null) ReleaseTexture(texture);
                 texture = UnityPeraQRTextureGenerator.Generate(uri, 512);
                 qr.style.backgroundImage = new StyleBackground(texture);
                 qr.style.display = DisplayStyle.Flex;
@@ -875,10 +953,17 @@ namespace Blockmaker
                 uri = null;
                 qr.style.display = DisplayStyle.None;
                 step.text = appearance.ApprovalStep;
+                step.style.display = string.IsNullOrEmpty(step.text) ? DisplayStyle.None : DisplayStyle.Flex;
                 title.text = appearance.ApprovalTitle;
                 message.text = value.phase == "verifying" || value.providerId == BlockmakerWalletPackageWebGL.TxnLabWeb3AuthProvider
                     ? appearance.VerifyingMessage : appearance.ApprovalMessage;
             }
+        }
+
+        private static void ReleaseTexture(Texture2D value)
+        {
+            if (Application.isPlaying) UnityEngine.Object.Destroy(value);
+            else UnityEngine.Object.DestroyImmediate(value);
         }
 
         public void Dispose()
@@ -892,9 +977,9 @@ namespace Blockmaker
             pending?.Invoke(BlockmakerWalletPackageWebGLResult.Failed("PLAYER_CANCELLED"));
             package.PresentationChanged -= Progress;
             overlay.RemoveFromHierarchy();
-            if (texture != null) UnityEngine.Object.Destroy(texture);
+            if (texture != null) ReleaseTexture(texture);
             texture = null;
-            if (ownedPeraLogo != null) UnityEngine.Object.Destroy(ownedPeraLogo);
+            if (ownedPeraLogo != null) ReleaseTexture(ownedPeraLogo);
             ownedPeraLogo = null;
             uri = null;
         }

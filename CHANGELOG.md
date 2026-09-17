@@ -1,10 +1,13 @@
 # Changelog
 
-## 2.0.1 (local candidate)
+## [2.0.1] - 2026-09-17
 
 - Email-first sign-in, a Wallet submenu, and Pera with its original reusable logo.
 - Configurable labels and logo; browsing/back/cancel keeps the existing wallet manager.
-- No backend/proof/provider changes. Awaiting the next NFTURBO build.
+- Cancel incomplete sign-in and disconnect remembered connections with Use another account.
+- Retain exact session revocation and discard late cancelled approvals.
+- Keep Cancel and account switching visible on short screens. Size the demo
+  using the canvas's visible dimensions, including high-DPI and phone screens.
 
 ## [2.0.0] - 2026-09-16
 

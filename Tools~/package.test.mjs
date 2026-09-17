@@ -34,7 +34,7 @@ test('UPM root is version 2 with only Unity module dependencies and current inst
 test('UPM carries the complete unmodified canonical runtime and matching build map', async () => {
   const value = await json('package-manifest.json')
   const manifest = parseWalletPackageManifest(value, { apiOrigin: new URL(value.members[0].url).origin, target: 'unity_webgl' })
-  assert.equal(manifest.packageId, 'unity-webgl-package-sha256-__-tqLYjkYy9Vb6vY_mx5BlxdUun1GRW73T0PCN2I3U')
+  assert.equal(manifest.packageId, 'unity-webgl-package-sha256-ABEU4Xw6yrr_x5QxD0RBoncEqP2IStnSSnbbfQhI-5k')
   assert.equal(manifest.members.length, 9)
   const hook = await text('Editor/BlockmakerWebGLBuild.cs')
   for (const member of manifest.members) {
